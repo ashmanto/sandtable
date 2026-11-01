@@ -1,0 +1,46 @@
+name: Bug report
+description: Report something in Sandtable that doesn't work as expected.
+labels: [bug]
+body:
+  - type: input
+    id: sandtable-version
+    attributes:
+      label: Sandtable version
+      description: The version from **Sandtable > About Sandtable**, or the commit you built from.
+    validations:
+      required: true
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+      placeholder: macOS 26.1
+    validations:
+      required: true
+  - type: dropdown
+    id: ticket-source
+    attributes:
+      label: Ticket source
+      description: Where the project's tickets come from.
+      options:
+        - GitHub Projects board
+        - GitHub repo issues
+        - Linear
+        - Jira
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a project.
+        2. Click **Start** on a ticket.
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, what you expected instead, and any error text.
+    validations:
+      required: true

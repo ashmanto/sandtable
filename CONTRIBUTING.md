@@ -3,6 +3,13 @@
 Thanks for your interest. Bug reports, fixes, and small features are welcome. For a larger
 change, open an issue first so you can agree on the approach before you write code.
 
+## Open an issue
+
+On the [Issues](https://github.com/ashmanto/sandtable/issues) page, click **New issue** and pick
+**Bug report** or **Feature request**. The bug report form asks for your Sandtable and macOS
+versions and your ticket source, which a fix usually needs. To report a security problem, follow
+[SECURITY.md](SECURITY.md) instead of opening a public issue.
+
 ## Set up
 
 You need the tools in the README's [Requirements](README.md#requirements). Then:
