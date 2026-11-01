@@ -1,4 +1,9 @@
-# Sandtable
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/logo-dark.png">
+    <img alt="Sandtable" src="docs/logo-light.png" width="480">
+  </picture>
+</h1>
 
 Sandtable is a macOS app that shows a project's tickets on a kanban board and runs one
 interactive Claude Code session per ticket, each in its own git worktree and tmux session.
