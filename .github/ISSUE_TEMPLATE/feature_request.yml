@@ -1,0 +1,18 @@
+name: Feature request
+description: Suggest a change to Sandtable.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What you're trying to do, and what gets in the way.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: What you'd like Sandtable to do instead.
+    validations:
+      required: true
