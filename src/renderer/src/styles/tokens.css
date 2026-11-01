@@ -1,0 +1,211 @@
+/* Sandtable design tokens (Linear look). See DESIGN.md. Every color is defined for both schemes. */
+
+:root {
+  color-scheme: light;
+  --surface: #ffffff;
+  --surface-2: #f8f8f8;
+  --surface-3: #f0f0f0;
+  --card: #f4f4f4;
+  --raised: #ffffff;
+  --card-hover: var(--surface-3);
+  --window: var(--surface-2);
+  --panel: var(--surface);
+  --card-shadow: 0 1px 2px rgba(40, 42, 47, 0.08), 0 1px 1px rgba(40, 42, 47, 0.04);
+  --fg: #282a2f;
+  --fg-2: #3c4149;
+  --fg-3: #6b6a73;
+  --fg-4: #86848d;
+  --line: #e9e8ea;
+  --line-2: #dcdbdd;
+  --accent: #5461cf;
+  --accent-bright: #5461cf;
+  --accent-foreground: #ffffff;
+  --focus: var(--accent);
+  --selection: color-mix(in lch, var(--accent), transparent 64%);
+  --find-current: color-mix(in lch, var(--accent), transparent 30%);
+  --danger: #c51717;
+  --danger-soft: rgba(235, 87, 87, 0.08);
+  --amber: #ab3503;
+  --amber-soft: rgba(252, 120, 64, 0.14);
+  --yellow: #a37a00;
+  --blue: #0360b8;
+  --blue-soft: rgba(78, 167, 252, 0.12);
+  --neutral: #3c4149;
+  --neutral-soft: rgba(40, 42, 47, 0.06);
+  --scrim: rgba(40, 42, 47, 0.32);
+  --added: #177533;
+  --added-soft: rgba(26, 127, 55, 0.09);
+  --removed: var(--danger);
+  --removed-soft: rgba(235, 87, 87, 0.09);
+  --ansi-0: #1b1b1f;
+  --ansi-1: #c4314b;
+  --ansi-2: #1a7f37;
+  --ansi-3: #a15c00;
+  --ansi-4: #2457c5;
+  --ansi-5: #8250c4;
+  --ansi-6: #0b7285;
+  --ansi-7: #8a8a93;
+  --ansi-8: #5d5d66;
+  --ansi-9: #d63a57;
+  --ansi-10: #2a9d4a;
+  --ansi-11: #b8730a;
+  --ansi-12: #3a6fe0;
+  --ansi-13: #9b6ad8;
+  --ansi-14: #1a8aa0;
+  --ansi-15: #3a3a42;
+  --font-sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  --radius: 8px;
+  --speed-highlight-in: 0s;
+  --speed-highlight-out: 0.15s;
+  --speed-quick: 0.1s;
+  --speed-regular: 0.25s;
+  --speed-slow: 0.35s;
+  --ease-out-quad: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  --ease-out-cubic: cubic-bezier(0.215, 0.61, 0.355, 1);
+  --ease-out-quart: cubic-bezier(0.165, 0.84, 0.44, 1);
+  --ease-in-out-cubic: cubic-bezier(0.645, 0.045, 0.355, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --surface: #08090a;
+    --surface-2: #0f1011;
+    --surface-3: #191a1b;
+    --card: #18191b;
+    --card-hover: #1f2022;
+    --raised: #232427;
+    --window: var(--surface);
+    --panel: var(--surface-2);
+    --card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 2px 4px rgba(0, 0, 0, 0.6);
+    --fg: #f7f8f8;
+    --fg-2: #d0d6e0;
+    --fg-3: #8a8f98;
+    --fg-4: #62666d;
+    --line: rgba(255, 255, 255, 0.08);
+    --line-2: rgba(255, 255, 255, 0.15);
+    --accent: #5e6ad2;
+    --accent-bright: #7170ff;
+    --danger: #ed6767;
+    --danger-soft: rgba(237, 103, 103, 0.14);
+    --amber: #fc7840;
+    --amber-soft: rgba(252, 120, 64, 0.14);
+    --yellow: #f2c94c;
+    --blue: #4ea7fc;
+    --blue-soft: rgba(78, 167, 252, 0.14);
+    --neutral: #d0d6e0;
+    --neutral-soft: rgba(247, 248, 248, 0.07);
+    --scrim: rgba(0, 0, 0, 0.4);
+    --added: #5fd07a;
+    --added-soft: rgba(95, 208, 122, 0.1);
+    --removed-soft: rgba(237, 103, 103, 0.12);
+    --ansi-0: #4a4a52;
+    --ansi-1: #f0697f;
+    --ansi-2: #5fd07a;
+    --ansi-3: #f0b443;
+    --ansi-4: #7ea6ff;
+    --ansi-5: #c79bff;
+    --ansi-6: #5fd0e0;
+    --ansi-7: #a0a0aa;
+    --ansi-8: #6e6e78;
+    --ansi-9: #ff8197;
+    --ansi-10: #86e09a;
+    --ansi-11: #f7c96a;
+    --ansi-12: #a2bfff;
+    --ansi-13: #d9b8ff;
+    --ansi-14: #8be0ec;
+    --ansi-15: #ececf0;
+  }
+}
+
+/* shadcn's variables, mapped onto the tokens above. */
+:root {
+  --background: var(--surface);
+  --foreground: var(--fg);
+  --card-foreground: var(--fg);
+  --popover: var(--raised);
+  --popover-foreground: var(--fg);
+  --primary: var(--accent);
+  --primary-foreground: var(--accent-foreground);
+  --secondary: var(--surface-3);
+  --secondary-foreground: var(--fg);
+  --muted: var(--surface-2);
+  --muted-foreground: var(--fg-2);
+  --destructive: var(--danger);
+  --border: var(--line);
+  --input: var(--line-2);
+  --ring: var(--focus);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-window: var(--window);
+  --color-panel: var(--panel);
+  --color-card-hover: var(--card-hover);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-fg-3: var(--fg-3);
+  --color-fg-4: var(--fg-4);
+  --color-accent-bright: var(--accent-bright);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-amber: var(--amber);
+  --color-amber-soft: var(--amber-soft);
+  --color-yellow: var(--yellow);
+  --color-blue: var(--blue);
+  --color-blue-soft: var(--blue-soft);
+  --color-neutral: var(--neutral);
+  --color-neutral-soft: var(--neutral-soft);
+  --color-scrim: var(--scrim);
+  --color-added: var(--added);
+  --color-added-soft: var(--added-soft);
+  --color-removed: var(--removed);
+  --color-removed-soft: var(--removed-soft);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --text-base: 13px;
+  --text-base--line-height: 18px;
+  --text-sm: 13px;
+  --text-sm--line-height: 18px;
+  --text-xs: 11px;
+  --text-xs--line-height: 16px;
+  --text-emoji: 15px;
+  --text-emoji--line-height: 1;
+  --spacing: 4px;
+
+  --radius-sm: var(--radius);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius);
+  --radius-xl: var(--radius);
+  --radius-card: 12px;
+
+  --shadow-card: var(--card-shadow);
+
+  --animate-spin: spin 0.7s linear infinite;
+}

@@ -1,0 +1,39 @@
+# Contributing to Sandtable
+
+Thanks for your interest. Bug reports, fixes, and small features are welcome. For a larger
+change, open an issue first so you can agree on the approach before you write code.
+
+## Set up
+
+You need the tools in the README's [Requirements](README.md#requirements). Then:
+
+```bash
+npm install    # also rebuilds node-pty for Electron and turns on the pre-push hook
+npm run dev -- -- --user-data-dir="$(mktemp -d)"
+```
+
+The temporary `--user-data-dir` keeps a development run away from the data folder of an
+installed Sandtable. A development run still starts real tmux sessions and creates real worktrees
+when you click **Start**, so use a throwaway project.
+
+## Make a change
+
+1. Work on a feature branch.
+2. Write the failing test first, watch it fail, then make it pass.
+3. Keep `docs/features.md`, the README, and `DESIGN.md` in step with the change.
+4. Run the checks. The pre-push hook runs them too:
+
+   ```bash
+   npm run lint && npm run typecheck && npm test && npm run format:check
+   npm run build && npx playwright test
+   ```
+
+5. Open a pull request that says why the change is needed and how you tested it.
+
+`CLAUDE.md` holds the architecture, the invariants that every change must keep, and the code
+style. Read it before your first change. `.claude/docs/workflow.md` covers commit messages.
+
+## License
+
+By contributing, you agree that your contributions are licensed under the
+[Functional Source License, Version 1.1, MIT Future License](LICENSE.md).

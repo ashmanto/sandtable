@@ -1,0 +1,32 @@
+.DS_Store
+.idea/
+.claude/worktrees/
+
+node_modules/
+dist/
+coverage/
+
+# playwright
+playwright-report/
+test-results/
+/blob-report/
+/playwright/.cache/
+
+# local env files
+.env
+.env.local
+.env.*.local
+*.local
+
+# electron-vite build output
+out/
+
+.eslintcache
+*.log*
+.superpowers/
+*.tsbuildinfo
+
+docs/superpowers/
+Claude outputs/
+CLAUDE.local.md
+.claude/settings.local.json

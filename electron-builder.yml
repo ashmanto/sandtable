@@ -1,0 +1,24 @@
+appId: com.ashmanto.sandtable
+productName: Sandtable
+directories:
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+asarUnpack:
+  - node_modules/node-pty/**
+afterPack: build/afterPack.mjs
+mac:
+  target: dir
+  identity: '-'
+  hardenedRuntime: false
+  notarize: false
+npmRebuild: false
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  # On for build:mac's packaged e2e (Playwright attaches via --inspect); dist:mac and make install's repackage turn it off.
+  enableNodeCliInspectArguments: true
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  enableCookieEncryption: true

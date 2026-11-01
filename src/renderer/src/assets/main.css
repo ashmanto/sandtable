@@ -1,0 +1,200 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import '../styles/tokens.css';
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background font-sans text-base text-foreground antialiased;
+  }
+  ::selection {
+    background-color: var(--selection);
+  }
+  ::highlight(find) {
+    background-color: var(--selection);
+  }
+  ::highlight(find-current) {
+    background-color: var(--find-current);
+  }
+}
+
+@utility highlight {
+  --highlight-speed: var(--speed-highlight-out);
+  --ring-speed: var(--speed-highlight-out);
+  --ring-delay: 0s;
+  --ring-ease: ease-in;
+  transition:
+    color var(--highlight-speed) ease-out,
+    background-color var(--highlight-speed) ease-out,
+    border-color var(--ring-speed) var(--ring-ease) var(--ring-delay),
+    box-shadow var(--ring-speed) var(--ring-ease) var(--ring-delay);
+  &:hover,
+  &:active {
+    --highlight-speed: var(--speed-highlight-in);
+  }
+  &:focus-visible,
+  &:has(> :is(input, textarea):focus-visible) {
+    --ring-speed: 0.3s;
+    --ring-delay: 0.4s;
+    --ring-ease: ease-out;
+  }
+}
+
+@utility focus-ring {
+  @apply focus-visible:ring-[3px] focus-visible:ring-ring/50;
+}
+
+@utility drag {
+  -webkit-app-region: drag;
+  & :is(button, a, input, select, textarea, [tabindex], [title]) {
+    -webkit-app-region: no-drag;
+  }
+}
+
+[data-slot$='-content'] {
+  -webkit-app-region: no-drag;
+}
+
+@utility markdown {
+  line-height: 20px;
+  overflow-wrap: anywhere;
+  & > * + * {
+    margin-top: 8px;
+  }
+  & :where(h1, h2, h3, h4, h5, h6) {
+    font-weight: 600;
+  }
+  & :where(h1, h2) {
+    font-size: 15px;
+  }
+  & :where(ul) {
+    list-style: disc;
+    padding-left: 20px;
+  }
+  & :where(ol) {
+    list-style: decimal;
+    padding-left: 20px;
+  }
+  & :where(li.task-list-item) {
+    list-style: none;
+    margin-left: -20px;
+  }
+  & :where(input[type='checkbox']) {
+    margin-right: 6px;
+    vertical-align: middle;
+    accent-color: var(--accent);
+  }
+  & :where(a) {
+    color: var(--accent-bright);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  & :where(code) {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    background-color: var(--neutral-soft);
+    border-radius: var(--radius);
+    padding: 1px 4px;
+  }
+  & :where(pre) {
+    overflow-x: auto;
+    background-color: var(--neutral-soft);
+    border-radius: var(--radius);
+    padding: 8px 12px;
+  }
+  & :where(pre code) {
+    padding: 0;
+    background-color: transparent;
+  }
+  & :where(blockquote) {
+    border-left: 2px solid var(--line-2);
+    padding-left: 12px;
+    color: var(--fg-2);
+  }
+  & :where(table) {
+    border-collapse: collapse;
+    display: block;
+    overflow-x: auto;
+  }
+  & :where(th, td) {
+    border: 1px solid var(--line);
+    padding: 4px 8px;
+    text-align: left;
+  }
+  /* Chrome ignores min-width on cells; this keeps short words whole while long paths still wrap. */
+  & :where(th, td) > :where(div) {
+    min-width: calc-size(max-content, min(size, 10em));
+  }
+  & :where(hr) {
+    border-color: var(--line);
+  }
+  & :where(img) {
+    max-width: 100%;
+  }
+}
+
+@utility shimmer {
+  background: linear-gradient(100deg, var(--fg-3) 38%, var(--fg) 50%, var(--fg-3) 62%) 100% 0 / 300%
+    100%;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 2.4s linear infinite;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+    background: none;
+    color: var(--fg-3);
+  }
+}
+
+@utility tool-key {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border-radius: 5px;
+  color: var(--fg-3);
+  background: linear-gradient(var(--surface), var(--surface-3));
+  box-shadow:
+    inset 0 0 0 1px var(--line-2),
+    var(--card-shadow);
+  animation:
+    key-flip 200ms var(--ease-out-cubic),
+    key-tilt 2.4s ease-in-out 200ms infinite;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@utility soft-pulse {
+  animation: soft-pulse 1.6s ease-in-out infinite;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@keyframes soft-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes shimmer {
+  to {
+    background-position: 0 0;
+  }
+}
+
+@keyframes key-flip {
+  from {
+    transform: perspective(80px) rotateX(90deg);
+  }
+}
+
+@keyframes key-tilt {
+  50% {
+    transform: perspective(80px) rotateX(18deg) rotateY(-14deg);
+  }
+}
