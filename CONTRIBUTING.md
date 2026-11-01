@@ -33,6 +33,35 @@ when you click **Start**, so use a throwaway project.
 `CLAUDE.md` holds the architecture, the invariants that every change must keep, and the code
 style. Read it before your first change. `.claude/docs/workflow.md` covers commit messages.
 
+## Release a version
+
+The `release` workflow builds the DMG on a GitHub-hosted Apple silicon runner. It doesn't use a
+local build. To release a version, follow these steps:
+
+1. On a branch, set `version` in `package.json` to the version to release, such as `1.2.0`. Merge
+   the change to `master`.
+2. Create a release on GitHub with a tag of `v` and that version, such as `v1.2.0`, on `master`,
+   and publish it.
+
+   The workflow stops if the tag doesn't match `package.json`. It runs the end-to-end tests
+   against the packaged app, including the check that the app bundles only `out/` and
+   `package.json`, and a failure stops it before the upload.
+
+3. The workflow attaches `Sandtable-<version>-arm64.dmg` to the release and opens a pull request
+   in `ashmanto/homebrew-tap` with the cask's `version` and `sha256`. Merge that pull request.
+4. Check the cask:
+
+   ```bash
+   brew update && brew audit --cask --online --strict ashmanto/tap/sandtable
+   ```
+
+The workflow writes to the tap with the `HOMEBREW_TAP_TOKEN` repository secret: a fine-grained
+personal access token for `ashmanto/homebrew-tap` alone, with read and write access to
+**Contents** and **Pull requests**. When the token expires, the tap step fails, so replace the
+secret and run the failed job again.
+
+The app is signed ad hoc and isn't notarized.
+
 ## License
 
 By contributing, you agree that your contributions are licensed under the
