@@ -1,0 +1,51 @@
+name: release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  dmg:
+    runs-on: macos-latest
+    env:
+      TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Check that the tag matches package.json
+        run: |
+          VERSION=$(node -p 'require("./package.json").version')
+          [ "$TAG" = "v$VERSION" ] || { echo "Tag $TAG doesn't match version $VERSION in package.json"; exit 1; }
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+      - run: brew install tmux && brew install --cask claude-code
+      - run: npm ci
+      - run: npm run build:mac
+      - run: npx playwright test
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - run: npx electron-builder --mac dmg --publish never -c.electronFuses.enableNodeCliInspectArguments=false
+      - run: gh release upload "$TAG" "dist/Sandtable-$VERSION-arm64.dmg"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Open a pull request in ashmanto/homebrew-tap
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          SHA=$(shasum -a 256 "dist/Sandtable-$VERSION-arm64.dmg" | cut -d ' ' -f 1)
+          BRANCH="sandtable-$VERSION"
+          gh auth setup-git
+          gh repo clone ashmanto/homebrew-tap tap -- --depth 1
+          cd tap
+          git switch -c "$BRANCH"
+          sed -i '' -e "s/^  version \".*\"/  version \"$VERSION\"/" -e "s/^  sha256 \".*\"/  sha256 \"$SHA\"/" Casks/sandtable.rb
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -am "sandtable $VERSION"
+          git push origin "$BRANCH"
+          gh pr create -R ashmanto/homebrew-tap --head "$BRANCH" --title "sandtable $VERSION" \
+            --body "Updates the cask to the $TAG release: ${{ github.event.release.html_url }}"

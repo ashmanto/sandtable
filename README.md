@@ -123,7 +123,8 @@ cp -R dist/mac-arm64/Sandtable.app /Applications/
 To update a copy you built, run `make install` on `master`. It pulls, runs the checks, builds,
 runs the end-to-end tests, and replaces the app. Your sessions keep running in tmux.
 
-To build a DMG, run `make dmg`. It builds `dist/Sandtable-<version>-arm64.dmg`.
+To build a DMG, run `make dmg`. It builds `dist/Sandtable-<version>-arm64.dmg`. Releases are
+built in CI instead; see [Release a version](CONTRIBUTING.md#release-a-version).
 
 ## Add a project
 
