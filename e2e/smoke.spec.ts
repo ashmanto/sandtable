@@ -568,14 +568,16 @@ test('marks the drop under the pointer after the sidebar scrolls during a drag',
   await page.mouse.move(x, view.y + view.height / 2, { steps: 5 })
   const middle = await list.evaluate(
     (ul, y) => {
-      const li = [...ul.children].find((el) => {
+      const away = (el: Element): number => {
         const r = el.getBoundingClientRect()
-        return r.top <= y && y < r.bottom
-      })
+        return Math.abs(r.top + r.height / 2 - y)
+      }
+      const li = [...ul.children].sort((a, b) => away(a) - away(b))[0]
       return li?.querySelector('button:not([aria-label])')?.textContent ?? ''
     },
     view.y + view.height / 2
   )
+  expect(middle, 'a project row near the middle of the sidebar').not.toBe('')
   const row = list
     .getByRole('listitem')
     .filter({ has: page.getByRole('button', { name: middle, exact: true }) })
