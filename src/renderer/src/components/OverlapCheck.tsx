@@ -68,7 +68,7 @@ export function OverlapCheck({
           </>
         )}
       </div>
-      <div className="flex gap-1.5">
+      <div className="flex flex-wrap gap-1.5">
         {check.kind === 'gaps' && check.gaps.length > 0 && (
           <>
             <Button variant="outline" size="xs" className="h-5" onClick={refine}>

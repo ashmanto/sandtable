@@ -671,6 +671,7 @@ them through Tailwind classes and never name a raw color.
   - A ready ticket goes on to the overlap check with no other step.
   - **Not ready**: the words in an `amber` chip on `amber-soft`, then each gap as a bullet in
     `fg-2`, then **Refine in chat** (outline), **Start with planning** (outline), **Start anyway** (outline), and **Cancel** (ghost).
+    The buttons wrap onto a second line when they don't fit the card.
     **Refine in chat** clears the block, opens the ticket view on **Details** with the chat panel
     shown, and sends the gaps there as your message. **Start with planning** goes on to the
     overlap check and then starts in plan mode. **Start anyway** goes on to the overlap check.
