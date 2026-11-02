@@ -745,11 +745,15 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       )
       .sort((a, b) => Number(!!a.done) - Number(!!b.done))
   }
-  const waitingList = (): SidebarSession[] => {
-    const order = sections(projects, groups).flatMap((s) => s.projects.map((p) => p.id))
-    return sidebarList()
-      .filter((s) => waiting(s) && order.includes(s.projectId))
-      .sort((a, b) => order.indexOf(a.projectId) - order.indexOf(b.projectId))
+  const waitingList = (listed = sidebarList()): SidebarSession[] => {
+    const order = new Map(
+      sections(projects, groups)
+        .flatMap((s) => s.projects)
+        .map((p, i) => [p.id, i])
+    )
+    return listed
+      .filter((s) => waiting(s) && order.has(s.projectId))
+      .sort((a, b) => order.get(a.projectId)! - order.get(b.projectId)!)
   }
 
   const setAsking = (s: SessionRecord, asking: boolean): void => {
@@ -2000,6 +2004,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
             s.ticketKey === current.ticketKey &&
             sameSource(current.projectId, s.projectId)
       )
+      if (at >= 0 && list.length === 1) return
       const s = list[(at + 1) % list.length]
       open(
         s.ticketKey
@@ -2205,7 +2210,8 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
 
     async getBoard(projectId: string): Promise<BoardView> {
       const needsYou: Record<string, number> = {}
-      for (const s of waitingList()) needsYou[s.projectId] = (needsYou[s.projectId] ?? 0) + 1
+      const listed = sidebarList()
+      for (const s of waitingList(listed)) needsYou[s.projectId] = (needsYou[s.projectId] ?? 0) + 1
       const { tickets, syncedAt, error } = synced.get(projectId) ?? {
         tickets: [],
         syncedAt: null,
@@ -2226,7 +2232,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
             !!s.ticketKey &&
             keys.has(s.ticketKey)
         ),
-        sidebarSessions: sidebarList(),
+        sidebarSessions: listed,
         syncedAt,
         error,
         needsYou,

@@ -1421,10 +1421,11 @@ describe('openNextNeedsYou', () => {
     expect(opened).toEqual([p2Session])
   })
 
-  it('stays on the only waiting session', async () => {
+  it('leaves the only waiting session alone, on whichever tab you are', async () => {
     const { t, opened } = await twoProjects(waitingPair.slice(0, 1))
+    t.orch.openNextNeedsYou({ ...p1Ticket, tab: 'changes' })
     t.orch.openNextNeedsYou(p1Ticket)
-    expect(opened).toEqual([p1Ticket])
+    expect(opened).toEqual([])
   })
 
   it('opens the first waiting session from a session that is gone', async () => {

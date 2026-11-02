@@ -97,16 +97,15 @@ test('View > Next Needs You is disabled while nothing waits, and opens a closed 
       return item && { label: item.label, accelerator: item.accelerator, enabled: item.enabled }
     })
   ).toEqual({ label: 'Next Needs You', accelerator: 'CmdOrCtrl+Shift+J', enabled: false })
+  const windows = (): Promise<number> =>
+    app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.close())
-  await expect
-    .poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length))
-    .toBe(0)
+  await expect.poll(windows).toBe(0)
   await app.evaluate(({ Menu }) =>
     Menu.getApplicationMenu()!.getMenuItemById('nextNeedsYou')!.click()
   )
-  await expect
-    .poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length))
-    .toBe(1)
+  await expect.poll(windows).toBe(1)
+  await app.close()
 })
 
 const focused = (app: ElectronApplication): Promise<boolean> =>
