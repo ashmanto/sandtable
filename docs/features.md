@@ -185,10 +185,11 @@ refusal, a notification title, or a format example.
 ### Pull request stage
 
 - A ticket's open pull request shows its stage on the card, the list row, and the ticket view
-  header, from the board sync: **Checks failing**, **Changes requested**, **Ready to merge**, or
-  **PR open**.
-- **Ready to merge** means not a draft, checks passing or none, approved or no review needed, and
-  mergeable. A draft always shows **PR open**.
+  header, from the board sync, and in Gauges for the session's pull request: **Conflicts**,
+  **Checks failing**, **Changes requested**, **Ready to merge**, or **PR open**.
+- **Conflicts** means the pull request conflicts with its base branch. **Ready to merge** means not
+  a draft, checks passing or none, approved or no review needed, and mergeable. A draft always
+  shows **PR open**. While GitHub works out mergeability after a push, the stage stays as it was.
 - A ticket in **Done** shows no stage word, and **Merged** when a merged pull request closed it.
 - A Linear or Jira ticket shows no stage word.
 

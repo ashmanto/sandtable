@@ -185,16 +185,6 @@ const Kv = ({
   </div>
 )
 
-// shortcut: the session's PR list has no mergeable state, so Ready to merge never shows here; add it to PullRequestState when wanted.
-const stageOf = (pr: PullRequestState): string =>
-  stageLook[
-    pr.checks.some((c) => c.state === 'failing')
-      ? 'checksFailing'
-      : pr.reviewDecision === 'changesRequested'
-        ? 'changesRequested'
-        : 'open'
-  ].label
-
 type Work = {
   files: number
   added: number
@@ -458,7 +448,9 @@ function Panel({
         <Row
           open
           title="Work"
-          summary={[filesWord, pr && `#${pr.number} ${stageOf(pr)}`].filter(Boolean).join(' · ')}
+          summary={[filesWord, pr && `#${pr.number} ${stageLook[pr.stage].label}`]
+            .filter(Boolean)
+            .join(' · ')}
         >
           <Kv k="Files">
             {onOpenChanges ? (
@@ -476,7 +468,7 @@ function Panel({
               <a href={p.url} target="_blank" rel="noreferrer" className={textLink}>
                 #{p.number}
               </a>{' '}
-              {stageOf(p)}
+              {stageLook[p.stage].label}
             </Kv>
           ))}
           <Kv k="Review findings">

@@ -333,6 +333,12 @@ describe('prStage', () => {
     expect(await stageOf([pr({ commits: { nodes: [] } })])).toBe('readyToMerge')
   })
 
+  it('keeps the last stage while GitHub computes mergeability, and says conflicts', async () => {
+    expect(await stageOf([pr({ url: 'u-conflicts', mergeable: 'CONFLICTING' })])).toBe('conflicts')
+    expect(await stageOf([pr({ url: 'u-conflicts', mergeable: 'UNKNOWN' })])).toBe('conflicts')
+    expect(await stageOf([pr({ url: 'u-fresh', mergeable: 'UNKNOWN' })])).toBe('open')
+  })
+
   it('says open for a draft that would otherwise be ready to merge', async () => {
     expect(await stageOf([pr({ isDraft: true })])).toBe('open')
   })

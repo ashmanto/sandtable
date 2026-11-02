@@ -188,6 +188,7 @@ describe('TicketCard pull request stage', () => {
 
   it.each([
     ['open', 'PR open'],
+    ['conflicts', 'Conflicts'],
     ['checksFailing', 'Checks failing'],
     ['changesRequested', 'Changes requested'],
     ['readyToMerge', 'Ready to merge']

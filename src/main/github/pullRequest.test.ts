@@ -11,12 +11,16 @@ const answer = {
           title: 'Dark mode',
           url: 'https://github.com/o/r/pull/12',
           reviewDecision: 'CHANGES_REQUESTED',
+          mergeable: 'MERGEABLE',
+          isDraft: false,
+          baseRefName: 'main',
           headRepository: { nameWithOwner: 'o/r' },
           commits: {
             nodes: [
               {
                 commit: {
                   statusCheckRollup: {
+                    state: 'FAILURE',
                     contexts: {
                       nodes: [
                         {
@@ -127,6 +131,9 @@ const answer = {
           title: 'From a fork',
           url: 'https://github.com/o/r/pull/13',
           reviewDecision: null,
+          mergeable: 'CONFLICTING',
+          isDraft: false,
+          baseRefName: 'main',
           headRepository: { nameWithOwner: 'fork/r' },
           commits: { nodes: [] },
           reviewThreads: { nodes: [] }
@@ -146,6 +153,8 @@ describe('fetchPullRequests', () => {
         title: 'Dark mode',
         url: 'https://github.com/o/r/pull/12',
         reviewDecision: 'changesRequested',
+        base: 'main',
+        stage: 'checksFailing',
         checks: [
           {
             name: 'test',
@@ -234,8 +243,23 @@ describe('fetchPullRequests', () => {
     }
     const gql = vi.fn(async () => ({ repository: { pullRequests: { nodes: [pr] } } }))
     expect(await fetchPullRequests(gql, 'o/r', 'b')).toMatchObject([
-      { number: 13, reviewDecision: null, checks: [], threads: [] }
+      { number: 13, reviewDecision: null, stage: 'conflicts', checks: [], threads: [] }
     ])
+  })
+
+  it('says ready to merge for a clean, approved, green pull request', async () => {
+    const pr = {
+      ...answer.repository.pullRequests.nodes[1],
+      url: 'https://github.com/o/r/pull/14',
+      reviewDecision: 'APPROVED',
+      mergeable: 'MERGEABLE',
+      headRepository: { nameWithOwner: 'o/r' },
+      commits: {
+        nodes: [{ commit: { statusCheckRollup: { state: 'SUCCESS', contexts: { nodes: [] } } } }]
+      }
+    }
+    const gql = vi.fn(async () => ({ repository: { pullRequests: { nodes: [pr] } } }))
+    expect(await fetchPullRequests(gql, 'o/r', 'b')).toMatchObject([{ stage: 'readyToMerge' }])
   })
 })
 

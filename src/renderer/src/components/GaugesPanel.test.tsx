@@ -347,6 +347,8 @@ describe('GaugesPanel', () => {
         title: 'Fix',
         url: 'https://github.com/o/r/pull/286',
         reviewDecision: null,
+        base: 'main',
+        stage: 'checksFailing',
         checks: [{ name: 'ci', state: 'failing' }],
         threads: []
       }

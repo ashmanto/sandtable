@@ -67,7 +67,7 @@ them through Tailwind classes and never name a raw color.
 - Pull request states are chips with a word: **Open** is `blue` on `blue-soft`, **Merged** is
   `fg` on `neutral-soft`, and **Closed** is `fg-3` on `neutral-soft`. Where an open pull request
   stands is a chip with a 12 px `GitPullRequest` icon and a word: **PR open** is `blue` on
-  `blue-soft`, **Checks failing** `danger` on `danger-soft`, **Changes requested** `amber` on
+  `blue-soft`, **Conflicts** and **Checks failing** `danger` on `danger-soft`, **Changes requested** `amber` on
   `amber-soft`, and **Ready to merge** `added` on `added-soft`.
 - Ticket statuses have drawn 14 px icons, not `lucide`'s circles, which mark session states: **To
   do** is an empty ring in `fg-3`, **In progress** a ring with its right half filled in `yellow`,
@@ -464,7 +464,7 @@ them through Tailwind classes and never name a raw color.
     and the repo (none on a Linear or Jira issue whose repo isn't known yet). On the right,
     **Merged** on a ticket in **Done** that a merged pull request closed, a Linear issue with one
     attached, or a Jira issue whose key one names (see the ticket view), or, on a ticket in another column with an open pull request,
-    where it stands (**PR open**, **Checks failing**, **Changes requested**, or **Ready to merge**,
+    where it stands (**PR open**, **Conflicts**, **Checks failing**, **Changes requested**, or **Ready to merge**,
     in the [pull request stage chip](#color)), then the session's model while the state chip shows (**Fable**, **Opus**, **Sonnet**, or **Haiku** in 11 px
     `fg-3`, which screen readers hear as "Model: Opus"; nothing for Account default), then the state chip, then the assignees as 18 px round avatars with their initial (`line-2` fill,
     `fg` text, a 1 px ring in the card's fill so they overlap cleanly), named in a Tip tooltip on hover by their
