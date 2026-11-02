@@ -792,8 +792,8 @@ refusal, a notification title, or a format example.
   `*.pem` in any worktree.
 - The diff it gets leaves out those credential files and files that show only their counts. A diff
   over 200,000 bytes is cut to fit, and Claude is told so.
-- The review also reads the ticket and the note you started it with. Work that neither asked for
-  comes back as a finding of at most **Medium**.
+- The review also reads the ticket, up to 100,000 bytes, and the note you started it with. Claude
+  is asked to rate work that neither asked for at most **Medium**.
 - When the ticket has a **Done when** or acceptance section, each criterion the changes miss comes
   back as a proposal named by that criterion, quoted from the ticket. An answer that isn't a whole
   item of that section is dropped. A ticket missing from the sync gets a review of the diff alone.

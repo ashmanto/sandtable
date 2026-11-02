@@ -187,11 +187,16 @@ function visibleMarkdown(body: string): string {
 export const visibleText = (md: string): string => withoutUnsafe(visibleMarkdown(md))
 
 /** The first message Claude Code receives: your note, then the issue line naming its service and body, cut to fit 10,000 bytes in all for tmux. */
-export function openingPrompt(t: Ticket, service: Service, note?: string): string {
+export function openingPrompt(
+  t: Ticket,
+  service: Service,
+  note?: string,
+  max = MAX_BODY_BYTES
+): string {
   const yours = fitBytes(withoutUnsafe(note ?? '').trim(), MAX_NOTE_BYTES)
   const head = `${yours && `Your note for this session:\n${yours}\n\n`}${service} issue ${t.key}: ${withoutUnsafe(t.title)}\n${t.url}\n\n`
   const body = visibleText(t.body)
-  const room = MAX_BODY_BYTES - Buffer.byteLength(head)
+  const room = max - Buffer.byteLength(head)
   if (Buffer.byteLength(body) <= room) return head + body
   const footer = `\n\n[Body truncated. Read the full issue at ${t.url}]`
   return head + fitBytes(body, Math.max(0, room - Buffer.byteLength(footer))) + footer

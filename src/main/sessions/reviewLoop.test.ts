@@ -471,11 +471,14 @@ describe('review', () => {
   const promptOf = (t: ReturnType<typeof setup>, call = 0): string =>
     t.deps.claude.print.mock.calls[call][1].at(-1)!
   const withCriteria = ticket({ body: 'Add a toggle.\n\n## Done when\n\n- A works\n- B works' })
-  const synced = async (note?: string): Promise<ReturnType<typeof setup> & { wt: string }> => {
+  const synced = async (
+    note?: string,
+    over = withCriteria
+  ): Promise<ReturnType<typeof setup> & { wt: string }> => {
     const wt = tempDir('st-wt-')
     const t = setup({
       sessions: [session({ state: 'needsYou', worktrees: [wt], ...(note && { note }) })],
-      tickets: [withCriteria]
+      tickets: [over]
     })
     t.deps.git.changes.mockResolvedValue(diff())
     await t.orch.reconnect()
@@ -489,6 +492,15 @@ describe('review', () => {
     await t.orch.review('s1')
     expect(promptOf(t)).toContain('<issue>\nYour note for this session:\nAlso rename X.')
     expect(promptOf(t)).toContain('- B works\n</issue>')
+  })
+
+  it('gives the review the whole body of a long ticket', async () => {
+    const body = `${'x'.repeat(20_000)}\n\n## Done when\n\n- Z works`
+    const t = await synced(undefined, ticket({ body }))
+    t.deps.claude.print.mockResolvedValueOnce(reply('r'))
+    await t.orch.review('s1')
+    expect(promptOf(t)).toContain('- Z works\n</issue>')
+    expect(promptOf(t)).not.toContain('[Body truncated')
   })
 
   it('falls back to the diff-only prompt when the ticket left the sync', async () => {

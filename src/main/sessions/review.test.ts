@@ -172,6 +172,11 @@ describe('reviewPrompt', () => {
     expect(prompt.length).toBeLessThan(202_500)
   })
 
+  it('asks for unmet only when the issue has a criterion the parser can read', () => {
+    expect(reviewPrompt('+a', '**Done when:** tests pass')).toContain('"unmet"')
+    expect(reviewPrompt('+a', '## Done when\n\n## Notes\n\n- x')).not.toContain('"unmet"')
+  })
+
   it('removes invisible characters from the issue', () => {
     expect(reviewPrompt('+a', 'Fix\u200b the\u202e login.')).toContain(
       '<issue>\nFix the login.\n</issue>'
@@ -367,6 +372,39 @@ describe('parseReview with an issue', () => {
       md
     )
     expect(out.map((f) => f.title)).toEqual(many.slice(0, 20))
+  })
+
+  const titlesOf = (md: string, criteria: unknown[]): (string | undefined)[] =>
+    parseReview(
+      unmet(
+        criteria.map((c) =>
+          typeof c === 'string' ? { criterion: c, severity: 'low', reason: 'r' } : c
+        )
+      ),
+      [changes()],
+      md
+    ).map((f) => f.title)
+
+  it('ends the section at prose or a truncation footer after the list', () => {
+    const footer = '[Body truncated. Read the full issue at https://x]'
+    const md = `## Done when\n\n- Alpha works\n\nThanks!\n\n${footer}`
+    expect(titlesOf(md, ['Thanks!', footer, 'Alpha works'])).toEqual(['Alpha works'])
+  })
+
+  it('keeps a criterion written on the heading line', () => {
+    expect(titlesOf('**Done when:** tests pass', ['tests pass'])).toEqual(['tests pass'])
+    expect(
+      titlesOf('Done when the modal closes', ['Done when the modal closes', 'the modal closes'])
+    ).toEqual(['the modal closes'])
+  })
+
+  it("doesn't end the section at a comment inside a fenced code block", () => {
+    const md = '## Done when\n\n- Run:\n  ```\n  # build\n  npm test\n  ```\n- Beta works'
+    expect(titlesOf(md, ['Beta works'])).toEqual(['Beta works'])
+  })
+
+  it('drops a malformed unmet entry and keeps the rest', () => {
+    expect(titlesOf(issue, [null, 5, 'Alpha works'])).toEqual(['Alpha works'])
   })
 
   it('drops unmet without an issue or a Done when section', () => {

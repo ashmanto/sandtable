@@ -19,7 +19,7 @@ import { sessionDraft } from '../../shared/drafts'
 import type { Orchestrator, OrchestratorDeps } from '../orchestrator'
 import type { PrintRun } from './chat'
 import { oneLine, openingPrompt, redact, withoutUnsafe } from './claudeLaunch'
-import { diffText, parseReview, reviewArgs, reviewPrompt } from './review'
+import { diffText, MAX_ISSUE_BYTES, parseReview, reviewArgs, reviewPrompt } from './review'
 import { typeIntoTmux } from './tmux'
 import { promptTyped } from './prompt'
 import { messageOf } from '../../shared/errors'
@@ -183,7 +183,7 @@ export function createReviewLoop(ctx: {
       const diff = diffText(changes)
       if (!diff) throw new Error(changes.find((c) => c.error)?.error ?? 'No changes to review')
       const ticket = ctx.ticketOf(s)
-      const issue = ticket && openingPrompt(ticket, ctx.serviceOf(s), s.note)
+      const issue = ticket && openingPrompt(ticket, ctx.serviceOf(s), s.note, MAX_ISSUE_BYTES)
       const stdout = await printRun(
         s.projectId,
         ticketKey,
