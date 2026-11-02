@@ -54,7 +54,8 @@ them through Tailwind classes and never name a raw color.
   with `ScanSearch`, whose opacity pulses to 55% and back every 1.6 s. **Done,
   session open** is `neutral-soft` with `fg` text, a 1 px `line-2` inset ring, and
   `CircleDashed`; a sidebar session row shortens it to **Done**, with "Done, session open" as
-  its accessible name. A sidebar session row's tooltip is its full title and state word, as
+  its accessible name. A **Needs you** sidebar row follows its badge with "asking" or "capped" in
+  `fg-3`, hidden like the badge's word in a narrow sidebar but kept in its name. A sidebar session row's tooltip is its full title and state word, as
   "Rate limits — Idle", and a live session's usage on a line of its own. **Can't start** is `danger` on `danger-soft` with
   `CircleX`. The sidebar's per-project count is the bare number with `CircleAlert` in the same
   `amber` on `amber-soft`, with "3 need you" (or "1 needs you") as its accessible name and
@@ -217,7 +218,8 @@ them through Tailwind classes and never name a raw color.
   just before **Go back** and **Go forward**, with the tooltip "Hide sidebar (⌃⌘S)". While the
   sidebar is hidden, a matching **Show sidebar** starts the view's header, 88 px from the panel's edge,
   followed by **Go back** and **Go forward**, then the total "3 need you" (or "1 needs you") in `amber` on `amber-soft` when any session needs you.
-  **View > Hide Sidebar** or **Show Sidebar** and Control+Command+S do the same. Whenever the
+  **View > Hide Sidebar** or **Show Sidebar** and Control+Command+S do the same. After a separator,
+  **View > Next Needs You** (⇧⌘J) follows, disabled while nothing needs you. Whenever the
   window controls show and no sidebar is beside a header, as on the setup guide, the header starts
   88 px in; in full screen the controls hide and headers keep their 16 px padding.
 - The ticket and session view headers share one layout of groups. What the view is about fills

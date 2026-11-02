@@ -136,6 +136,21 @@ describe('ProjectSidebar', () => {
     expect(onAdd).toHaveBeenCalled()
   })
 
+  it('adds asking or capped after Needs you, and nothing else', () => {
+    render(
+      sidebar({
+        sessions: [
+          adhoc({ id: 'a1', name: 'Asks', state: 'needsYou', asking: true }),
+          adhoc({ id: 'a2', name: 'Capped', state: 'needsYou', capped: true }),
+          adhoc({ id: 'a3', name: 'Runs', state: 'running', capped: true })
+        ]
+      })
+    )
+    expect(screen.getByRole('button', { name: /^Asks/ })).toHaveTextContent(/Needs you\s*asking/)
+    expect(screen.getByRole('button', { name: /^Capped/ })).toHaveTextContent(/Needs you\s*capped/)
+    expect(screen.getByRole('button', { name: /^Runs/ })).not.toHaveTextContent(/asking|capped/)
+  })
+
   it("opens and closes a project's sessions with its tile toggle", async () => {
     render(sidebar({ sessions: [triage] }))
     const toggle = screen.getByRole('button', { name: 'Show sessions of Sandtable' })

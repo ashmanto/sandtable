@@ -53,7 +53,11 @@ it('marks a needsYou session finished when its tmux session ends', async () => {
   const orch = createOrchestrator({
     claudeDirSet: false,
     store: {
-      load: async () => ({ ...emptyStore(), sessions: [record] }),
+      load: async () => ({
+        ...emptyStore(),
+        projects: [{ id: 'p1', name: 'P', repos: [] }],
+        sessions: [record]
+      }),
       save: async () => undefined
     },
     cache: { load: async () => ({}), save: async () => undefined },

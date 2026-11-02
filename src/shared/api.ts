@@ -41,7 +41,6 @@ import type {
   Theme,
   TicketDetails,
   TicketDraft,
-  TicketRef,
   TicketUsage,
   ToolCheck,
   Triage
@@ -300,7 +299,6 @@ export type SandtableApi = {
     onSwipe(cb: (direction: string) => void): () => void
     setSidebarHidden(hidden: boolean): void
     setSidebarWidth(width: number): void
-    setStartFailures(tickets: TicketRef[]): void
     /** The unsent composer draft saved under `key`, or null when there is none. */
     draft(key: string): Promise<ComposerDraft | null>
     /** Saves each part of the draft under `key` that `patch` has, removing an empty one. */

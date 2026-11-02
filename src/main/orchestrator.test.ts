@@ -1300,47 +1300,48 @@ describe('sync', () => {
 })
 
 describe('needsYouCount', () => {
-  const failed = { projectId: 'p1', ticketKey: 'octo/shop#147' }
-
-  it('counts a failed Start while the ticket can still start', async () => {
-    const t = setup({})
-    await t.orch.reconnect()
-    await t.orch.sync('p1')
-    expect(t.orch.needsYouCount([failed])).toBe(1)
-  })
-
-  it('drops a failed Start once the ticket is done, has a live session, or its project is gone', async () => {
-    const done = setup({ tickets: [ticket({ status: 'Done' })] })
-    await done.orch.reconnect()
-    await done.orch.sync('p1')
-    expect(done.orch.needsYouCount([failed])).toBe(0)
-
-    const live = setup({ sessions: [session({ state: 'running' })] })
-    live.live.add('st-p1-octo-shop-147')
-    await live.orch.reconnect()
-    await live.orch.sync('p1')
-    expect(live.orch.needsYouCount([failed])).toBe(0)
-
-    const gone = setup({})
-    await gone.orch.reconnect()
-    await gone.orch.sync('p1')
-    await gone.orch.removeProject('p1')
-    expect(gone.orch.needsYouCount([failed])).toBe(0)
-  })
-
-  it("counts a failed Start while another source's ticket with the same key is live", async () => {
-    const t = setup({
-      projects: [
-        { ...repoProject, jira: { site: 'acme.atlassian.net', project: 'INF', name: 'Internal' } },
-        { ...repoProject, id: 'p2', linear: { team: 'INF', projects: [] } }
-      ],
-      tickets: [ticket({ key: 'INF-12', itemId: '10012', number: 12, repo: '', status: 'new' })],
-      sessions: [session({ projectId: 'p2', ticketKey: 'INF-12', tmuxName: 'st-p2-INF-12' })]
+  const loose = (over: Partial<SessionRecord> = {}): SessionRecord =>
+    session({
+      id: 'a1',
+      ticketKey: undefined,
+      name: 'Scratch',
+      tmuxName: 'st-p1-session-a1',
+      ...over
     })
-    t.live.add('st-p2-INF-12')
-    await t.orch.reconnect()
+
+  it('counts the waiting ticket sessions on the board and the waiting sessions without a ticket', async () => {
+    const t = setup({ sessions: [session({ state: 'needsYou' }), loose({ state: 'needsYou' })] })
+    await t.orch.reconnect(false)
     await t.orch.sync('p1')
-    expect(t.orch.needsYouCount([{ projectId: 'p1', ticketKey: 'INF-12' }])).toBe(1)
+    expect(t.orch.needsYouCount()).toBe(2)
+  })
+
+  it("leaves out a hidden ticket's session, a running session, and a done ticket's open session", async () => {
+    const t = setup({
+      tickets: [
+        ticket({ key: 'octo/shop#1', number: 1, status: 'Wont fix' }),
+        ticket({ key: 'octo/shop#2', number: 2, status: 'Done' }),
+        ticket()
+      ],
+      sessions: [
+        session({ id: 's1', ticketKey: 'octo/shop#1', state: 'needsYou' }),
+        session({ id: 's2', ticketKey: 'octo/shop#2', state: 'needsYou' }),
+        session({ id: 's3' })
+      ]
+    })
+    await t.orch.reconnect(false)
+    await t.orch.sync('p1')
+    expect(t.orch.needsYouCount()).toBe(0)
+  })
+
+  it("leaves a hidden ticket's session out of the board's Needs you counts", async () => {
+    const t = setup({
+      tickets: [ticket({ status: 'Wont fix' })],
+      sessions: [session({ state: 'needsYou' })]
+    })
+    await t.orch.reconnect(false)
+    await t.orch.sync('p1')
+    expect((await t.orch.getBoard('p1')).needsYou).toEqual({})
   })
 
   it("stops counting a removed project's sessions and recounts", async () => {
@@ -1351,7 +1352,92 @@ describe('needsYouCount', () => {
     t.orch.onChange(changed)
     await t.orch.removeProject('p1')
     expect(changed).toHaveBeenCalledWith('p1')
-    expect(t.orch.needsYouCount([])).toBe(0)
+    expect(t.orch.needsYouCount()).toBe(0)
+  })
+})
+
+describe('openNextNeedsYou', () => {
+  const p1Ticket: LastView = { projectId: 'p1', ticketKey: 'octo/shop#147', tab: 'conversation' }
+  const p2Session = { projectId: 'p2', sessionId: 'a2' }
+  const twoProjects = async (
+    sessions: SessionRecord[]
+  ): Promise<{ t: ReturnType<typeof setup>; opened: LastView[] }> => {
+    const t = setup({ projects: [project, { ...repoProject, id: 'p2', name: 'Web' }], sessions })
+    await t.orch.reconnect(false)
+    await t.orch.sync('p1')
+    const opened: LastView[] = []
+    t.orch.onOpen((v) => opened.push(v))
+    return { t, opened }
+  }
+  const waitingPair = [
+    session({ state: 'needsYou' }),
+    session({
+      id: 'a2',
+      projectId: 'p2',
+      ticketKey: undefined,
+      name: 'Scratch',
+      tmuxName: 'st-p2-session-a2',
+      state: 'needsYou'
+    })
+  ]
+
+  it('reaches the waiting sessions in two projects in sidebar order and wraps around', async () => {
+    const { t, opened } = await twoProjects(waitingPair)
+    t.orch.openNextNeedsYou({ projectId: 'p1' })
+    t.orch.openNextNeedsYou(opened[0])
+    t.orch.openNextNeedsYou(opened[1])
+    expect(opened).toEqual([p1Ticket, p2Session, p1Ticket])
+  })
+
+  it("follows the sidebar's project order, not the order the sessions started in", async () => {
+    const { t, opened } = await twoProjects([...waitingPair].reverse())
+    t.orch.openNextNeedsYou(null)
+    expect(opened).toEqual([p1Ticket])
+  })
+
+  it('opens Changes only when the last review round left proposals waiting', async () => {
+    const round = { round: 1, startedAt: '2026-10-24T00:00:00.000Z', files: 1 }
+    const { t, opened } = await twoProjects([
+      session({ state: 'needsYou', reviewRounds: [{ ...round, waiting: 2 }] })
+    ])
+    t.orch.openNextNeedsYou(null)
+    const later = await twoProjects([
+      session({
+        state: 'needsYou',
+        reviewRounds: [
+          { ...round, waiting: 3 },
+          { ...round, round: 2, waiting: 0 }
+        ]
+      })
+    ])
+    later.t.orch.openNextNeedsYou(null)
+    expect(opened).toEqual([{ ...p1Ticket, tab: 'changes' }])
+    expect(later.opened).toEqual([p1Ticket])
+  })
+
+  it("moves on from a waiting ticket's Details tab instead of reopening it", async () => {
+    const { t, opened } = await twoProjects(waitingPair)
+    t.orch.openNextNeedsYou({ ...p1Ticket, tab: 'details' })
+    expect(opened).toEqual([p2Session])
+  })
+
+  it('leaves the only waiting session alone, on whichever tab you are', async () => {
+    const { t, opened } = await twoProjects(waitingPair.slice(0, 1))
+    t.orch.openNextNeedsYou({ ...p1Ticket, tab: 'changes' })
+    t.orch.openNextNeedsYou(p1Ticket)
+    expect(opened).toEqual([])
+  })
+
+  it('opens the first waiting session from a session that is gone', async () => {
+    const { t, opened } = await twoProjects(waitingPair)
+    t.orch.openNextNeedsYou({ projectId: 'p1', sessionId: 'ended' })
+    expect(opened).toEqual([p1Ticket])
+  })
+
+  it('opens nothing while no session waits', async () => {
+    const { t, opened } = await twoProjects([session()])
+    t.orch.openNextNeedsYou(null)
+    expect(opened).toEqual([])
   })
 })
 
@@ -1372,7 +1458,7 @@ describe('hook events', () => {
     onClick()
     expect(opened).toEqual([{ projectId: 'p1', ticketKey: 'octo/shop#147' }])
     expect((await t.orch.getBoard('p1')).needsYou).toEqual({ p1: 1 })
-    expect(t.orch.needsYouCount([])).toBe(1)
+    expect(t.orch.needsYouCount()).toBe(1)
   })
 
   it('notifies again at Stop after PostToolUse moves the session back to running', async () => {

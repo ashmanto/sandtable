@@ -51,7 +51,8 @@ refusal, a notification title, or a format example.
 - An open project lists its sessions without a ticket and its ticket sessions in **Running**,
   **Needs you**, **Reviewing**, or **Idle**, oldest first, then those in **Done, session open**.
 - Each row shows its state as a word. A ticket session's row shows the ticket number and title,
-  and hovering or focusing it shows the full title and state.
+  and hovering or focusing it shows the full title and state. A **Needs you** row adds "asking"
+  while Claude asks you something, or "capped" at its token cap.
 - Clicking a ticket session's row, or pressing Enter on it, opens the ticket on **Conversation**.
 - A ticket session leaves the list when it finishes, ends, or its ticket moves off the board.
 - A project's **More** menu has **Edit project**, **New session**, **Routines**, **Move to** (No
@@ -91,6 +92,10 @@ refusal, a notification title, or a format example.
 - Switching tabs inside a ticket doesn't add a step, and a view's own **Back** goes back a step
   when it returns to the screen before.
 - A step whose project, ticket, or session is gone, or an ended session, is skipped.
+- **View > Next Needs You** or Shift-Command-J opens the sidebar session in **Needs you** after
+  the one you're on, or the first, in sidebar order across projects, wrapping around; **Go back**
+  returns. A ticket opens on **Changes** when its last review round left proposals waiting, and on
+  **Conversation** otherwise. The item is off while nothing waits, and opens a closed window.
 
 ## Window
 
@@ -1254,8 +1259,8 @@ refusal, a notification title, or a format example.
   **Play a sound**. Restarting Sandtable can send it once more for the same window.
 - Each Claude Code account's windows count apart, and the notification names an account other than
   Default. A session on an API key has no plan limits, so it sends none.
-- A count on the Dock icon, across all projects, of the sessions that need you plus the tickets
-  whose Start failed and that can still start.
+- A count on the Dock icon, across all projects, of the sessions the sidebar lists that need you:
+  the ones **Next Needs You** reaches.
 - **Idle** sessions, routine **Done** runs, and done tickets whose session is still open don't
   count toward the Dock icon.
 - The Dock count is hidden while Sandtable is the active app, clears at zero, and doesn't follow the

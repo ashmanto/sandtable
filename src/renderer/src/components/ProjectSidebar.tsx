@@ -106,6 +106,11 @@ function SessionButton({
           <span className="ml-auto shrink-0">
             <SessionBadge state={stateOf(s)} short labelClassName="@max-[263px]/sidebar:sr-only" />
           </span>
+          {stateOf(s) === 'needsYou' && (s.asking || s.capped) && (
+            <span className="shrink-0 text-fg-3 @max-[263px]/sidebar:sr-only">
+              {s.asking ? 'asking' : 'capped'}
+            </span>
+          )}
         </span>
       </button>
     </Tip>
