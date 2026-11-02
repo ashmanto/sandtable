@@ -345,9 +345,6 @@ export type RemoveResult = { removed: true } | { removed: false; reason: string 
 
 export type Column = 'todo' | 'inProgress' | 'done' | 'hidden'
 
-/** A ticket in a project. */
-export type TicketRef = { projectId: string; ticketKey: string }
-
 /** A column a card can sit in: every column but hidden. */
 export type BoardColumn = Exclude<Column, 'hidden'>
 

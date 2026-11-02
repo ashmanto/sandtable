@@ -12,7 +12,7 @@ import {
   session
 } from 'electron'
 import { sidebarWidth, type PushArgs, type PushChannel, type WindowFrame } from '../shared/api'
-import type { LastView, TicketRef, Theme } from '../shared/types'
+import type { LastView, Theme } from '../shared/types'
 import { homedir } from 'os'
 import { join } from 'path'
 import { spawn } from 'node-pty'
@@ -209,14 +209,12 @@ async function start(): Promise<void> {
   const windowState = createWindowState(join(dataDir, 'window-state.json'))
   await windowState.load()
   const drafts = createDrafts(join(dataDir, 'drafts'))
-  let failedStarts: TicketRef[] = []
   const openWindow = (): BrowserWindow =>
     createWindow(windowState, () => {
       rendererStarted = false
       terminals.closeAll()
       orch.unwatchAll()
       orch.watch(null, false)
-      failedStarts = []
       sessionsChanged()
     })
 
@@ -264,6 +262,7 @@ async function start(): Promise<void> {
     setMenu()
     send('app.onFrame', frameOf(windowState))
   }
+  let waitingCount = 0
   const setMenu = (): void => {
     const hidden = frameOf(windowState).sidebarHidden
     Menu.setApplicationMenu(
@@ -294,6 +293,14 @@ async function start(): Promise<void> {
               label: hidden ? 'Show Sidebar' : 'Hide Sidebar',
               accelerator: 'Ctrl+Cmd+S',
               click: () => setSidebarHidden(!hidden)
+            },
+            { type: 'separator' },
+            {
+              id: 'nextNeedsYou',
+              label: 'Next Needs You',
+              accelerator: 'CmdOrCtrl+Shift+J',
+              enabled: waitingCount > 0,
+              click: () => orch.openNextNeedsYou(windowState.get().view ?? null)
             },
             ...(app.isPackaged
               ? []
@@ -382,7 +389,11 @@ async function start(): Promise<void> {
   })
   const sessionsChanged = (): void => {
     keepAwake.update()
-    dockBadge.setCount(orch.needsYouCount(failedStarts))
+    const count = orch.needsYouCount()
+    dockBadge.setCount(count)
+    const flipped = count > 0 !== waitingCount > 0
+    waitingCount = count
+    if (flipped) setMenu()
   }
   orch.onChange((projectId) => {
     send('board.onChange', projectId)
@@ -546,10 +557,6 @@ async function start(): Promise<void> {
       'app.setSidebarHidden': setSidebarHidden,
       'app.setSidebarWidth': (width) =>
         void windowState.update({ sidebarWidth: sidebarWidth(width) }),
-      'app.setStartFailures': (tickets) => {
-        failedStarts = tickets
-        sessionsChanged()
-      },
       'app.draft': drafts.get,
       'app.saveDraft': drafts.save
     }

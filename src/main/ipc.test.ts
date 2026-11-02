@@ -62,7 +62,6 @@ const appHandlers = (): AppHandlers => ({
   'app.frame': vi.fn(),
   'app.setSidebarHidden': vi.fn(),
   'app.setSidebarWidth': vi.fn(),
-  'app.setStartFailures': vi.fn(),
   'app.draft': vi.fn(),
   'app.saveDraft': vi.fn()
 })

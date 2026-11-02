@@ -55,21 +55,7 @@ const failures = new Map<string, StartFailure>()
 const models = new Map<string, Model | null>()
 const lastStarts = new Map<string, Pick<Base, 'extraRepos' | 'mainRepo' | 'note' | 'plan'>>()
 const pending = new Set<string>()
-const { subscribe, changed: notify } = listenerSet()
-let reported = ''
-const changed = (): void => {
-  const keys = [...failures.keys()].join('\0')
-  if (keys !== reported) {
-    reported = keys
-    window.sandtable.app.setStartFailures(
-      [...failures.keys()].map((key) => {
-        const [projectId, ticketKey] = key.split('\n')
-        return { projectId, ticketKey }
-      })
-    )
-  }
-  notify()
-}
+const { subscribe, changed } = listenerSet()
 const set = (key: string, check: Check | null): void => {
   if (check) checks.set(key, check)
   else {

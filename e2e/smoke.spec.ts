@@ -89,6 +89,16 @@ test('a test run stays out of the Dock and does not take focus', async () => {
   await app.close()
 })
 
+test('View > Next Needs You is disabled while nothing waits', async () => {
+  const app = await launchShown(tempDir('sandtable-e2e-'))
+  expect(
+    await app.evaluate(({ Menu }) => {
+      const item = Menu.getApplicationMenu()!.getMenuItemById('nextNeedsYou')
+      return item && { label: item.label, accelerator: item.accelerator, enabled: item.enabled }
+    })
+  ).toEqual({ label: 'Next Needs You', accelerator: 'CmdOrCtrl+Shift+J', enabled: false })
+})
+
 const focused = (app: ElectronApplication): Promise<boolean> =>
   app.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow() !== null)
 

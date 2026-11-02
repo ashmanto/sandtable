@@ -319,7 +319,6 @@ export function fakeSandtable(): SandtableApi {
       onSwipe: vi.fn(() => () => {}),
       setSidebarHidden: vi.fn(),
       setSidebarWidth: vi.fn(),
-      setStartFailures: vi.fn(),
       draft: vi.fn<SandtableApi['app']['draft']>(async () => null),
       saveDraft: vi.fn()
     }

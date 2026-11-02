@@ -471,9 +471,6 @@ describe('TicketCard Start with note', () => {
     await submitNote('Hi')
     await startInDialog()
     expect(await screen.findByText("Couldn't start: boom")).toBeInTheDocument()
-    expect(api.app.setStartFailures).toHaveBeenLastCalledWith([
-      { projectId: 'p1', ticketKey: 'octo/shop#98' }
-    ])
     await startWith('Start with note')
     const note = screen.getByRole('textbox', { name: 'Note for this session' })
     expect(note).toHaveValue('Hi')
@@ -482,7 +479,6 @@ describe('TicketCard Start with note', () => {
     await vi.waitFor(() => expect(api.tickets.start).toHaveBeenCalledTimes(2))
     await startWith('Start with note')
     expect(screen.getByRole('textbox', { name: 'Note for this session' })).toHaveValue('')
-    expect(api.app.setStartFailures).toHaveBeenLastCalledWith([])
   })
 
   it("drops a pending Start when the card can't start any more", async () => {

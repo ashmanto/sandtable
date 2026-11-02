@@ -162,7 +162,6 @@ const api: SandtableApi = {
     onSwipe: listen('app.onSwipe'),
     setSidebarHidden: send('app.setSidebarHidden'),
     setSidebarWidth: send('app.setSidebarWidth'),
-    setStartFailures: send('app.setStartFailures'),
     draft: invoke('app.draft'),
     saveDraft: send('app.saveDraft')
   }

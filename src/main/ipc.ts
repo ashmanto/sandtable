@@ -117,7 +117,6 @@ const sends: Record<SendChannel, true> = {
   'app.saveView': true,
   'app.setSidebarHidden': true,
   'app.setSidebarWidth': true,
-  'app.setStartFailures': true,
   'app.saveDraft': true
 }
 
