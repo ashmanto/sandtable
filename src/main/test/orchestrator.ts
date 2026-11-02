@@ -248,6 +248,7 @@ export function setup(
     },
     jiraClientWith: vi.fn<OrchestratorDeps['jiraClientWith']>(() => jira),
     mergedPullRequests: vi.fn<OrchestratorDeps['mergedPullRequests']>(async () => []),
+    githubStamp: vi.fn<OrchestratorDeps['githubStamp']>(async () => 'same'),
     githubReposOf: vi.fn(async (path: string) => folders[path] ?? []),
     pullRequests: vi.fn<OrchestratorDeps['pullRequests']>(async () => []),
     failedLog: vi.fn<OrchestratorDeps['failedLog']>(async () => 'Error: expected 1'),

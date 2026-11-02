@@ -41,6 +41,7 @@ import {
 } from './linear/client'
 import { createRepoIssuesClient } from './github/repoIssues'
 import { mergedPullRequests } from './github/merged'
+import { changeStamp } from './github/stamp'
 import { createJiraClient, type JiraClient } from './jira/client'
 import { createJiraCredentials, savedJiraRest } from './jira/credentials'
 import { jiraRest } from './jira/rest'
@@ -346,6 +347,7 @@ async function start(): Promise<void> {
     jiraClientWith: (site, email, token) => createJiraClient(jiraRest(site, email, token)),
     mergedPullRequests: (repo, since, truncated) =>
       mergedPullRequests(github.gql, repo, since, truncated),
+    githubStamp: (board, repos) => changeStamp(github.gql, board, repos),
     githubReposOf,
     pullRequests: (repo, branch) => fetchPullRequests(github.gql, repo, branch),
     failedLog: (repo, jobId) => failedLog(run, tools.paths.gh ?? 'gh', repo, jobId),

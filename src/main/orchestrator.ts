@@ -10,6 +10,7 @@ import type {
   Account,
   Activity,
   BoardColumn,
+  BoardSource,
   Chat,
   ChatState,
   ConversationChunk,
@@ -161,6 +162,7 @@ import type { SyncCache, SyncCacheStore } from './syncCache'
 import { messageOf } from '../shared/errors'
 
 const SYNC_MS = 60_000
+const STALE_MS = 30 * 60_000
 const POLL_MS = 3_000
 const NOTIFY_WAIT_MS = 10_000
 const SCHEDULE_MS = 30_000
@@ -227,6 +229,7 @@ export type OrchestratorDeps = {
     since: string,
     truncated?: (message: string) => void
   ): Promise<MergedPr[]>
+  githubStamp(board: BoardSource | undefined, repos: string[]): Promise<string>
   ticketDetails(repo: string, number: number): Promise<TicketDetails>
   postComment(repo: string, number: number, body: string): Promise<void>
   githubViewer(): Promise<string>
@@ -537,6 +540,16 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
   const missedConversations = new Map<string, Set<string>>()
   const runsInFlight = new Set<string>()
   const synced = new Map<string, Synced>()
+  const stamps = new Map<string, { stamp: string; at: number }>()
+  const stampOf = (p: Project): Promise<string | null> =>
+    tracked(p)
+      ? Promise.resolve(null)
+      : deps
+          .githubStamp(
+            p.board?.source,
+            p.repos.map((r) => r.github)
+          )
+          .catch(() => null)
   const viewers = new Map<string, Promise<string>>()
   const mergedPrs = new Map<string, MergedPr[]>()
   const trackerFor = (p: Project): Tracker => trackerOf(p, deps)
@@ -816,6 +829,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     try {
       const project = projectById(projectId)
       const startedAt = now().getTime()
+      const stamp = await stampOf(project)
       const truncated: string[] = []
       const problem = (message: string): void => void truncated.push(message)
       const tickets = await trackerFor(project).tickets(
@@ -851,23 +865,27 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       })
       if (merged) mergedPrs.set(projectId, merged.prs)
       persistCache()
-      // shortcut: one GitHub pull request read per live auto-on session per sync; gate on the ticket's PR if that costs too much.
-      for (const s of sessions)
-        if (
-          s.projectId === projectId &&
-          s.ticketKey &&
-          s.branch &&
-          isLive(s) &&
-          !s.removedAt &&
-          reviewLoop.autoOn(s)
-        )
-          void reviewLoop.autoPrFindings(s).catch(() => undefined)
+      autoFindings(projectId)
+      if (stamp !== null) stamps.set(projectId, { stamp, at: startedAt })
     } catch (err) {
       failed = (err as Error).message
       setError(projectId, failed)
     }
     changed(projectId)
     return failed
+  }
+  // shortcut: one GitHub pull request read per live auto-on session per sync; gate on the ticket's PR if that costs too much.
+  const autoFindings = (projectId: string): void => {
+    for (const s of sessions)
+      if (
+        s.projectId === projectId &&
+        s.ticketKey &&
+        s.branch &&
+        isLive(s) &&
+        !s.removedAt &&
+        reviewLoop.autoOn(s)
+      )
+        void reviewLoop.autoPrFindings(s).catch(() => undefined)
   }
   const running = new Map<string, Promise<string | null>>()
   /** Starts a sync, or reuses the project's running one; a caller that just wrote calls sync instead. */
@@ -899,6 +917,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     if (stamped) void persist().catch(() => undefined)
   }
   const setError = (projectId: string, error: string): void => {
+    stamps.delete(projectId)
     const current = synced.get(projectId) ?? { tickets: [], syncedAt: null, error: null }
     synced.set(projectId, { ...current, error })
   }
@@ -1082,11 +1101,20 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
   }
   let openId: string | null = null
   let visible = true
-  const syncWatched = (): Promise<unknown> =>
+  const timedSync = async (project: Project): Promise<string | null> => {
+    const stamp = await stampOf(project)
+    const last = stamps.get(project.id)
+    if (stamp !== null && last?.stamp === stamp && now().getTime() - last.at < STALE_MS) {
+      autoFindings(project.id)
+      return null
+    }
+    return joinSync(project.id)
+  }
+  const syncWatched = (timed = false): Promise<unknown> =>
     Promise.all(
       projects
         .filter((p) => p.id === openId || sessions.some((s) => s.projectId === p.id && isLive(s)))
-        .map((p) => joinSync(p.id))
+        .map((p) => (timed ? timedSync(p) : joinSync(p.id)))
     )
 
   const pollTmux = async (): Promise<void> => {
@@ -1890,7 +1918,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       }
     await persist()
     const syncTimer = setInterval(
-      unlessBusy(async () => visible && syncWatched()),
+      unlessBusy(async () => visible && syncWatched(true)),
       SYNC_MS
     )
     stoppers.push(() => clearInterval(syncTimer))
