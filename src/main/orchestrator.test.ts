@@ -6197,11 +6197,14 @@ describe('changes', () => {
 })
 
 describe('openFolder', () => {
-  const wt = '/repos/shop-wt.noindex/147-dark-mode-toggle'
+  let wt = ''
+  beforeEach(() => {
+    wt = tempDir('st-wt-')
+  })
   const cursor = { command: 'cursor', name: 'Cursor', path: '/x/cursor' }
   const idea = { command: 'idea', name: 'IntelliJ IDEA', path: '/x/idea' }
   const ready = async (over: Partial<SessionRecord> = {}): Promise<ReturnType<typeof setup>> => {
-    const t = setup({ sessions: [session(over)] })
+    const t = setup({ sessions: [session({ worktrees: [wt], ...over })] })
     t.deps.editors.mockResolvedValue([cursor, idea])
     await t.orch.reconnect()
     return t
@@ -6223,9 +6226,9 @@ describe('openFolder', () => {
   })
 
   it('opens the main checkout of a session without worktrees', async () => {
-    const t = await ready({ worktrees: [], checkout: '/repos/shop' })
-    await t.orch.openFolder('s1', '/repos/shop', 'finder')
-    expect(t.deps.openFolder).toHaveBeenCalledWith('/repos/shop', undefined)
+    const t = await ready({ worktrees: [], checkout: wt })
+    await t.orch.openFolder('s1', wt, 'finder')
+    expect(t.deps.openFolder).toHaveBeenCalledWith(wt, undefined)
   })
 
   it("refuses a folder that isn't the session's", async () => {
@@ -6240,6 +6243,14 @@ describe('openFolder', () => {
   it('refuses a removed worktree', async () => {
     const t = await ready({ state: 'finished', removedAt: '2026-10-25T00:00:00Z' })
     await expect(t.orch.openFolder('s1', wt, 'finder')).rejects.toThrow('The worktree was removed')
+  })
+
+  it('says the folder is gone instead of opening an empty editor', async () => {
+    const t = await ready({ worktrees: ['/nowhere/wt'] })
+    await expect(t.orch.openFolder('s1', '/nowhere/wt', 'editor')).rejects.toThrow(
+      'The worktree is gone; use Remove worktree, then Start'
+    )
+    expect(t.deps.openFolder).not.toHaveBeenCalled()
   })
 
   it('says why it could not open the folder', async () => {

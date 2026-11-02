@@ -432,9 +432,9 @@ describe('GaugesPanel', () => {
     ])
     const worktrees = ['/w/shop-wt.noindex/feat-147', '/w/api-wt.noindex/feat-147']
     await show(status(), { session: session('T1', { id: 's1', worktrees }) })
-    await userEvent.click(screen.getByRole('button', { name: 'Open api in Cursor' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Open in Cursor, api' }))
     expect(api.sessions.openFolder).toHaveBeenCalledWith('s1', worktrees[1], 'editor')
-    await userEvent.click(screen.getByRole('button', { name: 'Open shop in Finder' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Open in Finder, shop' }))
     expect(api.sessions.openFolder).toHaveBeenCalledWith('s1', worktrees[0], 'finder')
   })
 
@@ -450,7 +450,7 @@ describe('GaugesPanel', () => {
     await show(null, {
       session: { ...running, state: 'finished', removedAt: '2026-10-30T13:00:00Z' }
     })
-    expect(screen.queryByRole('button', { name: /^Open .*in / })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Open in / })).not.toBeInTheDocument()
   })
 
   it("shows a running session's latest step, which the header no longer does", async () => {

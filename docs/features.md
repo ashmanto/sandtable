@@ -1063,7 +1063,8 @@ refusal, a notification title, or a format example.
 ### Editor
 
 - **Editor** is set per project on the **Review** step, from the editors whose launcher is found.
-  **First found**, the default, uses the first one. With none found, the row is hidden.
+  **First found**, the default, uses the first one. The row is hidden when none is found
+  and the project saved none.
 
 ### Model
 

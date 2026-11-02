@@ -1641,7 +1641,7 @@ them through Tailwind classes and never name a raw color.
     text, focusable, an image named by its tooltip, which lists the limits and the session's
     allowed domains. Under each folder, until the worktree is removed, **Open in Finder** and
     **Open in <editor>** as text links in a wrapping row; with more than one folder, their
-    accessible names add the repo, such as "Open shop in Finder". A failed open shows its message
+    accessible names add the repo, such as "Open in Finder, shop". A failed open shows its message
     in `danger` under them.
   - **Work**, open by default: the files changed and the pull request, such as "3 files · #12 PR
     open". It opens to **Files** with lines added in `added` and removed in
@@ -2226,7 +2226,7 @@ them through Tailwind classes and never name a raw color.
   and Haiku, set to Account default unless the project saved a model, beside "The model sessions
   run on. Start and New session can pick another for one session." in 11 px `fg-2`, its
   description.
-  An **Editor** row follows, only when an editor's launcher is found: a 160 px select with First
+  An **Editor** row follows, only when an editor's launcher is found or the project saved one: a 160 px select with First
   found and each editor found, beside "The editor a session's side panel opens its folders in." in
   11 px `fg-2`.
   A **Keep done tickets** row follows, also with no **Edit**: a select with 1 day, 3 days, 7 days,

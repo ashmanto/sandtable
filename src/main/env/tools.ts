@@ -1,5 +1,5 @@
 import { execFile, type ChildProcess } from 'node:child_process'
-import { readdir } from 'node:fs/promises'
+import { readdir, realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { EDITORS, type Editor } from '../../shared/editors'
@@ -103,6 +103,19 @@ export async function findEditors(path: string, runFn: RunFn = run): Promise<Edi
     runFn
   )
   return EDITORS.flatMap((e, i) => (found[i] ? [{ ...e, path: found[i] }] : []))
+}
+
+/** Opens folder in editor, through `open -a` when its launcher lives in an app; resolves to an error message, or '' when it opened. */
+export async function openInEditor(
+  editor: Editor,
+  folder: string,
+  runFn: RunFn = run
+): Promise<string> {
+  const app = /^.*?\.app(?=\/)/.exec(await realpath(editor.path).catch(() => editor.path))?.[0]
+  const { code, stderr } = app
+    ? await runFn('/usr/bin/open', ['-a', app, folder])
+    : await runFn(editor.path, [folder], undefined, 30000)
+  return code === 0 ? '' : stderr.trim().split('\n')[0] || `${editor.name} exited with code ${code}`
 }
 
 type GhHost = { active?: boolean; state?: string; error?: string; scopes?: unknown }

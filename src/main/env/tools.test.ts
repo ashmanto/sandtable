@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
@@ -10,6 +10,7 @@ import {
   claudeFolders,
   claudeSignedIn,
   findEditors,
+  openInEditor,
   findTools,
   loginShellPath,
   run,
@@ -559,5 +560,34 @@ describe('findEditors', () => {
       { command: 'cursor', name: 'Cursor', path: '/x/cursor' },
       { command: 'idea', name: 'IntelliJ IDEA', path: '/x/idea' }
     ])
+  })
+})
+
+describe('openInEditor', () => {
+  const tempDir = tempDirs()
+  const ok: RunFn = async () => ({ stdout: '', stderr: '', code: 0 })
+
+  it("opens the folder with open -a when the launcher is inside an app, so the IDE isn't Sandtable's child", async () => {
+    const dir = tempDir('sandtable-ed-')
+    const app = join(dir, 'IntelliJ IDEA.app')
+    mkdirSync(join(app, 'Contents/MacOS'), { recursive: true })
+    writeFileSync(join(app, 'Contents/MacOS/idea'), '')
+    const fake = vi.fn<RunFn>(ok)
+    const idea = { command: 'idea', name: 'IntelliJ IDEA', path: join(app, 'Contents/MacOS/idea') }
+    expect(await openInEditor(idea, '/w/shop', fake)).toBe('')
+    expect(fake).toHaveBeenCalledWith('/usr/bin/open', ['-a', realpathSync(app), '/w/shop'])
+  })
+
+  it('runs a launcher outside an app with the folder, and says why it failed', async () => {
+    const dir = tempDir('sandtable-ed-')
+    writeFileSync(join(dir, 'idea'), '')
+    const idea = { command: 'idea', name: 'IntelliJ IDEA', path: join(dir, 'idea') }
+    const fake = vi.fn<RunFn>(ok)
+    expect(await openInEditor(idea, '/w/shop', fake)).toBe('')
+    expect(fake).toHaveBeenCalledWith(idea.path, ['/w/shop'], undefined, 30000)
+    fake.mockResolvedValue({ stdout: '', stderr: 'no display\nmore', code: 1 })
+    expect(await openInEditor(idea, '/w/shop', fake)).toBe('no display')
+    fake.mockResolvedValue({ stdout: '', stderr: '', code: 2 })
+    expect(await openInEditor(idea, '/w/shop', fake)).toBe('IntelliJ IDEA exited with code 2')
   })
 })

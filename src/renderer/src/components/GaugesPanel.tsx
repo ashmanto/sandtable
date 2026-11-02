@@ -292,7 +292,7 @@ function OpenFolder({
         <button
           type="button"
           className={textLink}
-          aria-label={`Open ${name}in Finder`}
+          aria-label={`Open in Finder${name}`}
           onClick={() => open('finder')}
         >
           Open in Finder
@@ -301,7 +301,7 @@ function OpenFolder({
           <button
             type="button"
             className={textLink}
-            aria-label={`Open ${name}in ${editor.name}`}
+            aria-label={`Open in ${editor.name}${name}`}
             onClick={() => open('editor')}
           >
             Open in {editor.name}
@@ -487,7 +487,7 @@ function Panel({
                       <OpenFolder
                         session={session}
                         folder={f}
-                        name={folders.length > 1 ? `${folderRepo(session, f)} ` : ''}
+                        name={folders.length > 1 ? `, ${folderRepo(session, f)}` : ''}
                         editor={editor}
                       />
                     )}

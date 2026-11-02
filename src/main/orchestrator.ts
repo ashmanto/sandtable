@@ -1452,16 +1452,17 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     return [...files]
   }
 
+  const goneError = (s: SessionRecord): Error =>
+    new Error(
+      !s.ticketKey
+        ? "The session's folder is gone. Remove it from the list."
+        : s.removedAt
+          ? 'The worktree was removed; use Start'
+          : 'The worktree is gone; use Remove worktree, then Start'
+    )
   const folderOf = (s: SessionRecord): string => {
     const dir = sessionDir(s)
-    if (s.removedAt || !dir || !existsSync(dir))
-      throw new Error(
-        !s.ticketKey
-          ? "The session's folder is gone. Remove it from the list."
-          : s.removedAt
-            ? 'The worktree was removed; use Start'
-            : 'The worktree is gone; use Remove worktree, then Start'
-      )
+    if (s.removedAt || !dir || !existsSync(dir)) throw goneError(s)
     return dir
   }
   const relaunch = async (s: SessionRecord, dir: string): Promise<void> => {
@@ -2838,6 +2839,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       if (s.removedAt) throw new Error('The worktree was removed')
       const folders = s.worktrees.length ? s.worktrees : s.checkout ? [s.checkout] : []
       if (!folders.includes(folder)) throw new Error("Not this session's folder")
+      if (!existsSync(folder)) throw goneError(s)
       let editor: Editor | undefined
       if (how === 'editor') {
         editor = editorFor(projectById(s.projectId).editor, await deps.editors())
