@@ -52,7 +52,8 @@ import {
   hookSettings,
   sandboxSettings,
   schemaArgs,
-  STATUS_SCRIPT
+  STATUS_SCRIPT,
+  CHECKS_RULE
 } from './sessions/claudeLaunch'
 import { compactText, prepareText } from '../shared/compact'
 import { ANSWERED_EVENT, IDLE_EVENT, stateFromEvent, STOPPED_EVENT } from './sessions/hookEvents'
@@ -5437,7 +5438,7 @@ describe('Linear projects', () => {
     const rules = cmd[cmd.indexOf('--append-system-prompt') + 1]
     expect(rules).toContain('Filing issues in Linear team APP:')
     expect(rules).toContain('Finishing issue APP-12:')
-    expect(rules).not.toContain('gh ')
+    expect(rules.replace(CHECKS_RULE, '')).not.toContain('gh ')
     expect(t.linear.setColumn).toHaveBeenCalledWith('APP', key, 'inProgress')
     expect(await shown(t)).toEqual(['octo/shop-web'])
   })
