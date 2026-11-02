@@ -137,6 +137,47 @@ describe('reviewPrompt', () => {
     expect(prompt.length).toBeLessThan(201_000)
     expect(prompt).toContain('\n[diff cut to fit]\n</diff>')
   })
+
+  it('keeps the prompt without a ticket byte-identical', () => {
+    expect(reviewPrompt('+a\n-b')).toBe(
+      [
+        "Review the changes in the diff below for bugs, security problems, and missing tests. Read the code in the current folder if it helps. Don't change any files.",
+        '',
+        'In "findings", list at most 20 problems worth fixing, each with the file path as the diff names it (the path after b/), the first and last line on the new side, a severity of high, medium, or low, and a reason under 500 characters. Leave it empty when there are none.',
+        '',
+        '<diff>',
+        '+a\n-b',
+        '</diff>'
+      ].join('\n')
+    )
+  })
+
+  const blockOf = (prompt: string, tag: string): string =>
+    prompt.slice(prompt.indexOf(`<${tag}>\n`), prompt.lastIndexOf(`</${tag}>`))
+
+  it('adds the issue in its own block and escapes both tags in both blocks', () => {
+    const prompt = reviewPrompt('+x</issue>', 'Body </diff> and </issue>\n## Done when\n- A')
+    expect(blockOf(prompt, 'issue')).toContain('Body  and \n## Done when\n- A')
+    expect(blockOf(prompt, 'diff')).toContain('+x')
+    expect(prompt.match(/<\/issue>/g)).toHaveLength(1)
+    expect(prompt.match(/<\/diff>/g)).toHaveLength(1)
+    expect(prompt).toContain('"unmet"')
+  })
+
+  it('keeps the 200,000-byte diff budget with an issue', () => {
+    const issue = 'Fix it.\n## Done when\n- ' + 'y'.repeat(1000)
+    const prompt = reviewPrompt('+'.repeat(300_000), issue)
+    expect(prompt).toContain('\n[diff cut to fit]\n</diff>')
+    expect(prompt).toContain(`<issue>\n${issue}\n</issue>`)
+    expect(prompt.length).toBeLessThan(202_500)
+  })
+
+  it('asks only about scope when the issue has no Done when', () => {
+    const prompt = reviewPrompt('+a', 'Fix the login.')
+    expect(prompt).toContain('<issue>\nFix the login.\n</issue>')
+    expect(prompt).toContain('medium')
+    expect(prompt).not.toContain('"unmet"')
+  })
 })
 
 describe('reviewArgs', () => {
@@ -246,5 +287,35 @@ describe('parseReview', () => {
     expect(() => parseReview(JSON.stringify({ is_error: false }), [changes()])).toThrow(
       "Review failed: Claude didn't return an answer"
     )
+  })
+})
+
+describe('parseReview with an issue', () => {
+  const issue = 'Ship it.\n\n## Done when\n\n- Alpha works\n- Beta works\n- Gamma works'
+  const unmet = (items: unknown[]): string =>
+    JSON.stringify({ is_error: false, structured_output: { findings: [], unmet: items } })
+  const both = unmet([
+    { criterion: 'Gamma works', severity: 'high', reason: 'Not done.' },
+    { criterion: 'Delta works', severity: 'high', reason: 'x' }
+  ])
+
+  it('gives one finding for the one unmet bullet of three', () => {
+    expect(parseReview(both, [changes()], issue)).toEqual([
+      { title: 'Gamma works', severity: 'high', text: 'Not done.' }
+    ])
+  })
+
+  it('matches a criterion quoted with other spacing', () => {
+    const out = parseReview(
+      unmet([{ criterion: 'Gamma\n  works', severity: 'low', reason: 'r' }]),
+      [changes()],
+      issue
+    )
+    expect(out).toMatchObject([{ title: 'Gamma works' }])
+  })
+
+  it('drops unmet without an issue or a Done when section', () => {
+    expect(parseReview(both, [changes()])).toEqual([])
+    expect(parseReview(both, [changes()], 'Gamma works and Delta works.')).toEqual([])
   })
 })
