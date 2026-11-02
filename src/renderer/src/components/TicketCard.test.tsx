@@ -282,6 +282,7 @@ describe('TicketCard Start with note', () => {
       undefined,
       undefined,
       'haiku',
+      undefined,
       undefined
     )
     expect(onOpen).not.toHaveBeenCalled()
@@ -330,6 +331,7 @@ describe('TicketCard Start with note', () => {
       [],
       undefined,
       'Keep it small',
+      undefined,
       undefined,
       undefined
     )
@@ -605,7 +607,8 @@ describe('TicketCard worktree setup', () => {
       undefined,
       'Hi',
       undefined,
-      false
+      false,
+      undefined
     )
     expect(document.querySelector('[data-slot="card"]')).toHaveFocus()
     expect(screen.queryByRole('button', { name: 'Start anyway' })).toBeNull()

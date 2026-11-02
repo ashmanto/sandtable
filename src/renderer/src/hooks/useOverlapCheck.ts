@@ -14,6 +14,7 @@ type Base = {
   extraRepos: string[]
   mainRepo?: string
   note?: string
+  plan?: true
   candidates: StartCheck['overlap']
 }
 type Check = Base &
@@ -28,9 +29,15 @@ type Check = Base &
 /** The readiness and overlap checks a Start runs, and what their block's buttons do. */
 export type OverlapRun = {
   check: Check | null
-  begin: (extraRepos: string[], mainRepo: string | undefined, pass: Pass, note?: string) => void
+  begin: (
+    extraRepos: string[],
+    mainRepo: string | undefined,
+    pass: Pass,
+    note?: string,
+    plan?: true
+  ) => void
   cancel: () => void
-  startAnyway: () => void
+  startAnyway: (plan?: true) => void
   refine: () => void
 }
 
@@ -46,7 +53,7 @@ const runs = new Map<string, object>()
 const asks = new Map<string, string>()
 const failures = new Map<string, StartFailure>()
 const models = new Map<string, Model | null>()
-const lastStarts = new Map<string, Pick<Base, 'extraRepos' | 'mainRepo' | 'note'>>()
+const lastStarts = new Map<string, Pick<Base, 'extraRepos' | 'mainRepo' | 'note' | 'plan'>>()
 const pending = new Set<string>()
 const { subscribe, changed: notify } = listenerSet()
 let reported = ''
@@ -86,11 +93,12 @@ export async function startTicket(
   extraRepos: string[],
   mainRepo?: string,
   note?: string,
-  setup?: false
+  setup?: false,
+  plan?: true
 ): Promise<boolean> {
   const key = `${projectId}\n${ticketKey}`
   failures.delete(key)
-  lastStarts.set(key, { extraRepos, mainRepo, note })
+  lastStarts.set(key, { extraRepos, mainRepo, note, plan })
   pending.add(key)
   changed()
   try {
@@ -101,7 +109,8 @@ export async function startTicket(
       mainRepo,
       note,
       models.get(key),
-      setup
+      setup,
+      plan
     )
     models.delete(key)
     return true
@@ -124,7 +133,8 @@ export function useTicketSetup(
     extraRepos: string[],
     mainRepo: string | undefined,
     note: string | undefined,
-    setup: false
+    setup: false,
+    plan?: true
   ) => void,
   after?: () => void
 ): SetupRun {
@@ -138,7 +148,7 @@ export function useTicketSetup(
       last &&
       (() => {
         after?.()
-        start(last.extraRepos, last.mainRepo, last.note, false)
+        start(last.extraRepos, last.mainRepo, last.note, false, last.plan)
       }),
     cancel: () => {
       after?.()
@@ -227,15 +237,15 @@ export function usePendingAsk(
 export function useOverlapCheck(
   projectId: string,
   ticketKey: string,
-  start: (extraRepos: string[], mainRepo?: string, note?: string) => void,
+  start: (extraRepos: string[], mainRepo?: string, note?: string, plan?: true) => void,
   onRefine?: () => void
 ): OverlapRun {
   const key = `${projectId}\n${ticketKey}`
   const check = useSyncExternalStore(subscribe, () => checks.get(key) ?? null)
   const cancel = (): void => set(key, null)
-  const go = ({ extraRepos, mainRepo, note }: Base): void => {
+  const go = ({ extraRepos, mainRepo, note, plan }: Base): void => {
     cancel()
-    start(extraRepos, mainRepo, note)
+    start(extraRepos, mainRepo, note, plan)
   }
   const ask = <T>(
     base: Base,
@@ -281,8 +291,8 @@ export function useOverlapCheck(
   }
   return {
     check,
-    begin: (extraRepos, mainRepo, pass, note) => {
-      const base = { extraRepos, mainRepo, note, candidates: pass.overlap }
+    begin: (extraRepos, mainRepo, pass, note, plan) => {
+      const base = { extraRepos, mainRepo, note, plan, candidates: pass.overlap }
       if (!pass.ready) return overlapStep(base)
       ask(
         base,
@@ -293,11 +303,12 @@ export function useOverlapCheck(
       )
     },
     cancel,
-    startAnyway: () => {
+    startAnyway: (plan) => {
       if (!check) return
       const { extraRepos, mainRepo, note, candidates } = check
-      if (check.kind === 'gaps') afterReady({ extraRepos, mainRepo, note, candidates })
-      else go(check)
+      const base = { extraRepos, mainRepo, note, plan: plan ?? check.plan, candidates }
+      if (check.kind === 'gaps') afterReady(base)
+      else go(base)
     },
     refine: () => {
       if (check?.kind !== 'gaps') return

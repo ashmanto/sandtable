@@ -459,6 +459,7 @@ describe('Board', () => {
       undefined,
       undefined,
       undefined,
+      undefined,
       undefined
     )
   })
@@ -622,6 +623,7 @@ describe('Board', () => {
           undefined,
           undefined,
           undefined,
+          undefined,
           undefined
         )
       )
@@ -647,6 +649,7 @@ describe('Board', () => {
         'p1',
         me.key,
         ['octo/shop-web'],
+        undefined,
         undefined,
         undefined,
         undefined,
@@ -844,6 +847,7 @@ describe('Board', () => {
       undefined,
       undefined,
       undefined,
+      undefined,
       undefined
     )
   })
@@ -859,6 +863,7 @@ describe('Board', () => {
       'p1',
       t.key,
       [],
+      undefined,
       undefined,
       undefined,
       undefined,
@@ -2085,6 +2090,7 @@ describe('Board', () => {
         'APP-12',
         [],
         'octo/shop',
+        undefined,
         undefined,
         undefined,
         undefined
