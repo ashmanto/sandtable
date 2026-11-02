@@ -178,6 +178,42 @@ describe('start', () => {
     expect(s.startWarning).toBeUndefined()
   })
 
+  it('starts in plan mode when asked', async () => {
+    const t = setup()
+    await t.orch.reconnect()
+    await t.orch.sync('p1')
+    await t.orch.start('p1', 'octo/shop#147', [], undefined, undefined, undefined, undefined, true)
+    const cmd = t.deps.tmux.startTmux.mock.calls[0][2]
+    expect(cmd[cmd.indexOf('--permission-mode') + 1]).toBe('plan')
+  })
+
+  it('starts without a permission mode by default', async () => {
+    const t = setup()
+    await t.orch.reconnect()
+    await t.orch.sync('p1')
+    await t.orch.start('p1', 'octo/shop#147')
+    expect(t.deps.tmux.startTmux.mock.calls[0][2]).not.toContain('--permission-mode')
+  })
+
+  it("refuses a plan choice that isn't true", async () => {
+    const t = setup()
+    await t.orch.reconnect()
+    await t.orch.sync('p1')
+    await expect(
+      t.orch.start(
+        'p1',
+        'octo/shop#147',
+        [],
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'yes' as never
+      )
+    ).rejects.toThrow('Not a plan choice')
+    expect(t.deps.tmux.startTmux).not.toHaveBeenCalled()
+  })
+
   it('creates both worktrees at once and refuses a second start while the first runs', async () => {
     const t = setup()
     const pending: Array<() => void> = []

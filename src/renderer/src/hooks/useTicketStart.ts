@@ -29,13 +29,13 @@ export function useTicketStart({
   setupFocus: React.RefObject<HTMLElement | null>
   onRefine?: () => void
 }): {
-  checking: { note?: string } | null
-  setChecking: (checking: { note?: string } | null) => void
+  checking: { note?: string; plan?: true } | null
+  setChecking: (checking: { note?: string; plan?: true } | null) => void
   note: Omit<ReturnType<typeof useStartNote>, 'clear'>
   overlap: ReturnType<typeof useOverlapCheck>
   setup: ReturnType<typeof useTicketSetup>
 } {
-  const [checking, setChecking] = useState<{ note?: string } | null>(null)
+  const [checking, setChecking] = useState<{ note?: string; plan?: true } | null>(null)
   if (checking && !startable) setChecking(null)
   const { clear: clearNote, ...note } = useStartNote(
     offered,
@@ -46,18 +46,20 @@ export function useTicketStart({
     extraRepos: string[],
     mainRepo?: string,
     text?: string,
-    setup?: false
+    setup?: false,
+    plan?: true
   ): Promise<boolean> =>
     run(async () => {
-      if (await startTicket(projectId, ticketKey, extraRepos, mainRepo, text, setup)) clearNote()
+      if (await startTicket(projectId, ticketKey, extraRepos, mainRepo, text, setup, plan))
+        clearNote()
     }, actionLabels.start[1])
   const overlap = useOverlapCheck(
     projectId,
     ticketKey,
-    (extra, main, text) => {
+    (extra, main, text, plan) => {
       const hinted = main ?? repo
       if (hint && hinted) void checkSetupHint(projectId, ticketKey, hinted)
-      void start(extra, main, text)
+      void start(extra, main, text, undefined, plan)
     },
     onRefine
   )

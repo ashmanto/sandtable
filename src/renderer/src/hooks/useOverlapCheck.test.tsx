@@ -4,7 +4,15 @@ import type { Overlap } from '../../../shared/types'
 import { folderError } from '../../../shared/repo'
 import { OverlapCheck } from '../components/OverlapCheck'
 import { fakeSandtable } from '../test/fixtures'
-import { refineMessage, useOverlapCheck, usePendingAsk, type OverlapRun } from './useOverlapCheck'
+import {
+  refineMessage,
+  startTicket,
+  useOverlapCheck,
+  usePendingAsk,
+  useTicketSetup,
+  type OverlapRun
+} from './useOverlapCheck'
+import { SETUP_FAILED } from '../../../shared/worktreeSetup'
 
 const busy = [{ key: 'octo/shop#67', number: 67, title: 'Sort cards' }]
 const pass = { overlap: busy, ready: false }
@@ -39,7 +47,7 @@ describe('useOverlapCheck', () => {
     act(() => card.result.current.begin(['extra'], undefined, pass, 'A note'))
     card.unmount()
     await act(async () => finish[0]([]))
-    expect(start).toHaveBeenCalledWith(['extra'], undefined, 'A note')
+    expect(start).toHaveBeenCalledWith(['extra'], undefined, 'A note', undefined)
   })
 
   it('shows the same check after a remount and in another view of the ticket', async () => {
@@ -73,7 +81,7 @@ describe('useOverlapCheck', () => {
     const card = mount('t#4', start)
     act(() => card.result.current.begin([], undefined, pass))
     await act(async () => fail[0](new Error(folderError('octo/shop'))))
-    expect(start).toHaveBeenCalledWith([], undefined, undefined)
+    expect(start).toHaveBeenCalledWith([], undefined, undefined, undefined)
     expect(card.result.current.check).toBeNull()
   })
 })
@@ -116,7 +124,7 @@ describe('the readiness step', () => {
     const card = mount('r#2', start)
     act(() => card.result.current.begin(['x'], 'a/b', ready, 'n'))
     await act(async () => answer[0]([]))
-    expect(start).toHaveBeenCalledWith(['x'], 'a/b', 'n')
+    expect(start).toHaveBeenCalledWith(['x'], 'a/b', 'n', undefined)
     expect(card.result.current.check).toBeNull()
   })
 
@@ -149,7 +157,7 @@ describe('the readiness step', () => {
     })
     act(() => card.result.current.begin([], undefined, ready))
     await act(async () => refuse[1](new Error(folderError('octo/shop'))))
-    expect(start).toHaveBeenCalledWith([], undefined, undefined)
+    expect(start).toHaveBeenCalledWith([], undefined, undefined, undefined)
   })
 
   it('Refine in chat clears the check and leaves the gaps for the chat', async () => {
@@ -166,6 +174,48 @@ describe('the readiness step', () => {
     act(() => expect(pending.result.current[1]()).toBe(refineMessage(gaps)))
     expect(pending.result.current[0]).toBeNull()
     expect(pending.result.current[1]()).toBeNull()
+  })
+})
+
+describe('the planning choice', () => {
+  const ready = { overlap: [], ready: true }
+  const gaps = ['No done-when']
+  it('keeps the planning choice through Not ready and Start anyway', async () => {
+    vi.mocked(window.sandtable.tickets.checkReady).mockResolvedValue(gaps)
+    const start = vi.fn()
+    const card = mount('pl#1', start)
+    await act(async () => card.result.current.begin([], undefined, ready, undefined, true))
+    await act(async () => card.result.current.startAnyway())
+    expect(start).toHaveBeenCalledWith([], undefined, undefined, true)
+  })
+
+  it('plans from the Not ready block', async () => {
+    vi.mocked(window.sandtable.tickets.checkReady).mockResolvedValue(gaps)
+    const start = vi.fn()
+    const card = mount('pl#2', start)
+    await act(async () => card.result.current.begin([], undefined, ready))
+    await act(async () => card.result.current.startAnyway(true))
+    expect(start).toHaveBeenCalledWith([], undefined, undefined, true)
+  })
+
+  it('keeps the planning choice through Overlaps and Start anyway', async () => {
+    const start = vi.fn()
+    const card = mount('pl#3', start)
+    act(() => card.result.current.begin([], undefined, pass, undefined, true))
+    await act(async () => finish[0](overlap))
+    act(() => card.result.current.startAnyway())
+    expect(start).toHaveBeenCalledWith([], undefined, undefined, true)
+  })
+
+  it('reruns a failed setup with the planning choice', async () => {
+    vi.mocked(window.sandtable.tickets.start).mockRejectedValue(new Error(SETUP_FAILED))
+    await act(async () => {
+      await startTicket('p1', 'pl#4', [], undefined, undefined, undefined, true)
+    })
+    const start = vi.fn()
+    const { result } = renderHook(() => useTicketSetup('p1', 'pl#4', start))
+    act(() => result.current.startAnyway?.())
+    expect(start).toHaveBeenCalledWith([], undefined, undefined, false, true)
   })
 })
 

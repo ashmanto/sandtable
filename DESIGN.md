@@ -545,7 +545,7 @@ them through Tailwind classes and never name a raw color.
   the board whose card isn't shown, such as one hidden by a filter or in a collapsed lane, opens
   its ticket view instead, and one that isn't on the board opens on GitHub, in Linear, or in Jira.
 - The action row holds at most one 20 px button, then the Remote Control mark; **Start** also
-  has the model chip and **Start with note** after it:
+  has the model chip and **Start with…** after it:
   - **Start** on a ticket with no session, or whose worktree was removed, that isn't done. **Start**
     first runs the [Start check](#start-check-dialog), then opens the Start dialog when the
     project has more than one repo or the ticket has none. Its title is "Start <#n> <title>" and
@@ -564,17 +564,19 @@ them through Tailwind classes and never name a raw color.
     model Start will use, the project's until you pick another. Its menu, "Model for this
     session", lists Account default, Fable, Opus, Sonnet, and Haiku as radio items, the project's marked
     **Project** in `fg-3` on the right. The pick belongs to the ticket, so the card and the ticket
-    view show the same one; it applies to **Start** and **Start with note**, and it's forgotten once
+    view show the same one; it applies to **Start**, **Start with note**, and **Start with planning**, and it's forgotten once
     the session starts. In the ticket view the chip is 28 px tall.
-  - **Start with note**, a 20 px ghost button in `fg-2` after the model chip, turns the action row into
-    the [note composer](#start-note-composer).
+  - **Start with…**, a 20 px ghost button in `fg-2` with a 12 px chevron after the model chip,
+    opens a menu of two items. **Start with note** turns the action row into the
+    [note composer](#start-note-composer). **Start with planning** runs the same checks as
+    **Start**, then starts Claude Code in plan mode.
   - **Resume** on a **Finished** ticket that isn't done ("Resuming" while it works).
   - **Remove worktree** on a **Finished** ticket in **Done** ("Removing").
   - **End session and remove worktree** on a **Done, session open** ticket ("Ending session").
   - **Session elsewhere:** when the ticket has no live session of its own but another project over
     the same GitHub, Linear workspace, or Jira site has one (a Linear project with no saved
     workspace uses the CLI's default one, so it matches any workspace), the newest such session shows as one
-    row button in place of **Start**, the model chip, **Start with note**, and **Resume** (a
+    row button in place of **Start**, the model chip, **Start with…**, and **Resume** (a
     finished session's **Remove worktree** stays): reaching 4 px into the card's padding on each
     side, `radius` corners, a `surface-2` fill (`surface-3` on hover), a 1 px `line` inset ring,
     and 11 px text: the other project's tile and name, cut off with an ellipsis, its state chip
@@ -668,10 +670,10 @@ them through Tailwind classes and never name a raw color.
     disabled **Checking** and **Cancel**.
   - A ready ticket goes on to the overlap check with no other step.
   - **Not ready**: the words in an `amber` chip on `amber-soft`, then each gap as a bullet in
-    `fg-2`, then **Refine in chat** (outline), **Start anyway** (outline), and **Cancel** (ghost).
+    `fg-2`, then **Refine in chat** (outline), **Start with planning** (outline), **Start anyway** (outline), and **Cancel** (ghost).
     **Refine in chat** clears the block, opens the ticket view on **Details** with the chat panel
-    shown, and sends the gaps there as your message. **Start anyway** goes on to the overlap
-    check.
+    shown, and sends the gaps there as your message. **Start with planning** goes on to the
+    overlap check and then starts in plan mode. **Start anyway** goes on to the overlap check.
   - Failure, including the 3-minute timeout: the error in `danger`, then **Start anyway** and
     **Cancel**. A missing repo folder goes straight to the start, as in the overlap check.
 
@@ -736,7 +738,7 @@ them through Tailwind classes and never name a raw color.
 
 ### Start note composer
 
-- **Start with note**, on a card or in the ticket view, puts a form named "Start with note" in
+- **Start with note**, in the **Start with…** menu on a card or in the ticket view, puts a form named "Start with note" in
   place of the buttons, in the [New ticket composer](#new-ticket-composer)'s field, with its fill,
   ring, padding, and entrance: one borderless three-line text area, "Note for this session", with
   the placeholder "Add a note for this session…" in `fg-4`, which takes focus and grows with its
@@ -746,13 +748,13 @@ them through Tailwind classes and never name a raw color.
   dialog when it's needed, and the readiness and overlap checks, and the trimmed note, cut to 4,000 bytes, starts
   the session's opening prompt, before the issue line. A blank note starts as **Start** does. The note isn't saved, so
   **Resume** doesn't send it again.
-- Escape closes it, drops the note, and focuses **Start with note**; during an IME composition it
+- Escape closes it, drops the note, and focuses **Start with…**; during an IME composition it
   only ends the composition. Its **Start** closes it the same way but keeps the note, so focus
-  comes back to **Start with note** when the dialog closes, and cancelling the Start check, the
+  comes back to **Start with…** when the dialog closes, and cancelling the Start check, the
   Start dialog, or the readiness or overlap check, or a start that fails, leaves the note there when you open
   it again. The note clears once a start succeeds. In the ticket view, the note stays when you
   switch tabs. When **Start** is no longer offered, it closes, and if it had focus, focus moves
-  to the card, or in the ticket view to the selected tab. A Start whose check or dialog is still
+  to the card, or in the ticket view to the selected tab. After a **Start with planning**, focus returns to **Start with…** the same way when its Start check or dialog closes. A Start whose check or dialog is still
   open is dropped when the ticket can't start any more, such as when a sync removes it. Clicks,
   presses, and keys inside it don't open the card or start a drag.
 
@@ -972,8 +974,8 @@ them through Tailwind classes and never name a raw color.
   `#n` (`owner/name#n` in another repo) or Linear or Jira key in monospace, then its title cut off with an ellipsis, with the full title on hover, turning
   `fg-2` on hover; then the title as an 18 px weight 500 heading in `fg`, wrapping; a line of 11 px `fg-3` with the
   monospace `#number`, the repo, and "Created <date>" with the full date and time on hover; then
-  the ticket's buttons, 28 px, 8 px apart: **Start**, the card's model chip, and an outline **Start with note** with a
-  speech-bubble-plus icon, which opens the [note composer](#start-note-composer) across the row
+  the ticket's buttons, 28 px, 8 px apart: **Start**, the card's model chip, and an outline **Start with…** with a
+  speech-bubble-plus icon and a 12 px chevron, whose menu opens the [note composer](#start-note-composer) across the row (**Start with note**) or runs the same checks as **Start** and starts Claude Code in plan mode (**Start with planning**)
   (no session, or the worktree removed), **Resume** and **Remove worktree** (finished session; **Remove
   worktree** first on a ticket in **Done**, the card's one action leading), or **End session and
   remove worktree** (**Done, session open**), then an outline **Open on GitHub** (**Open in

@@ -70,16 +70,21 @@ export function OverlapCheck({
       </div>
       <div className="flex gap-1.5">
         {check.kind === 'gaps' && check.gaps.length > 0 && (
-          <Button variant="outline" size="xs" className="h-5" onClick={refine}>
-            Refine in chat
-          </Button>
+          <>
+            <Button variant="outline" size="xs" className="h-5" onClick={refine}>
+              Refine in chat
+            </Button>
+            <Button variant="outline" size="xs" className="h-5" onClick={() => startAnyway(true)}>
+              Start with planning
+            </Button>
+          </>
         )}
         <Button
           variant="outline"
           size="xs"
           className="h-5"
           disabled={waiting}
-          onClick={startAnyway}
+          onClick={() => startAnyway()}
         >
           {waiting ? 'Checking' : 'Start anyway'}
         </Button>

@@ -369,7 +369,7 @@ refusal, a notification title, or a format example.
   by the issue format in the repo's `CLAUDE.md` when there is one.
 - A ready ticket goes on with only a progress note on the card or under the ticket view's header.
 - A ticket that isn't ready shows **Not ready** with what's missing, **Refine in chat**, **Start
-  anyway**, and **Cancel**.
+  with planning**, **Start anyway**, and **Cancel**.
 - **Refine in chat** opens the ticket's chat with the gaps as your message.
 - A ticket whose title and text haven't changed since it passed skips the check until Sandtable
   quits.
@@ -393,13 +393,23 @@ refusal, a notification title, or a format example.
 
 ### Start with note
 
-- **Start with note**, after **Start** and the model chip on a card and in the ticket view, opens
-  a composer in place for a note to this session.
+- **Start with…**, after **Start** and the model chip on a card and in the ticket view, opens a
+  menu with **Start with note** and **Start with planning**.
+- **Start with note** opens a composer in place for a note to this session.
 - Its **Start**, or ⌘↩, runs the same checks as **Start** and puts the note, cut to 4,000 bytes,
   at the start of Claude's first message, before the issue. Escape closes it.
 - Cancelling a check or a failed start keeps the note for next time; a start that succeeds clears
   it.
 - The note isn't saved, so **Resume** doesn't send it again.
+
+### Start with planning
+
+- **Start with planning**, in the **Start with…** menu and on a **Not ready** ticket, runs the same
+  checks as **Start**, then starts Claude Code in plan mode.
+- In plan mode Claude can't edit until you approve its plan on the plan card, and your choice there
+  sets the mode afterward.
+- Cancelling a check drops the choice, so the next **Start** doesn't plan. **Resume** doesn't plan
+  again.
 
 ### Branch, worktree, and repo
 

@@ -366,7 +366,8 @@ export type Orchestrator = {
     mainRepo?: string,
     note?: string,
     model?: Model | null,
-    setup?: false
+    setup?: false,
+    plan?: true
   ): Promise<void>
   create(
     projectId: string,
@@ -2317,10 +2318,12 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       mainRepo?: string,
       note?: string,
       choice?: Model | null,
-      setup?: false
+      setup?: false,
+      plan?: true
     ): Promise<void> {
       if (note !== undefined && typeof note !== 'string') throw new Error('Not a note')
       assertSetupChoice(setup)
+      if (plan !== undefined && plan !== true) throw new Error('Not a plan choice')
       let project = projectById(projectId)
       modelOf(project, choice)
       const ticket = syncedTicket(projectId, ticketKey)
@@ -2414,7 +2417,8 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
               sessionId: id,
               name: shortName(ticketKey),
               addDirs: worktrees.slice(1),
-              prompt: openingPrompt(ticket, serviceOf(project), note)
+              prompt: openingPrompt(ticket, serviceOf(project), note),
+              ...(plan && { permissionMode: 'plan' as const })
             },
             choice,
             true

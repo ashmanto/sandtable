@@ -117,7 +117,7 @@ describe('Board', () => {
     )
     const c = within(card('Ticket 9'))
     expect(c.queryByRole('button', { name: 'Start' })).toBeNull()
-    expect(c.queryByRole('button', { name: 'Start with note' })).toBeNull()
+    expect(c.queryByRole('button', { name: 'Start with…' })).toBeNull()
     expect(c.getByText('Contacts team')).toBeInTheDocument()
     expect(c.getAllByText('Running')).toHaveLength(1)
     await userEvent.click(
@@ -459,6 +459,7 @@ describe('Board', () => {
       undefined,
       undefined,
       undefined,
+      undefined,
       undefined
     )
   })
@@ -622,6 +623,7 @@ describe('Board', () => {
           undefined,
           undefined,
           undefined,
+          undefined,
           undefined
         )
       )
@@ -647,6 +649,7 @@ describe('Board', () => {
         'p1',
         me.key,
         ['octo/shop-web'],
+        undefined,
         undefined,
         undefined,
         undefined,
@@ -844,6 +847,7 @@ describe('Board', () => {
       undefined,
       undefined,
       undefined,
+      undefined,
       undefined
     )
   })
@@ -859,6 +863,7 @@ describe('Board', () => {
       'p1',
       t.key,
       [],
+      undefined,
       undefined,
       undefined,
       undefined,
@@ -1145,9 +1150,8 @@ describe('Board', () => {
 
     it("doesn't drag a card from its note", async () => {
       renderBoard(boardView({ tickets: [ticket(1)] }))
-      await userEvent.click(
-        within(card('Ticket 1')).getByRole('button', { name: 'Start with note' })
-      )
+      await userEvent.click(within(card('Ticket 1')).getByRole('button', { name: 'Start with…' }))
+      await userEvent.click(await screen.findByRole('menuitem', { name: 'Start with note' }))
       const note = screen.getByRole('textbox', { name: 'Note for this session' })
       await userEvent.keyboard(' {ArrowRight} ')
       const at = (clientX: number, clientY: number): PointerEventInit => ({
@@ -2085,6 +2089,7 @@ describe('Board', () => {
         'APP-12',
         [],
         'octo/shop',
+        undefined,
         undefined,
         undefined,
         undefined

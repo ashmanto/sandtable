@@ -5,6 +5,7 @@ import type { SandtableApi } from '../../../shared/api'
 import type { ModelUsage, SessionRecord, SetupProgress, Ticket } from '../../../shared/types'
 import { SETUP_CANCELLED, SETUP_FAILED } from '../../../shared/worktreeSetup'
 import { fakeSandtable, project, session, ticket } from '../test/fixtures'
+import type { DragHandle } from '@/hooks/useTicketDrag'
 import { TicketCard } from './TicketCard'
 
 const t = ticket(98, { status: 'Done' })
@@ -206,6 +207,11 @@ describe('TicketCard pull request stage', () => {
   })
 })
 
+const startWith = async (item: string): Promise<void> => {
+  await userEvent.click(screen.getByRole('button', { name: 'Start with…' }))
+  await userEvent.click(await screen.findByRole('menuitem', { name: item }))
+}
+
 describe('TicketCard Start with note', () => {
   const todo = ticket(98)
   const todoCard = (onOpen = vi.fn(), s?: SessionRecord, tk = todo): React.JSX.Element => (
@@ -282,6 +288,7 @@ describe('TicketCard Start with note', () => {
       undefined,
       undefined,
       'haiku',
+      undefined,
       undefined
     )
     expect(onOpen).not.toHaveBeenCalled()
@@ -316,7 +323,7 @@ describe('TicketCard Start with note', () => {
   it('carries the note to tickets.start without opening the card', async () => {
     const onOpen = vi.fn()
     renderTodo(onOpen)
-    await userEvent.click(screen.getByRole('button', { name: 'Start with note' }))
+    await startWith('Start with note')
     const note = screen.getByRole('textbox', { name: 'Note for this session' })
     expect(note).toHaveFocus()
     await userEvent.type(note, 'Keep it small')
@@ -331,41 +338,107 @@ describe('TicketCard Start with note', () => {
       undefined,
       'Keep it small',
       undefined,
+      undefined,
       undefined
     )
     expect(onOpen).not.toHaveBeenCalled()
   })
 
+  it('starts with planning from the start menu without opening the card', async () => {
+    const onOpen = vi.fn()
+    renderTodo(onOpen)
+    await startWith('Start with planning')
+    await userEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Start' })
+    )
+    expect(vi.mocked(api.tickets.start).mock.calls[0][7]).toBe(true)
+    expect(onOpen).not.toHaveBeenCalled()
+  })
+
+  it("doesn't plan a plain Start after a cancelled planning start", async () => {
+    renderTodo()
+    await startWith('Start with planning')
+    await userEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel' })
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Start' }))
+    await userEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Start' })
+    )
+    expect(vi.mocked(api.tickets.start).mock.calls[0][7]).toBeUndefined()
+  })
+
+  it('keeps the start menu keys from the card', async () => {
+    const onOpen = vi.fn()
+    const onKeyDown = vi.fn()
+    render(
+      <TicketCard
+        project={project}
+        ticket={todo}
+        session={undefined}
+        state={undefined}
+        done={false}
+        onFolderFixed={vi.fn()}
+        onSetUp={vi.fn()}
+        tickets={[]}
+        onOpenTicket={vi.fn()}
+        stateOf={() => undefined}
+        onOpen={onOpen}
+        dragHandle={{ ref: vi.fn(), onKeyDown } as unknown as DragHandle}
+      />
+    )
+    screen.getByRole('button', { name: 'Start with…' }).focus()
+    await userEvent.keyboard('{Enter}')
+    await screen.findByRole('menuitem', { name: 'Start with planning' })
+    onKeyDown.mockClear()
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}{Enter}')
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(onKeyDown).not.toHaveBeenCalled()
+    expect(onOpen).not.toHaveBeenCalled()
+  })
+
   it('closes on Escape and returns focus to Start with note', async () => {
     renderTodo()
-    await userEvent.click(screen.getByRole('button', { name: 'Start with note' }))
+    await startWith('Start with note')
     expect(screen.getByRole('button', { name: 'Start' })).toBeInTheDocument()
     await userEvent.keyboard('{Escape}')
     expect(screen.queryByRole('textbox', { name: 'Note for this session' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Start with note' })).toHaveFocus()
+    expect(screen.getByRole('button', { name: 'Start with…' })).toHaveFocus()
   })
 
   it('offers it only when the action is Start', () => {
     renderCard(true)
-    expect(screen.queryByRole('button', { name: 'Start with note' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Start with…' })).toBeNull()
   })
 
   it('returns focus to Start with note after the Start dialog closes', async () => {
     renderTodo()
-    await userEvent.click(screen.getByRole('button', { name: 'Start with note' }))
+    await startWith('Start with note')
     await userEvent.type(screen.getByRole('textbox', { name: 'Note for this session' }), 'Hi')
     await userEvent.click(screen.getByRole('button', { name: 'Start with note' }))
     await userEvent.click(
       within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel' })
     )
     await vi.waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Start with note' })).toHaveFocus()
+      expect(screen.getByRole('button', { name: 'Start with…' })).toHaveFocus()
     )
   })
 
-  it('closes when Start is no longer offered', () => {
+  it('returns focus to Start with… after a planning start closes the dialog', async () => {
+    renderTodo()
+    await userEvent.click(screen.getByRole('button', { name: 'Start with…' }))
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}{Enter}')
+    await userEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel' })
+    )
+    await vi.waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Start with…' })).toHaveFocus()
+    )
+  })
+
+  it('closes when Start is no longer offered', async () => {
     const { rerender } = render(todoCard())
-    fireEvent.click(screen.getByRole('button', { name: 'Start with note' }))
+    await startWith('Start with note')
     rerender(todoCard(vi.fn(), session(todo.key)))
     expect(screen.queryByRole('textbox', { name: 'Note for this session' })).toBeNull()
     rerender(todoCard())
@@ -373,7 +446,7 @@ describe('TicketCard Start with note', () => {
   })
 
   const submitNote = async (text: string): Promise<void> => {
-    await userEvent.click(screen.getByRole('button', { name: 'Start with note' }))
+    await startWith('Start with note')
     await userEvent.type(screen.getByRole('textbox', { name: 'Note for this session' }), text)
     await userEvent.click(screen.getByRole('button', { name: 'Start with note' }))
   }
@@ -384,7 +457,7 @@ describe('TicketCard Start with note', () => {
     await userEvent.click(
       within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel' })
     )
-    await userEvent.click(screen.getByRole('button', { name: 'Start with note' }))
+    await startWith('Start with note')
     expect(screen.getByRole('textbox', { name: 'Note for this session' })).toHaveValue('Hi')
   })
 
@@ -401,13 +474,13 @@ describe('TicketCard Start with note', () => {
     expect(api.app.setStartFailures).toHaveBeenLastCalledWith([
       { projectId: 'p1', ticketKey: 'octo/shop#98' }
     ])
-    await userEvent.click(screen.getByRole('button', { name: 'Start with note' }))
+    await startWith('Start with note')
     const note = screen.getByRole('textbox', { name: 'Note for this session' })
     expect(note).toHaveValue('Hi')
     await userEvent.click(screen.getByRole('button', { name: 'Start with note' }))
     await startInDialog()
     await vi.waitFor(() => expect(api.tickets.start).toHaveBeenCalledTimes(2))
-    await userEvent.click(await screen.findByRole('button', { name: 'Start with note' }))
+    await startWith('Start with note')
     expect(screen.getByRole('textbox', { name: 'Note for this session' })).toHaveValue('')
     expect(api.app.setStartFailures).toHaveBeenLastCalledWith([])
   })
@@ -424,7 +497,7 @@ describe('TicketCard Start with note', () => {
 
   it('moves focus to the card when the note closes on its own', async () => {
     const { rerender } = render(todoCard())
-    await userEvent.click(screen.getByRole('button', { name: 'Start with note' }))
+    await startWith('Start with note')
     expect(screen.getByRole('textbox', { name: 'Note for this session' })).toHaveFocus()
     rerender(todoCard(vi.fn(), session(todo.key)))
     expect(document.activeElement).toHaveAttribute('data-slot', 'card')
@@ -582,7 +655,7 @@ describe('TicketCard worktree setup', () => {
       new Error(`${SETUP_FAILED}: npm install exited with code 1`)
     )
     renderCard()
-    await userEvent.click(screen.getByRole('button', { name: 'Start with note' }))
+    await startWith('Start with note')
     await userEvent.type(screen.getByRole('textbox', { name: 'Note for this session' }), 'Hi')
     await userEvent.click(screen.getByRole('button', { name: 'Start with note' }))
     await userEvent.click(
@@ -593,7 +666,7 @@ describe('TicketCard worktree setup', () => {
     expect(await screen.findByText('Setup failed: npm install exited with code 1')).toBeVisible()
     expect(screen.queryByText(/Couldn't start/)).toBeNull()
     expect(screen.queryByRole('button', { name: 'Start' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Start with note' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Start with…' })).toBeNull()
     expect(screen.queryByRole('button', { name: /^Model:/ })).toBeNull()
     let finish: () => void = () => undefined
     vi.mocked(api.tickets.start).mockReturnValueOnce(new Promise<void>((r) => (finish = r)))
@@ -605,14 +678,15 @@ describe('TicketCard worktree setup', () => {
       undefined,
       'Hi',
       undefined,
-      false
+      false,
+      undefined
     )
     expect(document.querySelector('[data-slot="card"]')).toHaveFocus()
     expect(screen.queryByRole('button', { name: 'Start anyway' })).toBeNull()
     expect(api.tickets.start).toHaveBeenCalledTimes(2)
     act(() => push(target, null))
     await act(async () => finish())
-    await userEvent.click(await screen.findByRole('button', { name: 'Start with note' }))
+    await startWith('Start with note')
     expect(screen.getByRole('textbox', { name: 'Note for this session' })).toHaveValue('')
   })
 

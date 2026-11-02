@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  ChevronDown,
   ExternalLink,
   FileDiff,
   FileText,
@@ -14,6 +15,12 @@ import { flushSync } from 'react-dom'
 import type { LucideIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import {
   Select,
   SelectContent,
@@ -77,6 +84,7 @@ import { OverlapCheck } from './OverlapCheck'
 import { SetupBlock } from './SetupBlock'
 import { SessionBadge } from './SessionBadge'
 import { SessionElsewhere } from './SessionElsewhere'
+import { useAfterMenu } from '@/hooks/useAfterMenu'
 import { StartFlow } from './StartFlow'
 import { LoadError, Loading, Md } from './TabContent'
 import { Usage } from './Usage'
@@ -436,10 +444,11 @@ export function TicketView({
     elsewhere: !!away
   })
   const heading = useRef<HTMLHeadingElement>(null)
+  const { later, afterMenu } = useAfterMenu()
   const {
     checking,
     setChecking,
-    note: { open: noting, show: showNote, button: noteButton, composer },
+    note: { open: noting, show: showNote, button: noteButton, focusButton, composer },
     overlap,
     setup
   } = useTicketStart({
@@ -556,10 +565,28 @@ export function TicketView({
         />
       )}
       {actions.includes('start') && (
-        <Button ref={noteButton} variant="outline" disabled={pending || held} onClick={showNote}>
-          <MessageSquarePlus />
-          Start with note
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button ref={noteButton} variant="outline" disabled={pending || held}>
+              <MessageSquarePlus />
+              Start with…
+              <ChevronDown className="size-3" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" onCloseAutoFocus={afterMenu}>
+            <DropdownMenuItem onSelect={showNote}>Start with note</DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() =>
+                later(() => {
+                  focusButton()
+                  setChecking({ plan: true })
+                })
+              }
+            >
+              Start with planning
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
     </>
   )
@@ -900,7 +927,9 @@ export function TicketView({
           ticket={ticket}
           mainRepo={repo}
           session={session}
-          onStart={(extra, main, pass) => overlap.begin(extra, main, pass, checking.note)}
+          onStart={(extra, main, pass) =>
+            overlap.begin(extra, main, pass, checking.note, checking.plan)
+          }
           onClose={() => setChecking(null)}
         />
       )}

@@ -1,7 +1,20 @@
-import { ChevronRight, CornerUpRight, ExternalLink, GitMerge, GitPullRequest } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronRight,
+  CornerUpRight,
+  ExternalLink,
+  GitMerge,
+  GitPullRequest
+} from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Badge, badgeClass } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { cardClass, opensIn, prLook, stateLook, shownLabels, stageLook } from '@/lib/card'
 import { cleanUp, type Line } from '@/lib/cleanUp'
 import { jumpToCard, useRiseOnChange } from '@/hooks/useRiseOnChange'
@@ -11,7 +24,7 @@ import { useRun } from '@/hooks/useRun'
 import { useLiveUsage } from '@/hooks/useLiveUsage'
 import { useUsage } from '@/hooks/useUsage'
 import type { DragHandle } from '@/hooks/useTicketDrag'
-import { cn, errorMessage, fullTime, shortDate } from '@/lib/utils'
+import { cn, errorMessage, fullTime, shortDate, stop } from '@/lib/utils'
 import { areaOf, blockedByText } from '../../../shared/areas'
 import { columnFor, statusMapOf } from '../../../shared/columns'
 import { canStart, findRepo, issueLabel, ticketLabel } from '../../../shared/repo'
@@ -42,6 +55,7 @@ import { RemoteMark } from './RemoteToggle'
 import { SessionBadge, type CardState } from './SessionBadge'
 import { SessionElsewhere } from './SessionElsewhere'
 import { SetupBlock } from './SetupBlock'
+import { useAfterMenu } from '@/hooks/useAfterMenu'
 import { StartFlow } from './StartFlow'
 import { Tip } from './Tip'
 import { CardUsage } from './Usage'
@@ -532,7 +546,7 @@ export function TicketCard({
   const {
     checking,
     setChecking,
-    note: { open: noting, show: showNote, button: noteButton, composer },
+    note: { open: noting, show: showNote, button: noteButton, focusButton, composer },
     overlap,
     setup
   } = useTicketStart({
@@ -554,14 +568,16 @@ export function TicketCard({
 
   const action = overlap.check || setup.progress ? undefined : firstAction
   const id = session?.id ?? ''
+  const { later, afterMenu } = useAfterMenu()
+  const start = (plan?: true): void => {
+    setHintError(null)
+    setChecking(plan ? { plan } : {})
+  }
   const handlers: Record<TicketAction, () => unknown> = {
     chooseFolder: () =>
       blocked &&
       run(() => chooseFolder(project, blocked, onFolderFixed), actionLabels.chooseFolder[1]),
-    start: () => {
-      setHintError(null)
-      setChecking({})
-    },
+    start: () => start(),
     resume: () => run(() => window.sandtable.sessions.resume(id), actionLabels.resume[1]),
     removeWorktree: () => run(() => cleanUp(id, false), actionLabels.removeWorktree[1]),
     endSession: () => run(() => cleanUp(id, true), actionLabels.endSession[1])
@@ -732,19 +748,40 @@ export function TicketCard({
                 />
               )}
               {action === 'start' && (
-                <Button
-                  ref={noteButton}
-                  variant="ghost"
-                  size="xs"
-                  className="h-5 text-fg-2"
-                  disabled={busy !== null}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    showNote()
-                  }}
-                >
-                  Start with note
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      ref={noteButton}
+                      variant="ghost"
+                      size="xs"
+                      className="h-5 text-fg-2"
+                      disabled={busy !== null}
+                      onClick={stop}
+                    >
+                      Start with…
+                      <ChevronDown className="size-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="start"
+                    onCloseAutoFocus={afterMenu}
+                    onClick={stop}
+                    onPointerDown={stop}
+                    onKeyDown={stop}
+                  >
+                    <DropdownMenuItem onSelect={showNote}>Start with note</DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() =>
+                        later(() => {
+                          focusButton()
+                          start(true)
+                        })
+                      }
+                    >
+                      Start with planning
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               )}
               {session?.remoteControl && !removed && <RemoteMark />}
               {session && state === 'needsYou' && (
@@ -761,7 +798,9 @@ export function TicketCard({
           ticket={ticket}
           mainRepo={repo}
           session={session}
-          onStart={(extra, main, pass) => overlap.begin(extra, main, pass, checking.note)}
+          onStart={(extra, main, pass) =>
+            overlap.begin(extra, main, pass, checking.note, checking.plan)
+          }
           onClose={() => setChecking(null)}
         />
       )}

@@ -503,6 +503,14 @@ describe('hookSettings attribution', () => {
   })
 })
 
+describe('hookSettings plan approval', () => {
+  it('hides the clear-context plan approval', () => {
+    expect(hookSettings('/e.jsonl', '/c', '/s', '/sh')).toMatchObject({
+      showClearContextOnPlanAccept: false
+    })
+  })
+})
+
 describe('hookSettings sandbox', () => {
   const tempDir = tempDirs()
 
@@ -558,6 +566,20 @@ describe('claudeArgs', () => {
     addDirs: ['/d1', '/d2'],
     rules: 'R'
   }
+
+  it('starts in plan mode when asked', () => {
+    const args = claudeArgs({ ...base, prompt: 'hi', permissionMode: 'plan' })
+    const i = args.indexOf('--permission-mode')
+    expect(i).toBeGreaterThan(-1)
+    expect(args[i + 1]).toBe('plan')
+    expect(i).toBeLessThan(args.indexOf('--'))
+  })
+
+  it('never passes a permission mode on resume', () => {
+    expect(
+      claudeArgs({ ...base, prompt: 'hi', resume: true, permissionMode: 'plan' })
+    ).not.toContain('--permission-mode')
+  })
 
   it('puts add-dirs first, then the prompt last', () => {
     expect(claudeArgs({ ...base, prompt: 'hi' })).toEqual([
