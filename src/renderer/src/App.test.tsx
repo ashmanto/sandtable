@@ -46,6 +46,24 @@ describe('App', () => {
     expect(screen.getByRole('img', { name: '1 needs you' })).toHaveTextContent('1')
   })
 
+  it('still counts a session toward Needs you when the search hides its ticket', async () => {
+    const t = ticket(1)
+    vi.mocked(api.board.get).mockResolvedValue(
+      boardView({
+        tickets: [t],
+        sessions: [session(t.key, { state: 'needsYou' })],
+        needsYou: { p1: 1 }
+      })
+    )
+    render(<App />)
+    await userEvent.type(
+      await screen.findByRole('searchbox', { name: 'Search tickets' }),
+      'nothing like it'
+    )
+    expect(screen.getByText('1 hidden by filter')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: '1 needs you' })).toHaveTextContent('1')
+  })
+
   it("doesn't carry one project's label filter to another", async () => {
     localStorage.setItem('labelFilter:p1', JSON.stringify({ mode: 'only', labels: ['bug'] }))
     vi.mocked(api.projects.list).mockResolvedValue([

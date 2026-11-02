@@ -1681,6 +1681,18 @@ describe('Board', () => {
       expect(screen.getByText('Ticket 3')).toBeInTheDocument()
     })
 
+    it('lets Escape through once the field is empty', () => {
+      renderBoard(view(), vi.fn(), solo)
+      const onKey = vi.fn()
+      document.addEventListener('keydown', onKey)
+      onTestFinished(() => document.removeEventListener('keydown', onKey))
+      fireEvent.change(field(), { target: { value: 'zzz' } })
+      fireEvent.keyDown(field(), { key: 'Escape' })
+      expect(onKey).not.toHaveBeenCalled()
+      fireEvent.keyDown(field(), { key: 'Escape' })
+      expect(onKey).toHaveBeenCalledTimes(1)
+    })
+
     it('Clear filter leaves the search', async () => {
       renderBoard(view(), vi.fn(), solo)
       await userEvent.type(field(), 'Ticket 1')

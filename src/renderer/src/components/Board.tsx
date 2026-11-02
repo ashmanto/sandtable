@@ -678,7 +678,7 @@ export function Board({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key !== 'Escape') return
+              if (e.key !== 'Escape' || !search) return
               e.stopPropagation()
               setSearch('')
             }}
