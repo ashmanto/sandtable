@@ -210,10 +210,10 @@ describe('the planning choice', () => {
   it('reruns a failed setup with the planning choice', async () => {
     vi.mocked(window.sandtable.tickets.start).mockRejectedValue(new Error(SETUP_FAILED))
     await act(async () => {
-      await startTicket('p1', 'r#1', [], undefined, undefined, undefined, true)
+      await startTicket('p1', 'pl#4', [], undefined, undefined, undefined, true)
     })
     const start = vi.fn()
-    const { result } = renderHook(() => useTicketSetup('p1', 'r#1', start))
+    const { result } = renderHook(() => useTicketSetup('p1', 'pl#4', start))
     act(() => result.current.startAnyway?.())
     expect(start).toHaveBeenCalledWith([], undefined, undefined, false, true)
   })
