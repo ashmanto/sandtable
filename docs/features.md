@@ -264,8 +264,8 @@ refusal, a notification title, or a format example.
   workspace, or to its Jira site), **Unassigned**, and each assignee on the board's tickets.
 - **Assignees** has the same **Show only** and **Hide** modes as **Filters**.
 - A search field filters by title and by ticket number, such as `#42`, `42`, or `ENG-42`; a
-  search that starts with `#` matches only numbers. Its own clear button or Esc empties it, and it
-  isn't saved across restarts.
+  search that starts with `#` matches only numbers. Its own clear button or Esc empties it. It
+  stays while you open a ticket and come back, and clears when you switch projects or restart.
 - A ticket shows only when it passes the label, repo, and assignee filters and the search.
 - The board says how many tickets the filters and the search hide. **Clear filter** removes every
   checked label and repo, and **Assignees** has its own **Clear filter**; neither clears the search.

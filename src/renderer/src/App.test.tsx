@@ -60,6 +60,28 @@ describe('App', () => {
     expect(screen.queryByText(/hidden by filter/)).not.toBeInTheDocument()
   })
 
+  it('keeps the search after you open a ticket and go back, but not in another project', async () => {
+    vi.mocked(api.projects.list).mockResolvedValue([
+      project,
+      { ...project, id: 'p2', name: 'Other' }
+    ])
+    vi.mocked(api.board.get).mockResolvedValue(boardView({ tickets: [ticket(1), ticket(2)] }))
+    render(<App />)
+    const field = (): HTMLElement => screen.getByRole('searchbox', { name: 'Search tickets' })
+    await screen.findByText('Ticket 1')
+    await userEvent.type(field(), 'Ticket 1')
+    await userEvent.click(screen.getByText('Ticket 1'))
+    await userEvent.click(await screen.findByRole('button', { name: 'Back to board' }))
+    expect(field()).toHaveValue('Ticket 1')
+    expect(screen.queryByText('Ticket 2')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Other' }))
+    expect(await screen.findByText('Ticket 2')).toBeInTheDocument()
+    expect(field()).toHaveValue('')
+    await userEvent.click(screen.getByRole('button', { name: 'Shop' }))
+    expect(await screen.findByText('Ticket 2')).toBeInTheDocument()
+    expect(field()).toHaveValue('')
+  })
+
   it('goes to the add-project flow from Add project and to a ticket when main asks', async () => {
     let openTicket: (view: LastView) => void = () => {}
     vi.mocked(api.app.onOpen).mockImplementation((cb) => {

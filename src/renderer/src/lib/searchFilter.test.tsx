@@ -33,4 +33,11 @@ describe('passesSearch', () => {
     expect(passesSearch('eng-4', t)).toBe(true)
     expect(passesSearch('eng-5', t)).toBe(false)
   })
+
+  it('matches a tracker ticket by its number, with or without #', () => {
+    const t = ticket(42, { key: 'ENG-42', title: 'Other' })
+    expect(passesSearch('42', t)).toBe(true)
+    expect(passesSearch('#42', t)).toBe(true)
+    expect(passesSearch('#5', t)).toBe(false)
+  })
 })

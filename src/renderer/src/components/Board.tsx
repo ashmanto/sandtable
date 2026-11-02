@@ -133,7 +133,9 @@ export function Board({
   onDrafted,
   onOpenSession,
   onRoutine,
-  onSetUp
+  onSetUp,
+  defaultSearch = '',
+  onSearch
 }: {
   project: Project
   projects: Project[]
@@ -147,6 +149,8 @@ export function Board({
   onOpenSession: (sessionId: string) => void
   onRoutine: OpenRoutine
   onSetUp: (repo: string) => void
+  defaultSearch?: string
+  onSearch?: (text: string) => void
 }): React.JSX.Element {
   const [syncing, setSyncing] = useState(false)
   const [dismissed, setDismissed] = useState<string | null>(null)
@@ -158,7 +162,11 @@ export function Board({
   const [repos, setRepos] = useState(() => loadRepoFilter(project.id))
   const multiRepo = project.repos.length >= 2
   const [people, setPeople] = useState(() => loadAssigneeFilter(project.id))
-  const [search, setSearch] = useState('')
+  const [search, setSearchText] = useState(defaultSearch)
+  const setSearch = (text: string): void => {
+    setSearchText(text)
+    onSearch?.(text)
+  }
   const searchField = useRef<HTMLInputElement>(null)
   const [me, setMe] = useState<string | null>(null)
   const wantsMe = people.people.includes('@me')

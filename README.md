@@ -24,7 +24,7 @@ any Claude Code session.
 The following list is an overview. For the full list, see [What works today](docs/features.md).
 
 - A board with **To do**, **In progress**, and **Done** columns, or a list, grouped by assignee or
-  parent, and filtered by label, repo, or assignee. Drag a card to change its status or assignee.
+  parent, filtered by label, repo, or assignee, and searched by title or ticket number. Drag a card to change its status or assignee.
 - **Start** on a card checks for open blockers, whether the ticket is ready, and whether it
   overlaps tickets in the same area that are in progress or have a live session, then starts
   Claude Code in a fresh worktree.

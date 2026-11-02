@@ -6,10 +6,11 @@ export function passesSearch(
   t: { key: string; number: number; title: string }
 ): boolean {
   const q = query.trim().toLowerCase()
-  const label = ticketLabel(t).toLowerCase()
+  const number = `#${t.number}`
   return (
-    label.startsWith(q) ||
-    label.startsWith(`#${q}`) ||
+    ticketLabel(t).toLowerCase().startsWith(q) ||
+    number.startsWith(q) ||
+    number.startsWith(`#${q}`) ||
     (!q.startsWith('#') && t.title.toLowerCase().includes(q))
   )
 }
