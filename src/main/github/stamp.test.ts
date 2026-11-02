@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { BoardSource } from '../../shared/types'
+import type { GraphqlFn } from './graphql'
 import { changeStamp } from './stamp'
 
 const board: BoardSource = {
@@ -12,9 +13,9 @@ const NEWEST = 'first: 1, orderBy: { field: UPDATED_AT, direction: DESC }'
 
 describe('changeStamp', () => {
   it("asks for the board updatedAt and each repo's newest issue and pull request", async () => {
-    const gql = vi.fn(async () => ({}))
+    const gql = vi.fn<GraphqlFn>(async () => ({}))
     await changeStamp(gql, board, ['o/a', 'o/b'])
-    const [query, vars] = gql.mock.calls[0] as unknown as [string, Record<string, unknown>]
+    const [query, vars] = gql.mock.calls[0]
     expect(query).toContain('organization(login: $owner)')
     expect(query).toContain('projectV2(number: $number) { updatedAt }')
     expect(query.split(`issues(${NEWEST})`)).toHaveLength(3)
@@ -23,22 +24,22 @@ describe('changeStamp', () => {
   })
 
   it('asks a user board through user', async () => {
-    const gql = vi.fn(async () => ({}))
+    const gql = vi.fn<GraphqlFn>(async () => ({}))
     await changeStamp(gql, { ...board, ownerType: 'user' }, ['o/a'])
     expect(gql.mock.calls[0][0]).toContain('user(login: $owner)')
   })
 
   it('leaves out the board for a repo-issue project', async () => {
-    const gql = vi.fn(async () => ({}))
+    const gql = vi.fn<GraphqlFn>(async () => ({}))
     await changeStamp(gql, undefined, ['o/a'])
-    const [query, vars] = gql.mock.calls[0] as unknown as [string, Record<string, unknown>]
+    const [query, vars] = gql.mock.calls[0]
     expect(query).not.toContain('projectV2')
     expect(query).not.toContain('$owner')
     expect(vars).toEqual({ o0: 'o', n0: 'a' })
   })
 
   it('passes names as variables', async () => {
-    const gql = vi.fn(async () => ({}))
+    const gql = vi.fn<GraphqlFn>(async () => ({}))
     await changeStamp(gql, board, ['o/"x"'])
     expect(gql.mock.calls[0][0]).not.toContain('"x"')
   })
@@ -48,7 +49,11 @@ describe('changeStamp', () => {
       r0: { issues: { nodes: [{ updatedAt: at }] }, pullRequests: { nodes: [] } }
     })
     const stamp = (at: string): Promise<string> =>
-      changeStamp(vi.fn(async () => answer(at)), undefined, ['o/a'])
+      changeStamp(
+        vi.fn(async () => answer(at)),
+        undefined,
+        ['o/a']
+      )
     expect(await stamp('2026-11-02T10:00:00Z')).toBe(await stamp('2026-11-02T10:00:00Z'))
     expect(await stamp('2026-11-02T10:00:00Z')).not.toBe(await stamp('2026-11-02T10:01:00Z'))
   })

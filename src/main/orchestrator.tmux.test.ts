@@ -83,6 +83,7 @@ it('marks a needsYou session finished when its tmux session ends', async () => {
     jiraCredentials: { save: vi.fn(), sites: vi.fn() },
     jiraClientWith: vi.fn(),
     mergedPullRequests: vi.fn(),
+    githubStamp: vi.fn(),
     ticketDetails: vi.fn(),
     postComment: vi.fn(),
     githubViewer: vi.fn(),

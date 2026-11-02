@@ -1107,7 +1107,7 @@ describe('sync', () => {
     })
 
     describe('the minute check', () => {
-      const minute = (): Promise<void> => vi.advanceTimersByTimeAsync(60_000)
+      const minute = (): Promise<unknown> => vi.advanceTimersByTimeAsync(60_000)
       const afterTimedSync = async (): Promise<ReturnType<typeof setup>> => {
         const t = await watching()
         await minute()
