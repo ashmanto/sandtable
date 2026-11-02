@@ -138,6 +138,8 @@ refusal, a notification title, or a format example.
   always show.
 - The open project, and every project with a live session, syncs every minute while any part of
   the window shows. Other projects show their last synced board until you open them.
+- For a GitHub project, that minute's sync first sends a 1-point check and skips the rest when
+  nothing on the board or in its repos changed, and runs in full at least every 30 minutes.
 - A project also syncs when you switch to it, when the window shows again after being minimized,
   hidden, or fully covered, and with **Sync**.
 - Sandtable syncs a project whenever any of its sessions starts needing you.

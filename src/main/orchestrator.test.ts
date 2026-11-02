@@ -1105,6 +1105,80 @@ describe('sync', () => {
       expect(synced(t).sort()).toEqual([2, 3])
       t.orch.stop()
     })
+
+    describe('the minute check', () => {
+      const minute = (): Promise<void> => vi.advanceTimersByTimeAsync(60_000)
+      const afterTimedSync = async (): Promise<ReturnType<typeof setup>> => {
+        const t = await watching()
+        await minute()
+        t.deps.board.tickets.mockClear()
+        return t
+      }
+
+      it("skips a timed sync when the stamp hasn't changed", async () => {
+        const t = await afterTimedSync()
+        await minute()
+        expect(synced(t)).toEqual([])
+        expect(t.deps.githubStamp).toHaveBeenLastCalledWith(
+          three[0].board!.source,
+          project.repos.map((r) => r.github)
+        )
+        t.orch.stop()
+      })
+
+      it('runs a timed sync when the stamp changes', async () => {
+        const t = await afterTimedSync()
+        t.deps.githubStamp.mockResolvedValue('moved')
+        await minute()
+        expect(synced(t)).toEqual([1])
+        t.orch.stop()
+      })
+
+      it('runs a timed sync at least every 30 minutes', async () => {
+        const t = await afterTimedSync()
+        t.deps.now.mockReturnValue(new Date('2026-10-24T12:30:00.000Z'))
+        await minute()
+        expect(synced(t)).toEqual([1])
+        t.orch.stop()
+      })
+
+      it('runs a timed sync when the stamp check fails', async () => {
+        const t = await watching()
+        t.deps.githubStamp.mockRejectedValue(new Error('rate limited'))
+        await minute()
+        await minute()
+        expect(synced(t)).toEqual([1, 1])
+        t.orch.stop()
+      })
+
+      it('retries in full after a failed sync', async () => {
+        const t = await watching()
+        t.deps.board.tickets.mockRejectedValueOnce(new Error('timeout'))
+        await minute()
+        await minute()
+        expect(synced(t)).toEqual([1, 1])
+        t.orch.stop()
+      })
+
+      it('never checks a stamp for a Linear project', async () => {
+        const t = setup({ projects: [{ ...repoProject, linear: { team: 'INF', projects: [] } }] })
+        await t.orch.reconnect()
+        t.orch.watch('p1', true)
+        await settle()
+        await minute()
+        await minute()
+        expect(t.deps.githubStamp).not.toHaveBeenCalled()
+        t.orch.stop()
+      })
+
+      it('syncs in full when you click Sync after a skipped minute', async () => {
+        const t = await afterTimedSync()
+        await minute()
+        await t.orch.sync('p1')
+        expect(synced(t)).toEqual([1])
+        t.orch.stop()
+      })
+    })
   })
 })
 

@@ -10,6 +10,7 @@ import type {
   Account,
   Activity,
   BoardColumn,
+  BoardSource,
   Chat,
   ChatState,
   ConversationChunk,
@@ -161,6 +162,7 @@ import type { SyncCache, SyncCacheStore } from './syncCache'
 import { messageOf } from '../shared/errors'
 
 const SYNC_MS = 60_000
+const STALE_MS = 30 * 60_000
 const POLL_MS = 3_000
 const NOTIFY_WAIT_MS = 10_000
 const SCHEDULE_MS = 30_000
@@ -227,6 +229,7 @@ export type OrchestratorDeps = {
     since: string,
     truncated?: (message: string) => void
   ): Promise<MergedPr[]>
+  githubStamp(board: BoardSource | undefined, repos: string[]): Promise<string>
   ticketDetails(repo: string, number: number): Promise<TicketDetails>
   postComment(repo: string, number: number, body: string): Promise<void>
   githubViewer(): Promise<string>
@@ -1081,11 +1084,27 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
   }
   let openId: string | null = null
   let visible = true
-  const syncWatched = (): Promise<unknown> =>
+  const stamps = new Map<string, { stamp: string; at: number }>()
+  const timedSync = async (project: Project): Promise<string | null> => {
+    if (tracked(project)) return joinSync(project.id)
+    const stamp = await deps
+      .githubStamp(
+        project.board?.source,
+        project.repos.map((r) => r.github)
+      )
+      .catch(() => null)
+    const last = stamps.get(project.id)
+    const at = now().getTime()
+    if (stamp !== null && last?.stamp === stamp && at - last.at < STALE_MS) return null
+    const failed = await joinSync(project.id)
+    if (stamp !== null && failed === null) stamps.set(project.id, { stamp, at })
+    return failed
+  }
+  const syncWatched = (timed = false): Promise<unknown> =>
     Promise.all(
       projects
         .filter((p) => p.id === openId || sessions.some((s) => s.projectId === p.id && isLive(s)))
-        .map((p) => joinSync(p.id))
+        .map((p) => (timed ? timedSync(p) : joinSync(p.id)))
     )
 
   const pollTmux = async (): Promise<void> => {
@@ -1889,7 +1908,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       }
     await persist()
     const syncTimer = setInterval(
-      unlessBusy(async () => visible && syncWatched()),
+      unlessBusy(async () => visible && syncWatched(true)),
       SYNC_MS
     )
     stoppers.push(() => clearInterval(syncTimer))
