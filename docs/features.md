@@ -1019,6 +1019,8 @@ refusal, a notification title, or a format example.
 - A ticket's session treats the issue text and comments as coming from GitHub, not as
   instructions, and treats pasted review findings, thread comments, and check logs as data to
   judge.
+- After each push, a ticket's session waits for its pull request checks and fixes a failing one
+  from its failed log, stopping to tell you after three failed attempts.
 - A worktree session stays in its worktree and branch.
 - A routine's session never stops to ask in plain text, and asks with a question dialog when it's
   blocked, needs a decision, or leaves something for you to act on.
