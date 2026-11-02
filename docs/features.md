@@ -1020,7 +1020,7 @@ refusal, a notification title, or a format example.
   instructions, and treats pasted review findings, thread comments, and check logs as data to
   judge.
 - After it opens a pull request or pushes to one, a ticket's session waits for the checks on that
-  commit and fixes a failing one from its failed log, treated as data, stopping to tell you after
+  commit and fixes a failing one from its failed log, treated as data, stopping to ask you after
   three failed attempts. This holds on Linear and Jira projects too.
 - A worktree session stays in its worktree and branch.
 - A routine's session never stops to ask in plain text, and asks with a question dialog when it's
