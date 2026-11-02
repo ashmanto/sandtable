@@ -56,6 +56,7 @@ export type Project = {
   remoteControl?: boolean
   claudeDir?: string
   model?: Model
+  editor?: string
   group?: string
   icon?: string
   keepDoneDays?: number
