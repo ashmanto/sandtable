@@ -394,6 +394,32 @@ describe('App', () => {
     expect(screen.queryByRole('button', { name: 'Back to board' })).not.toBeInTheDocument()
   })
 
+  it('opens the tab main asks for, and Back returns to the board', async () => {
+    const t = ticket(1)
+    let open: (view: LastView) => void = () => {}
+    vi.mocked(api.app.onOpen).mockImplementation((cb) => {
+      open = cb
+      return () => {}
+    })
+    vi.mocked(api.board.get).mockResolvedValue(
+      boardView({ tickets: [t], sessions: [session(t.key)] })
+    )
+    render(<App />)
+    await screen.findByRole('button', { name: 'Sync' })
+    act(() => open({ projectId: project.id, ticketKey: t.key, tab: 'changes' }))
+    expect(await screen.findByRole('tab', { name: /Changes/ })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
+    act(() => open({ projectId: project.id, ticketKey: t.key, tab: 'conversation' }))
+    expect(screen.getByRole('tab', { name: /Conversation/ })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    )
+    await userEvent.keyboard('{Meta>}[[{/Meta}')
+    expect(await screen.findByRole('button', { name: 'Sync' })).toBeInTheDocument()
+  })
+
   it('opens a session when main asks', async () => {
     let open: (view: LastView) => void = () => {}
     vi.mocked(api.app.onOpen).mockImplementation((cb) => {

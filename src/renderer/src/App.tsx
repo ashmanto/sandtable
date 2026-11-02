@@ -150,12 +150,15 @@ function App(): React.JSX.Element | null {
         fill(restoreRoute(saved, list, view))
       })
       .catch(() => fill(homeRoute([])))
-    const open = ({ projectId, ticketKey, sessionId }: LastView): void =>
+    const open = ({ projectId, ticketKey, sessionId, tab }: LastView): void =>
       setRoute((r) =>
         ticketKey
-          ? r?.name === 'ticket' && r.projectId === projectId && r.ticketKey === ticketKey
+          ? r?.name === 'ticket' &&
+            r.projectId === projectId &&
+            r.ticketKey === ticketKey &&
+            (!tab || r.tab === tab)
             ? r
-            : { name: 'ticket', projectId, ticketKey }
+            : { name: 'ticket', projectId, ticketKey, tab }
           : sessionId
             ? { name: 'session', projectId, sessionId }
             : r
