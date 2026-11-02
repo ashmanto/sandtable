@@ -35,10 +35,11 @@ The following list is an overview. For the full list, see [What works today](doc
   session needs you. **Reviewing** comes from automatic review while one of its rounds runs.
 - A ticket view with the ticket's details, the live conversation with a composer, a terminal, and
   the session's changes.
-- A review loop: an AI review of the diff, failing checks, and open review threads, collected as
-  findings you send to the session. With **Automatic review** on for a project or a session, the
-  review runs when Claude ends its turn with an open pull request, sends the **High** proposals to
-  the session, and leaves the rest for you, for up to 3 rounds. The session shows **Reviewing**
+- A review loop: an AI review of the diff against its ticket's **Done when**, failing checks, and
+  open review threads, collected as findings you send to the session. With **Automatic review** on
+  for a project or a session, the review runs when Claude ends its turn with an open pull request,
+  sends the **High** line proposals to the session, and leaves the rest for you, for up to 3
+  rounds. The session shows **Reviewing**
   while a round runs, and the conversation records each round and how it went.
 - Answer Claude's questions and permission prompts on a card in the conversation.
 - A ticket chat that drafts comments, triage that suggests areas and blockers, and a summary draft
