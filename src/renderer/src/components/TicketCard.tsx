@@ -55,6 +55,7 @@ import { RemoteMark } from './RemoteToggle'
 import { SessionBadge, type CardState } from './SessionBadge'
 import { SessionElsewhere } from './SessionElsewhere'
 import { SetupBlock } from './SetupBlock'
+import { useAfterMenu } from '@/hooks/useAfterMenu'
 import { StartFlow } from './StartFlow'
 import { Tip } from './Tip'
 import { CardUsage } from './Usage'
@@ -545,7 +546,7 @@ export function TicketCard({
   const {
     checking,
     setChecking,
-    note: { open: noting, show: showNote, button: noteButton, composer },
+    note: { open: noting, show: showNote, button: noteButton, focusButton, composer },
     overlap,
     setup
   } = useTicketStart({
@@ -567,6 +568,7 @@ export function TicketCard({
 
   const action = overlap.check || setup.progress ? undefined : firstAction
   const id = session?.id ?? ''
+  const { later, afterMenu } = useAfterMenu()
   const start = (plan?: true): void => {
     setHintError(null)
     setChecking(plan ? { plan } : {})
@@ -762,12 +764,20 @@ export function TicketCard({
                   </DropdownMenuTrigger>
                   <DropdownMenuContent
                     align="start"
+                    onCloseAutoFocus={afterMenu}
                     onClick={stop}
                     onPointerDown={stop}
                     onKeyDown={stop}
                   >
                     <DropdownMenuItem onSelect={showNote}>Start with note</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => start(true)}>
+                    <DropdownMenuItem
+                      onSelect={() =>
+                        later(() => {
+                          focusButton()
+                          start(true)
+                        })
+                      }
+                    >
                       Start with planning
                     </DropdownMenuItem>
                   </DropdownMenuContent>

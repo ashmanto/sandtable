@@ -19,6 +19,7 @@ export function useStartNote(
   show: () => void
   clear: () => void
   button: (el: HTMLButtonElement | null) => void
+  focusButton: () => void
   composer: NoteProps
 } {
   const [open, setOpen] = useState(false)
@@ -43,6 +44,7 @@ export function useStartNote(
     button: (el) => {
       button.current = el
     },
+    focusButton: () => button.current?.focus(),
     composer: {
       note,
       onChange: setNote,

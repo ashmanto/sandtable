@@ -570,8 +570,8 @@ describe('claudeArgs', () => {
   it('starts in plan mode when asked', () => {
     const args = claudeArgs({ ...base, prompt: 'hi', permissionMode: 'plan' })
     const i = args.indexOf('--permission-mode')
-    expect(args[i + 1]).toBe('plan')
     expect(i).toBeGreaterThan(-1)
+    expect(args[i + 1]).toBe('plan')
     expect(i).toBeLessThan(args.indexOf('--'))
   })
 

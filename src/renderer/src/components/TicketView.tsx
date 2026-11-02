@@ -84,6 +84,7 @@ import { OverlapCheck } from './OverlapCheck'
 import { SetupBlock } from './SetupBlock'
 import { SessionBadge } from './SessionBadge'
 import { SessionElsewhere } from './SessionElsewhere'
+import { useAfterMenu } from '@/hooks/useAfterMenu'
 import { StartFlow } from './StartFlow'
 import { LoadError, Loading, Md } from './TabContent'
 import { Usage } from './Usage'
@@ -443,10 +444,11 @@ export function TicketView({
     elsewhere: !!away
   })
   const heading = useRef<HTMLHeadingElement>(null)
+  const { later, afterMenu } = useAfterMenu()
   const {
     checking,
     setChecking,
-    note: { open: noting, show: showNote, button: noteButton, composer },
+    note: { open: noting, show: showNote, button: noteButton, focusButton, composer },
     overlap,
     setup
   } = useTicketStart({
@@ -571,9 +573,16 @@ export function TicketView({
               <ChevronDown className="size-3" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
+          <DropdownMenuContent align="start" onCloseAutoFocus={afterMenu}>
             <DropdownMenuItem onSelect={showNote}>Start with note</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setChecking({ plan: true })}>
+            <DropdownMenuItem
+              onSelect={() =>
+                later(() => {
+                  focusButton()
+                  setChecking({ plan: true })
+                })
+              }
+            >
               Start with planning
             </DropdownMenuItem>
           </DropdownMenuContent>

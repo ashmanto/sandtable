@@ -754,7 +754,7 @@ them through Tailwind classes and never name a raw color.
   Start dialog, or the readiness or overlap check, or a start that fails, leaves the note there when you open
   it again. The note clears once a start succeeds. In the ticket view, the note stays when you
   switch tabs. When **Start** is no longer offered, it closes, and if it had focus, focus moves
-  to the card, or in the ticket view to the selected tab. A Start whose check or dialog is still
+  to the card, or in the ticket view to the selected tab. After a **Start with planning**, focus returns to **Start with…** the same way when its Start check or dialog closes. A Start whose check or dialog is still
   open is dropped when the ticket can't start any more, such as when a sync removes it. Clicks,
   presses, and keys inside it don't open the card or start a drag.
 
@@ -975,7 +975,7 @@ them through Tailwind classes and never name a raw color.
   `fg-2` on hover; then the title as an 18 px weight 500 heading in `fg`, wrapping; a line of 11 px `fg-3` with the
   monospace `#number`, the repo, and "Created <date>" with the full date and time on hover; then
   the ticket's buttons, 28 px, 8 px apart: **Start**, the card's model chip, and an outline **Start with…** with a
-  speech-bubble-plus icon and a 12 px chevron, whose menu opens the [note composer](#start-note-composer) across the row
+  speech-bubble-plus icon and a 12 px chevron, whose menu opens the [note composer](#start-note-composer) across the row (**Start with note**) or runs the same checks as **Start** and starts Claude Code in plan mode (**Start with planning**)
   (no session, or the worktree removed), **Resume** and **Remove worktree** (finished session; **Remove
   worktree** first on a ticket in **Done**, the card's one action leading), or **End session and
   remove worktree** (**Done, session open**), then an outline **Open on GitHub** (**Open in
