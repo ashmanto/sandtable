@@ -26,5 +26,6 @@ export async function changeStamp(
     )
     Object.assign(vars, { [`o${i}`]: owner, [`n${i}`]: name })
   })
+  if (fields.length === 0) return ''
   return JSON.stringify(await gql(`query(${params.join(', ')}) {\n${fields.join('\n')}\n}`, vars))
 }

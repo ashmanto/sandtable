@@ -38,6 +38,25 @@ describe('changeStamp', () => {
     expect(vars).toEqual({ o0: 'o', n0: 'a' })
   })
 
+  it('sends nothing for a project with no board and no repos', async () => {
+    const gql = vi.fn<GraphqlFn>(async () => ({}))
+    expect(await changeStamp(gql, undefined, [])).toBe('')
+    expect(gql).not.toHaveBeenCalled()
+  })
+
+  it("changes when only the board's updatedAt moves", async () => {
+    const at = (when: string): Promise<string> =>
+      changeStamp(
+        vi.fn(async () => ({
+          user: { projectV2: { updatedAt: when } },
+          r0: { issues: { nodes: [{ updatedAt: 'x' }] }, pullRequests: { nodes: [] } }
+        })),
+        { ...board, ownerType: 'user' },
+        ['o/a']
+      )
+    expect(await at('2026-11-02T10:00:00Z')).not.toBe(await at('2026-11-02T10:01:00Z'))
+  })
+
   it('passes names as variables', async () => {
     const gql = vi.fn<GraphqlFn>(async () => ({}))
     await changeStamp(gql, board, ['o/"x"'])

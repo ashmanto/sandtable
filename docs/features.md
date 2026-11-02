@@ -139,8 +139,10 @@ refusal, a notification title, or a format example.
 - The open project, and every project with a live session, syncs every minute while any part of
   the window shows. Other projects show their last synced board until you open them.
 - For a GitHub project, that minute's sync first sends a 1-point check and skips the rest when
-  no field on the board, issue, or pull request in its repos changed, and runs in full at least
-  every 30 minutes, so a pull request's checks and conflicts can show up to 30 minutes late.
+  neither the board nor any issue or pull request in its repos was updated since the last sync.
+  It runs in full at least every 30 minutes, so a change that updates none of them can show up to
+  30 minutes late: a pull request's checks or conflicts, a deleted or transferred issue, or an
+  edit to a parent, sub-issue, or blocker in another repo.
 - A project also syncs when you switch to it, when the window shows again after being minimized,
   hidden, or fully covered, and with **Sync**.
 - Sandtable syncs a project whenever any of its sessions starts needing you.
