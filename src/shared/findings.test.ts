@@ -182,11 +182,16 @@ describe('prStage', () => {
   it('is open otherwise', () => {
     expect(stage('PENDING', 'APPROVED')).toBe('open')
     expect(stage('SUCCESS', 'REVIEW_REQUIRED')).toBe('open')
-    expect(stage('SUCCESS', 'APPROVED', 'CONFLICTING')).toBe('open')
     expect(stage('SUCCESS', 'APPROVED', 'UNKNOWN')).toBe('open')
   })
 
-  it('is never ready to merge while a draft', () => {
+  it('says conflicts before failing checks and requested changes', () => {
+    expect(stage('FAILURE', 'CHANGES_REQUESTED', 'CONFLICTING')).toBe('conflicts')
+    expect(stage('SUCCESS', 'APPROVED', 'CONFLICTING')).toBe('conflicts')
+  })
+
+  it('is open while a draft, even when it conflicts', () => {
     expect(stage('SUCCESS', 'APPROVED', 'MERGEABLE', true)).toBe('open')
+    expect(stage('SUCCESS', 'APPROVED', 'CONFLICTING', true)).toBe('open')
   })
 })

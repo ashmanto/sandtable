@@ -567,6 +567,7 @@ export type PullRequestState = {
   title: string
   url: string
   reviewDecision: 'approved' | 'changesRequested' | 'reviewRequired' | null
+  stage: PrStage
   checks: { name: string; state: 'passing' | 'failing' | 'pending'; jobId?: number; url?: string }[]
   threads: {
     id: string
@@ -581,4 +582,4 @@ export type PullRequestState = {
 }
 
 /** Where an open pull request stands, as the card and ticket header word says it. */
-export type PrStage = 'open' | 'checksFailing' | 'changesRequested' | 'readyToMerge'
+export type PrStage = 'open' | 'conflicts' | 'checksFailing' | 'changesRequested' | 'readyToMerge'

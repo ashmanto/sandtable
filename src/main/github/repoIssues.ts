@@ -1,5 +1,6 @@
 import { IN_PROGRESS_LABEL, REPO_STATUS } from '../../shared/columns'
 import { prStage } from '../../shared/findings'
+import { knownMergeable } from './mergeable'
 import type { BoardColumn, PrStage, Ticket, IssueRef } from '../../shared/types'
 import { paginate, splitRepo as split, type GraphqlFn } from './graphql'
 
@@ -131,7 +132,7 @@ const openPrStage = (prs: any[]): PrStage | null => {
     ? prStage({
         rollup: pr.commits.nodes[0]?.commit.statusCheckRollup?.state ?? null,
         reviewDecision: pr.reviewDecision,
-        mergeable: pr.mergeable,
+        mergeable: knownMergeable(pr.url, pr.mergeable),
         isDraft: pr.isDraft
       })
     : null

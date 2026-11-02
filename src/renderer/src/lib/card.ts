@@ -76,6 +76,7 @@ export const prLook = {
 /** Each open pull request stage's word and chip colors. */
 export const stageLook: Record<PrStage, { label: string; className: string }> = {
   open: { label: 'PR open', className: 'bg-blue-soft text-blue' },
+  conflicts: { label: 'Conflicts', className: 'bg-danger-soft text-danger' },
   checksFailing: { label: 'Checks failing', className: 'bg-danger-soft text-danger' },
   changesRequested: { label: 'Changes requested', className: 'bg-amber-soft text-amber' },
   readyToMerge: { label: 'Ready to merge', className: 'bg-added-soft text-added' }

@@ -77,6 +77,7 @@ export function prStage(pr: {
   isDraft?: boolean
 }): PrStage {
   if (pr.isDraft) return 'open'
+  if (pr.mergeable === 'CONFLICTING') return 'conflicts'
   if (pr.rollup === 'FAILURE' || pr.rollup === 'ERROR') return 'checksFailing'
   if (pr.reviewDecision === 'CHANGES_REQUESTED') return 'changesRequested'
   if (

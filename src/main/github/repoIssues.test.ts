@@ -333,6 +333,15 @@ describe('prStage', () => {
     expect(await stageOf([pr({ commits: { nodes: [] } })])).toBe('readyToMerge')
   })
 
+  it('keeps conflicts across an UNKNOWN sync, even from a draft', async () => {
+    const draft = { url: 'u-draft-conflicts', isDraft: true }
+    expect(await stageOf([pr({ ...draft, mergeable: 'CONFLICTING' })])).toBe('open')
+    expect(await stageOf([pr({ ...draft, isDraft: false, mergeable: 'UNKNOWN' })])).toBe(
+      'conflicts'
+    )
+    expect(await stageOf([pr({ url: 'u-unseen', mergeable: 'UNKNOWN' })])).toBe('open')
+  })
+
   it('says open for a draft that would otherwise be ready to merge', async () => {
     expect(await stageOf([pr({ isDraft: true })])).toBe('open')
   })

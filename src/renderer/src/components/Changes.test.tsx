@@ -671,6 +671,7 @@ describe('Changes findings rail', () => {
         title: 'A long title',
         url: 'u',
         reviewDecision: null,
+        stage: 'open',
         checks: [],
         threads: [
           {
@@ -929,6 +930,7 @@ describe('Changes findings rail', () => {
         title: 'Fix it',
         url: 'u',
         reviewDecision: null,
+        stage: 'open',
         checks: [{ name: 'lint', state: 'failing', jobId: 11 }],
         threads: [
           {
@@ -993,6 +995,7 @@ describe('Changes findings rail', () => {
       title: 'Fix it',
       url: 'https://github.com/o/app/pull/7',
       reviewDecision: 'changesRequested',
+      stage: 'changesRequested',
       checks: [
         { name: 'lint', state: 'failing', jobId: 11 },
         { name: 'test', state: 'passing' },
