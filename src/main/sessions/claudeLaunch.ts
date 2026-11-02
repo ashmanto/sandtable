@@ -360,6 +360,7 @@ export function hookSettings(
   const entry = (name: string): object => ({ hooks: [{ type: 'command', command: command(name) }] })
   return {
     attribution: { commit: '', pr: '' },
+    showClearContextOnPlanAccept: false,
     statusLine: {
       type: 'command',
       command: `sh ${shellQuote(statusScript)} ${shellQuote(statusFile)}`
@@ -393,10 +394,12 @@ export function claudeArgs(opts: {
   resume?: boolean
   remoteControl?: boolean
   model?: Model
+  permissionMode?: 'plan'
 }): string[] {
   const args = opts.addDirs.flatMap((d) => ['--add-dir', d])
   args.push(opts.resume ? '--resume' : '--session-id', opts.sessionId)
   if (opts.model) args.push('--model', opts.model)
+  if (!opts.resume && opts.permissionMode) args.push('--permission-mode', opts.permissionMode)
   args.push('--settings', opts.settingsFile, '-n', opts.name)
   if (opts.remoteControl) args.push(`--remote-control=${opts.name}`)
   args.push('--append-system-prompt', opts.rules)
