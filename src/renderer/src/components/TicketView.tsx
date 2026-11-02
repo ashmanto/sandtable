@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  ChevronDown,
   ExternalLink,
   FileDiff,
   FileText,
@@ -14,6 +15,12 @@ import { flushSync } from 'react-dom'
 import type { LucideIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import {
   Select,
   SelectContent,
@@ -556,10 +563,21 @@ export function TicketView({
         />
       )}
       {actions.includes('start') && (
-        <Button ref={noteButton} variant="outline" disabled={pending || held} onClick={showNote}>
-          <MessageSquarePlus />
-          Start with note
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button ref={noteButton} variant="outline" disabled={pending || held}>
+              <MessageSquarePlus />
+              Start with…
+              <ChevronDown className="size-3" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onSelect={showNote}>Start with note</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setChecking({ plan: true })}>
+              Start with planning
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
     </>
   )
@@ -900,7 +918,9 @@ export function TicketView({
           ticket={ticket}
           mainRepo={repo}
           session={session}
-          onStart={(extra, main, pass) => overlap.begin(extra, main, pass, checking.note)}
+          onStart={(extra, main, pass) =>
+            overlap.begin(extra, main, pass, checking.note, checking.plan)
+          }
           onClose={() => setChecking(null)}
         />
       )}

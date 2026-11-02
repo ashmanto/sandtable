@@ -83,7 +83,7 @@ describe('TicketView', () => {
     )
     expect(screen.getByText('Session in another project')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Start' })).toBeNull()
-    expect(screen.queryByRole('button', { name: /Start with note/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Start with…/ })).toBeNull()
     await userEvent.click(
       screen.getByRole('button', { name: 'Needs you in Contacts team. Open the session' })
     )
@@ -1498,10 +1498,15 @@ describe('TicketView', () => {
   })
 })
 
+const openNote = async (): Promise<void> => {
+  await userEvent.click(screen.getByRole('button', { name: 'Start with…' }))
+  await userEvent.click(await screen.findByRole('menuitem', { name: 'Start with note' }))
+}
+
 describe('TicketView Start with note', () => {
   it('carries the trimmed note through the check to tickets.start', async () => {
     renderView(boardView({ tickets: [t] }))
-    await userEvent.click(screen.getByRole('button', { name: 'Start with note' }))
+    await openNote()
     const note = screen.getByRole('textbox', { name: 'Note for this session' })
     expect(note).toHaveFocus()
     const form = within(screen.getByRole('form', { name: 'Start with note' }))
@@ -1534,7 +1539,7 @@ describe('TicketView Start with note', () => {
       { key: 'octo/shop#67', number: 67, title: 'Sort cards', reason: 'Same file.' }
     ])
     renderView(boardView({ tickets: [t] }))
-    await userEvent.click(screen.getByRole('button', { name: 'Start with note' }))
+    await openNote()
     await userEvent.type(screen.getByRole('textbox', { name: 'Note for this session' }), 'Hi')
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}')
     await userEvent.click(
@@ -1562,24 +1567,51 @@ describe('TicketView Start with note', () => {
     expect(vi.mocked(api.tickets.start).mock.calls[0][4]).toBeUndefined()
   })
 
+  const startWith = async (item: string): Promise<void> => {
+    await userEvent.click(screen.getByRole('button', { name: 'Start with…' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: item }))
+  }
+
+  it('starts with planning from the start menu', async () => {
+    renderView(boardView({ tickets: [t] }))
+    await startWith('Start with planning')
+    await userEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Start' })
+    )
+    expect(vi.mocked(api.tickets.start).mock.calls[0][7]).toBe(true)
+  })
+
+  it("doesn't plan a plain Start after a cancelled planning start", async () => {
+    renderView(boardView({ tickets: [t] }))
+    await startWith('Start with planning')
+    await userEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel' })
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Start' }))
+    await userEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Start' })
+    )
+    expect(vi.mocked(api.tickets.start).mock.calls[0][7]).toBeUndefined()
+  })
+
   it('closes on Escape and returns focus to Start with note', async () => {
     renderView(boardView({ tickets: [t] }))
-    await userEvent.click(screen.getByRole('button', { name: 'Start with note' }))
+    await openNote()
     await userEvent.type(screen.getByRole('textbox', { name: 'Note for this session' }), 'x')
     await userEvent.keyboard('{Escape}')
     expect(screen.queryByRole('textbox', { name: 'Note for this session' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Start with note' })).toHaveFocus()
+    expect(screen.getByRole('button', { name: 'Start with…' })).toHaveFocus()
   })
 
   it('keeps the note when the Start dialog is cancelled', async () => {
     renderView(boardView({ tickets: [t] }))
-    await userEvent.click(screen.getByRole('button', { name: 'Start with note' }))
+    await openNote()
     await userEvent.type(screen.getByRole('textbox', { name: 'Note for this session' }), 'Hi')
     await userEvent.click(screen.getByRole('button', { name: 'Start with note' }))
     await userEvent.click(
       within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel' })
     )
-    await userEvent.click(screen.getByRole('button', { name: 'Start with note' }))
+    await openNote()
     expect(screen.getByRole('textbox', { name: 'Note for this session' })).toHaveValue('Hi')
   })
 
@@ -1606,7 +1638,7 @@ describe('TicketView Start with note', () => {
 
   it('moves focus to the selected tab when the note closes on its own', async () => {
     const { rerender } = renderView(boardView({ tickets: [t] }))
-    await userEvent.click(screen.getByRole('button', { name: 'Start with note' }))
+    await openNote()
     rerender(
       <TicketView
         project={project}
@@ -1625,7 +1657,7 @@ describe('TicketView Start with note', () => {
   it('keeps the typed note when you switch tabs', async () => {
     const removed = session(t.key, { state: 'finished', removedAt: '2026-10-03T00:00:00Z' })
     renderView(boardView({ tickets: [t], sessions: [removed] }))
-    await userEvent.click(screen.getByRole('button', { name: 'Start with note' }))
+    await openNote()
     await userEvent.type(screen.getByRole('textbox', { name: 'Note for this session' }), 'Hi')
     await userEvent.click(screen.getByRole('tab', { name: /Conversation/ }))
     expect(screen.getByRole('textbox', { name: 'Note for this session' })).toHaveValue('Hi')
@@ -1638,7 +1670,7 @@ describe('TicketView Start with note', () => {
         sessions: [session(t.key, { state: 'finished', removedAt: '2026-10-03T00:00:00Z' })]
       })
     )
-    expect(screen.getByRole('button', { name: 'Start with note' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Start with…' })).toBeInTheDocument()
   })
 })
 

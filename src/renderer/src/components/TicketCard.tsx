@@ -1,7 +1,20 @@
-import { ChevronRight, CornerUpRight, ExternalLink, GitMerge, GitPullRequest } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronRight,
+  CornerUpRight,
+  ExternalLink,
+  GitMerge,
+  GitPullRequest
+} from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Badge, badgeClass } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { cardClass, opensIn, prLook, stateLook, shownLabels, stageLook } from '@/lib/card'
 import { cleanUp, type Line } from '@/lib/cleanUp'
 import { jumpToCard, useRiseOnChange } from '@/hooks/useRiseOnChange'
@@ -554,14 +567,15 @@ export function TicketCard({
 
   const action = overlap.check || setup.progress ? undefined : firstAction
   const id = session?.id ?? ''
+  const start = (plan?: true): void => {
+    setHintError(null)
+    setChecking(plan ? { plan } : {})
+  }
   const handlers: Record<TicketAction, () => unknown> = {
     chooseFolder: () =>
       blocked &&
       run(() => chooseFolder(project, blocked, onFolderFixed), actionLabels.chooseFolder[1]),
-    start: () => {
-      setHintError(null)
-      setChecking({})
-    },
+    start: () => start(),
     resume: () => run(() => window.sandtable.sessions.resume(id), actionLabels.resume[1]),
     removeWorktree: () => run(() => cleanUp(id, false), actionLabels.removeWorktree[1]),
     endSession: () => run(() => cleanUp(id, true), actionLabels.endSession[1])
@@ -732,19 +746,27 @@ export function TicketCard({
                 />
               )}
               {action === 'start' && (
-                <Button
-                  ref={noteButton}
-                  variant="ghost"
-                  size="xs"
-                  className="h-5 text-fg-2"
-                  disabled={busy !== null}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    showNote()
-                  }}
-                >
-                  Start with note
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      ref={noteButton}
+                      variant="ghost"
+                      size="xs"
+                      className="h-5 text-fg-2"
+                      disabled={busy !== null}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Start with…
+                      <ChevronDown className="size-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenuItem onSelect={showNote}>Start with note</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => start(true)}>
+                      Start with planning
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               )}
               {session?.remoteControl && !removed && <RemoteMark />}
               {session && state === 'needsYou' && (
@@ -761,7 +783,9 @@ export function TicketCard({
           ticket={ticket}
           mainRepo={repo}
           session={session}
-          onStart={(extra, main, pass) => overlap.begin(extra, main, pass, checking.note)}
+          onStart={(extra, main, pass) =>
+            overlap.begin(extra, main, pass, checking.note, checking.plan)
+          }
           onClose={() => setChecking(null)}
         />
       )}
