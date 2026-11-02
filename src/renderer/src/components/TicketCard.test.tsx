@@ -5,6 +5,7 @@ import type { SandtableApi } from '../../../shared/api'
 import type { ModelUsage, SessionRecord, SetupProgress, Ticket } from '../../../shared/types'
 import { SETUP_CANCELLED, SETUP_FAILED } from '../../../shared/worktreeSetup'
 import { fakeSandtable, project, session, ticket } from '../test/fixtures'
+import type { DragHandle } from '@/hooks/useTicketDrag'
 import { TicketCard } from './TicketCard'
 
 const t = ticket(98, { status: 'Done' })
@@ -370,6 +371,35 @@ describe('TicketCard Start with note', () => {
       within(await screen.findByRole('dialog')).getByRole('button', { name: 'Start' })
     )
     expect(vi.mocked(api.tickets.start).mock.calls[0][7]).toBeUndefined()
+  })
+
+  it('keeps the start menu keys from the card', async () => {
+    const onOpen = vi.fn()
+    const onKeyDown = vi.fn()
+    render(
+      <TicketCard
+        project={project}
+        ticket={todo}
+        session={undefined}
+        state={undefined}
+        done={false}
+        onFolderFixed={vi.fn()}
+        onSetUp={vi.fn()}
+        tickets={[]}
+        onOpenTicket={vi.fn()}
+        stateOf={() => undefined}
+        onOpen={onOpen}
+        dragHandle={{ ref: vi.fn(), onKeyDown } as unknown as DragHandle}
+      />
+    )
+    screen.getByRole('button', { name: 'Start with…' }).focus()
+    await userEvent.keyboard('{Enter}')
+    await screen.findByRole('menuitem', { name: 'Start with planning' })
+    onKeyDown.mockClear()
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}{Enter}')
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(onKeyDown).not.toHaveBeenCalled()
+    expect(onOpen).not.toHaveBeenCalled()
   })
 
   it('closes on Escape and returns focus to Start with note', async () => {

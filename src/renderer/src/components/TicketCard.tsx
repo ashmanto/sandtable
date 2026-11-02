@@ -24,7 +24,7 @@ import { useRun } from '@/hooks/useRun'
 import { useLiveUsage } from '@/hooks/useLiveUsage'
 import { useUsage } from '@/hooks/useUsage'
 import type { DragHandle } from '@/hooks/useTicketDrag'
-import { cn, errorMessage, fullTime, shortDate } from '@/lib/utils'
+import { cn, errorMessage, fullTime, shortDate, stop } from '@/lib/utils'
 import { areaOf, blockedByText } from '../../../shared/areas'
 import { columnFor, statusMapOf } from '../../../shared/columns'
 import { canStart, findRepo, issueLabel, ticketLabel } from '../../../shared/repo'
@@ -754,13 +754,18 @@ export function TicketCard({
                       size="xs"
                       className="h-5 text-fg-2"
                       disabled={busy !== null}
-                      onClick={(e) => e.stopPropagation()}
+                      onClick={stop}
                     >
                       Start with…
                       <ChevronDown className="size-3" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenuContent
+                    align="start"
+                    onClick={stop}
+                    onPointerDown={stop}
+                    onKeyDown={stop}
+                  >
                     <DropdownMenuItem onSelect={showNote}>Start with note</DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => start(true)}>
                       Start with planning
