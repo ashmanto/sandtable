@@ -252,6 +252,8 @@ export function setup(
     githubReposOf: vi.fn(async (path: string) => folders[path] ?? []),
     pullRequests: vi.fn<OrchestratorDeps['pullRequests']>(async () => []),
     failedLog: vi.fn<OrchestratorDeps['failedLog']>(async () => 'Error: expected 1'),
+    editors: vi.fn<OrchestratorDeps['editors']>(async () => []),
+    openFolder: vi.fn<OrchestratorDeps['openFolder']>(async () => ''),
     git: {
       ensureWorktree: vi.fn<OrchestratorDeps['git']['ensureWorktree']>(async (repo, branch) => ({
         path: `${repo}-wt.noindex/${branch}`,

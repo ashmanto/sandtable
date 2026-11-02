@@ -1,5 +1,5 @@
 import type { Project } from '../../../shared/types'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SandtableApi } from '../../../shared/api'
@@ -1428,6 +1428,42 @@ describe('AddProject', () => {
     await userEvent.click(screen.getByRole('option', { name: 'Account default' }))
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(api.projects.save).toHaveBeenLastCalledWith(project)
+  })
+
+  it('opens sessions in the first editor found unless you pick one, and saves the pick', async () => {
+    vi.mocked(api.app.editors).mockResolvedValue([
+      { command: 'code', name: 'VS Code', path: '/x/code' },
+      { command: 'cursor', name: 'Cursor', path: '/x/cursor' }
+    ])
+    const { rerender } = render(<AddProject {...props} project={project} />)
+    await userEvent.click(screen.getByRole('button', { name: /Review/ }))
+    const editor = await screen.findByRole('combobox', { name: 'Editor' })
+    expect(editor).toHaveTextContent('First found')
+    await userEvent.click(editor)
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'First found',
+      'VS Code',
+      'Cursor'
+    ])
+    await userEvent.click(screen.getByRole('option', { name: 'Cursor' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(api.projects.save).toHaveBeenCalledWith({ ...project, editor: 'cursor' })
+    rerender(<AddProject {...props} project={{ ...project, editor: 'idea' }} key="again" />)
+    await userEvent.click(screen.getByRole('button', { name: /Review/ }))
+    expect(await screen.findByRole('combobox', { name: 'Editor' })).toHaveTextContent(
+      'IntelliJ IDEA'
+    )
+    await userEvent.click(screen.getByRole('combobox', { name: 'Editor' }))
+    await userEvent.click(screen.getByRole('option', { name: 'First found' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(api.projects.save).toHaveBeenLastCalledWith(project)
+  })
+
+  it('hides Editor when no editor is found', async () => {
+    render(<AddProject {...props} project={project} />)
+    await userEvent.click(screen.getByRole('button', { name: /Review/ }))
+    await act(async () => {})
+    expect(screen.queryByRole('combobox', { name: 'Editor' })).not.toBeInTheDocument()
   })
 
   it('checks readiness at Start by default, and saves it turned off and back on', async () => {

@@ -1644,7 +1644,10 @@ them through Tailwind classes and never name a raw color.
     **Repo** (or **Repos**), **Folder** (or **Folders**) in `fg-3` over each folder in monospace
     `fg-2`, wrapping anywhere, and, on the same terms as the summary, **Sandbox** with the quiet **Sandboxed** label: 11 px `fg-3`
     text, focusable, an image named by its tooltip, which lists the limits and the session's
-    allowed domains.
+    allowed domains. Under each folder, until the worktree is removed, **Open in Finder** and
+    **Open in <editor>** as text links in a wrapping row; with more than one folder, their
+    accessible names add the repo, such as "Open in Finder, shop". A failed open shows its message
+    in `danger` under them.
   - **Work**, open by default: the files changed and the pull request, such as "3 files · #12 PR
     open". It opens to **Files** with lines added in `added` and removed in
     `danger`, a **Pull request** row per pull request from the branch, its number a link to GitHub
@@ -2228,6 +2231,9 @@ them through Tailwind classes and never name a raw color.
   and Haiku, set to Account default unless the project saved a model, beside "The model sessions
   run on. Start and New session can pick another for one session." in 11 px `fg-2`, its
   description.
+  An **Editor** row follows, only when an editor's launcher is found or the project saved one: a 160 px select with First
+  found and each editor found, beside "The editor a session's side panel opens its folders in." in
+  11 px `fg-2`.
   A **Keep done tickets** row follows, also with no **Edit**: a select with 1 day, 3 days, 7 days,
   14 days, and 30 days, set to 7 days unless the project saved another. A **Token cap** row
   follows, also with no **Edit**: a 128 px select with Off, 10M tokens, 25M tokens, 50M tokens,

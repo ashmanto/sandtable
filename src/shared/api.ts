@@ -47,6 +47,7 @@ import type {
 } from './types'
 import type { PromptAnswer, SessionPrompt } from './prompt'
 import type { SessionStatus } from './sessionStatus'
+import type { Editor } from './editors'
 
 /** A session the sidebar lists; `done` marks Done, session open. */
 export type SidebarSession = SessionRecord & { done?: true }
@@ -199,6 +200,8 @@ export type SandtableApi = {
     raiseCap(sessionId: string): Promise<void>
     /** Each of the session's worktrees' changes against the merge base with the default branch. */
     changes(sessionId: string): Promise<RepoChanges[]>
+    /** Opens one of the session's folders in Finder or the project's editor; rejects with why it couldn't. */
+    openFolder(sessionId: string, folder: string, how: 'finder' | 'editor'): Promise<void>
     /** The session's findings and AI review proposals. */
     findings(sessionId: string): Promise<FindingsState>
     addFinding(sessionId: string, f: NewFinding): Promise<Finding>
@@ -280,6 +283,8 @@ export type SandtableApi = {
     onOpen(cb: (view: LastView) => void): () => void
     pendingOpen(): Promise<LastView | 'settings' | null>
     tools(): Promise<ToolCheck>
+    /** The editors whose command-line launcher is installed, in the order Sandtable prefers them. */
+    editors(): Promise<Editor[]>
     theme(): Promise<Theme>
     setTheme(theme: Theme): Promise<void>
     keepAwake(): Promise<boolean>

@@ -3,6 +3,7 @@ import { useEffect, useId, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useLiveUsage } from '@/hooks/useLiveUsage'
+import { useLoad } from '@/hooks/useLoad'
 import { useRun } from '@/hooks/useRun'
 import { useSessionStatus } from '@/hooks/useSessionStatus'
 import { stageLook } from '@/lib/card'
@@ -19,6 +20,7 @@ import {
 import { cn, plural, textLink, visible } from '@/lib/utils'
 import { isPrepared } from '../../../shared/compact'
 import { folderRepo, isLive, tokenCapOf } from '../../../shared/sessions'
+import { editorFor, type Editor } from '../../../shared/editors'
 import {
   CONTEXT_WARN,
   LIMIT_WARN,
@@ -270,6 +272,51 @@ function Compact({
   )
 }
 
+function OpenFolder({
+  session,
+  folder,
+  name,
+  editor
+}: {
+  session: SessionRecord
+  folder: string
+  name: string
+  editor: Editor | undefined
+}): React.JSX.Element {
+  const { error, run } = useRun()
+  const open = (how: 'finder' | 'editor'): void =>
+    void run(() => window.sandtable.sessions.openFolder(session.id, folder, how))
+  return (
+    <>
+      <span className="flex flex-wrap gap-x-3">
+        <button
+          type="button"
+          className={textLink}
+          aria-label={`Open in Finder${name}`}
+          onClick={() => open('finder')}
+        >
+          Open in Finder
+        </button>
+        {editor && (
+          <button
+            type="button"
+            className={textLink}
+            aria-label={`Open in ${editor.name}${name}`}
+            onClick={() => open('editor')}
+          >
+            Open in {editor.name}
+          </button>
+        )}
+      </span>
+      {error && (
+        <p role="alert" className="text-danger">
+          {error}
+        </p>
+      )}
+    </>
+  )
+}
+
 function Panel({
   session,
   project,
@@ -314,6 +361,8 @@ function Panel({
   const folders = worktree ? session.worktrees : session.checkout ? [session.checkout] : []
   const byCount = (one: string, many: string): string => (folders.length > 1 ? many : one)
   const [view, setView] = useSessionView()
+  const editors = useLoad(() => window.sandtable.app.editors(), []).data ?? []
+  const editor = editorFor(project.editor, editors)
   const viewId = useId()
 
   return (
@@ -432,9 +481,17 @@ function Panel({
               <div className="flex flex-col gap-0.5">
                 <span className="text-fg-3">{byCount('Folder', 'Folders')}</span>
                 {folders.map((f) => (
-                  <span key={f} className="font-mono text-fg-2 wrap-anywhere">
-                    {f}
-                  </span>
+                  <div key={f} className="flex flex-col gap-0.5">
+                    <span className="font-mono text-fg-2 wrap-anywhere">{f}</span>
+                    {!session.removedAt && (
+                      <OpenFolder
+                        session={session}
+                        folder={f}
+                        name={folders.length > 1 ? `, ${folderRepo(session, f)}` : ''}
+                        editor={editor}
+                      />
+                    )}
+                  </div>
                 ))}
               </div>
             </>

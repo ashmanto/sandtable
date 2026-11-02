@@ -94,6 +94,8 @@ it('marks a needsYou session finished when its tmux session ends', async () => {
     githubReposOf: async () => [],
     pullRequests: async () => [],
     failedLog: async () => '',
+    editors: async () => [],
+    openFolder: async () => '',
     git: {
       ensureWorktree: vi.fn(),
       removeWorktree: vi.fn(),
