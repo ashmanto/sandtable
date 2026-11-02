@@ -539,6 +539,16 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
   const missedConversations = new Map<string, Set<string>>()
   const runsInFlight = new Set<string>()
   const synced = new Map<string, Synced>()
+  const stamps = new Map<string, { stamp: string; at: number }>()
+  const stampOf = (p: Project): Promise<string | null> =>
+    tracked(p)
+      ? Promise.resolve(null)
+      : deps
+          .githubStamp(
+            p.board?.source,
+            p.repos.map((r) => r.github)
+          )
+          .catch(() => null)
   const viewers = new Map<string, Promise<string>>()
   const mergedPrs = new Map<string, MergedPr[]>()
   const trackerFor = (p: Project): Tracker => trackerOf(p, deps)
@@ -818,6 +828,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     try {
       const project = projectById(projectId)
       const startedAt = now().getTime()
+      const stamp = await stampOf(project)
       const truncated: string[] = []
       const problem = (message: string): void => void truncated.push(message)
       const tickets = await trackerFor(project).tickets(
@@ -854,6 +865,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       if (merged) mergedPrs.set(projectId, merged.prs)
       persistCache()
       autoFindings(projectId)
+      if (stamp !== null) stamps.set(projectId, { stamp, at: startedAt })
     } catch (err) {
       failed = (err as Error).message
       setError(projectId, failed)
@@ -1088,25 +1100,14 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
   }
   let openId: string | null = null
   let visible = true
-  const stamps = new Map<string, { stamp: string; at: number }>()
   const timedSync = async (project: Project): Promise<string | null> => {
-    if (tracked(project)) return joinSync(project.id)
-    const stamp = await deps
-      .githubStamp(
-        project.board?.source,
-        project.repos.map((r) => r.github)
-      )
-      .catch(() => null)
+    const stamp = await stampOf(project)
     const last = stamps.get(project.id)
-    const at = now().getTime()
-    if (stamp !== null && last?.stamp === stamp && at - last.at < STALE_MS) {
+    if (stamp !== null && last?.stamp === stamp && now().getTime() - last.at < STALE_MS) {
       autoFindings(project.id)
       return null
     }
-    const joined = running.has(project.id)
-    const failed = await joinSync(project.id)
-    if (stamp !== null && failed === null && !joined) stamps.set(project.id, { stamp, at })
-    return failed
+    return joinSync(project.id)
   }
   const syncWatched = (timed = false): Promise<unknown> =>
     Promise.all(

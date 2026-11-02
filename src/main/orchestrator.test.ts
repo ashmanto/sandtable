@@ -710,6 +710,7 @@ describe('start sets In Progress like a drag', () => {
     t.deps.board.tickets.mockImplementationOnce(() => new Promise((r) => (release = r)))
     const first = t.orch.sync('p1')
     const second = t.orch.sync('p1')
+    await vi.waitFor(() => expect(t.deps.board.tickets).toHaveBeenCalled())
     release([ticket()])
     await Promise.all([first, second])
     expect(t.deps.board.tickets).toHaveBeenCalledTimes(1)
@@ -1049,6 +1050,8 @@ describe('sync', () => {
 
     it('syncs only the open project every 60 seconds', async () => {
       const t = await watching()
+      let n = 0
+      t.deps.githubStamp.mockImplementation(async () => String(n++))
       await vi.advanceTimersByTimeAsync(60_000)
       expect(synced(t)).toEqual([1])
       t.orch.stop()
@@ -1061,6 +1064,8 @@ describe('sync', () => {
       t.orch.watch('p1', true)
       await settle()
       t.deps.board.tickets.mockClear()
+      let n = 0
+      t.deps.githubStamp.mockImplementation(async () => String(n++))
       await vi.advanceTimersByTimeAsync(60_000)
       expect(synced(t).sort()).toEqual([1, 3])
       t.orch.stop()
@@ -1115,6 +1120,13 @@ describe('sync', () => {
         return t
       }
 
+      it('skips the first minute after a sync you started', async () => {
+        const t = await watching()
+        await minute()
+        expect(synced(t)).toEqual([])
+        t.orch.stop()
+      })
+
       it("skips a timed sync when the stamp hasn't changed", async () => {
         const t = await afterTimedSync()
         await minute()
@@ -1152,7 +1164,8 @@ describe('sync', () => {
       })
 
       it('retries in full after a failed sync', async () => {
-        const t = await watching()
+        const t = await afterTimedSync()
+        t.deps.githubStamp.mockResolvedValue('moved')
         t.deps.board.tickets.mockRejectedValueOnce(new Error('timeout'))
         await minute()
         await minute()
@@ -1177,13 +1190,12 @@ describe('sync', () => {
         t.deps.board.tickets.mockImplementationOnce(
           () => new Promise((done) => (release = () => done([])))
         )
-        t.deps.githubStamp.mockImplementation(async () => {
-          void t.orch.sync('p1')
-          return 'moved'
-        })
-        const joined = minute()
+        void t.orch.sync('p1')
         await vi.waitFor(() => expect(t.deps.board.tickets).toHaveBeenCalled())
         t.deps.githubStamp.mockResolvedValue('moved')
+        const calls = t.deps.githubStamp.mock.calls.length
+        const joined = minute()
+        await vi.waitFor(() => expect(t.deps.githubStamp.mock.calls.length).toBe(calls + 1))
         release()
         await joined
         await settle()
@@ -6897,6 +6909,7 @@ describe('timer ticks', () => {
     await settle()
     t.deps.board.tickets.mockClear()
     t.deps.board.tickets.mockReturnValue(new Promise(() => {}))
+    t.deps.githubStamp.mockResolvedValue('moved')
     await vi.advanceTimersByTimeAsync(180_000)
     expect(t.deps.board.tickets).toHaveBeenCalledTimes(1)
     t.orch.stop()

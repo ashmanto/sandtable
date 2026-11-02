@@ -45,6 +45,7 @@ describe('findings', () => {
     const t = setup({ sessions: [session({ state: 'needsYou', ...over })], findings })
     t.live.add(tmux)
     await t.orch.reconnect()
+    await settle()
     return t
   }
   const mine = (over: Partial<Finding> = {}): Finding => ({
