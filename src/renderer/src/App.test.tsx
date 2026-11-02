@@ -46,6 +46,24 @@ describe('App', () => {
     expect(screen.getByRole('img', { name: '1 needs you' })).toHaveTextContent('1')
   })
 
+  it('still counts a session toward Needs you when the search hides its ticket', async () => {
+    const t = ticket(1)
+    vi.mocked(api.board.get).mockResolvedValue(
+      boardView({
+        tickets: [t],
+        sessions: [session(t.key, { state: 'needsYou' })],
+        needsYou: { p1: 1 }
+      })
+    )
+    render(<App />)
+    await userEvent.type(
+      await screen.findByRole('searchbox', { name: 'Search tickets' }),
+      'nothing like it'
+    )
+    expect(screen.getByText('1 hidden by filter')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: '1 needs you' })).toHaveTextContent('1')
+  })
+
   it("doesn't carry one project's label filter to another", async () => {
     localStorage.setItem('labelFilter:p1', JSON.stringify({ mode: 'only', labels: ['bug'] }))
     vi.mocked(api.projects.list).mockResolvedValue([
@@ -58,6 +76,28 @@ describe('App', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Other' }))
     expect(await screen.findByText('Ticket 1')).toBeInTheDocument()
     expect(screen.queryByText(/hidden by filter/)).not.toBeInTheDocument()
+  })
+
+  it('keeps the search after you open a ticket and go back, but not in another project', async () => {
+    vi.mocked(api.projects.list).mockResolvedValue([
+      project,
+      { ...project, id: 'p2', name: 'Other' }
+    ])
+    vi.mocked(api.board.get).mockResolvedValue(boardView({ tickets: [ticket(1), ticket(2)] }))
+    render(<App />)
+    const field = (): HTMLElement => screen.getByRole('searchbox', { name: 'Search tickets' })
+    await screen.findByText('Ticket 1')
+    await userEvent.type(field(), 'Ticket 1')
+    await userEvent.click(screen.getByText('Ticket 1'))
+    await userEvent.click(await screen.findByRole('button', { name: 'Back to board' }))
+    expect(field()).toHaveValue('Ticket 1')
+    expect(screen.queryByText('Ticket 2')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Other' }))
+    expect(await screen.findByText('Ticket 2')).toBeInTheDocument()
+    expect(field()).toHaveValue('')
+    await userEvent.click(screen.getByRole('button', { name: 'Shop' }))
+    expect(await screen.findByText('Ticket 2')).toBeInTheDocument()
+    expect(field()).toHaveValue('')
   })
 
   it('goes to the add-project flow from Add project and to a ticket when main asks', async () => {

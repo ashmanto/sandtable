@@ -60,6 +60,7 @@ const none = { tickets: [], sessions: [] }
 
 function App(): React.JSX.Element | null {
   const [projects, setProjects] = useState<Project[]>([])
+  const [search, setSearch] = useState({ projectId: '', text: '' })
   const [groups, setGroups] = useState<ProjectGroup[]>([])
   const [history, setHistory] = useState<History<Screen>>({
     entries: [{ route: null, page: null }],
@@ -270,6 +271,7 @@ function App(): React.JSX.Element | null {
   if (view && view !== lastView) setLastView(view)
   const counts = (view ?? lastView)?.needsYou ?? {}
   const project = projects.find((p) => p.id === route?.projectId)
+  if (project && search.projectId !== project.id) setSearch({ projectId: project.id, text: '' })
   const toBoard = (projectId: string): void => setRoute({ name: 'board', projectId })
   const toSession = (projectId: string, sessionId: string): void =>
     setRoute({ name: 'session', projectId, sessionId })
@@ -390,6 +392,8 @@ function App(): React.JSX.Element | null {
                 onDrafted={(id) => toSession(project.id, id)}
                 onOpenSession={(id) => toSession(project.id, id)}
                 onRoutine={onRoutine}
+                defaultSearch={search.text}
+                onSearch={(text) => setSearch({ projectId: project.id, text })}
                 onSetUp={(repo) => setRoute({ name: 'add', projectId: project.id, repo })}
               />
             )}
