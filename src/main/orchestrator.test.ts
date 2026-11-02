@@ -516,6 +516,15 @@ describe('your instructions and note', () => {
     expect(t.saved().sessions.map((s) => s.note)).toEqual(['Hi', undefined])
   })
 
+  it('keeps at most 4,000 bytes of the note', async () => {
+    const t = setup()
+    await t.orch.reconnect()
+    await t.orch.sync('p1')
+    await t.orch.start('p1', 'octo/shop#147', [], undefined, 'x'.repeat(10_000))
+    await t.orch.flush()
+    expect(t.saved().sessions[0].note).toHaveLength(4000)
+  })
+
   it('refuses a note that is not text', async () => {
     const t = setup()
     await t.orch.reconnect()

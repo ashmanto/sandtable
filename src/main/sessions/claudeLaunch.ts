@@ -13,7 +13,8 @@ import { shellQuote } from '../../shared/shell'
 import { instructionsSection, type Instruction } from '../../shared/instructions'
 import type { Model, Project, Ticket } from '../../shared/types'
 
-const MAX_NOTE_BYTES = 4000
+/** The most of your start note a session keeps, in UTF-8 bytes. */
+export const MAX_NOTE_BYTES = 4000
 
 /** The system-prompt line that keeps secrets out of Claude's answers. */
 export const NO_SECRETS_RULE = 'Never quote secrets, tokens, or credentials.'

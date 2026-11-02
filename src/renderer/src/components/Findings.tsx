@@ -53,7 +53,7 @@ const autoStatus = (a: AutoReview, reviewing: boolean): string =>
   a.on === false
     ? 'Automatic review is off for this session.'
     : a.stopped === 'clean'
-      ? 'Automatic review stopped: the last review had no High proposals.'
+      ? 'Automatic review stopped: the last review had no High line proposals.'
       : a.stopped === 'rounds'
         ? `Automatic review stopped after ${a.rounds} rounds.`
         : reviewing

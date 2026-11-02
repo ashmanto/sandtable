@@ -118,7 +118,9 @@ import {
   withoutUnsafe,
   openingPrompt,
   schemaArgs,
-  sessionRules
+  sessionRules,
+  fitBytes,
+  MAX_NOTE_BYTES
 } from './sessions/claudeLaunch'
 import { readActivity } from './sessions/activity'
 import { findConversation, parseConversation, readLastEntries } from './sessions/conversation'
@@ -2464,7 +2466,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
             startedAt: now().toISOString(),
             state: 'running',
             startWarning: warning || undefined,
-            ...(note?.trim() && { note: note.trim() })
+            ...(note?.trim() && { note: fitBytes(note.trim(), MAX_NOTE_BYTES) })
           })
         } catch (err) {
           await removeCreated()

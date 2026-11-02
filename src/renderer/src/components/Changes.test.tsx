@@ -501,7 +501,7 @@ describe('Changes findings rail', () => {
       [
         { rounds: 1, stopped: 'clean' },
         false,
-        'Automatic review stopped: the last review had no High proposals.'
+        'Automatic review stopped: the last review had no High line proposals.'
       ],
       [{ rounds: 3, stopped: 'rounds' }, false, 'Automatic review stopped after 3 rounds.'],
       [{ on: false, rounds: 1 }, false, 'Automatic review is off for this session.']

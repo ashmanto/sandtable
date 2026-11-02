@@ -176,6 +176,8 @@ describe('reviewPrompt', () => {
     const prompt = reviewPrompt('+a', 'Fix the login.')
     expect(prompt).toContain('<issue>\nFix the login.\n</issue>')
     expect(prompt).toContain('medium')
+    expect(prompt).toContain('not counting tests, docs, or changes the requested work needs')
+    expect(prompt).toContain('the note the person wrote')
     expect(prompt).not.toContain('"unmet"')
   })
 })
@@ -312,6 +314,20 @@ describe('parseReview with an issue', () => {
       issue
     )
     expect(out).toMatchObject([{ title: 'Gamma works' }])
+  })
+
+  it('matches a criterion quoted without its markdown, case, or bullet marker', () => {
+    const md = '**Done when**\n- **Alpha** works\n- [ ] `npm test` passes'
+    const out = parseReview(
+      unmet([
+        { criterion: 'alpha works', severity: 'low', reason: 'r' },
+        { criterion: 'npm test passes', severity: 'low', reason: 'r' },
+        { criterion: '- [ ] `npm test` passes', severity: 'low', reason: 'r' }
+      ]),
+      [changes()],
+      md
+    )
+    expect(out.map((f) => f.title)).toEqual(['alpha works', 'npm test passes'])
   })
 
   it('drops unmet without an issue or a Done when section', () => {

@@ -830,7 +830,7 @@ refusal, a notification title, or a format example.
 - A new proposal on the same lines, or for the same **Done when** criterion, as an earlier undecided
   one replaces it.
 - The next round starts when Claude ends a later turn with changed work. The rounds stop after a
-  review with no **High** proposals or after 3 rounds.
+  review with no **High** line proposals or after 3 rounds.
 - The rail says where the loop stands or why it stopped.
 
 ### When automatic review runs and sends
