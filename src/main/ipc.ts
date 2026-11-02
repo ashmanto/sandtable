@@ -64,6 +64,7 @@ const waitingHandlers = (
   'sessions.liveUsage': orch.liveUsage,
   'sessions.raiseCap': orch.raiseCap,
   'sessions.changes': orch.changes,
+  'sessions.openFolder': orch.openFolder,
   'sessions.findings': orch.findings,
   'sessions.addFinding': orch.addFinding,
   'sessions.updateFinding': orch.updateFinding,

@@ -6196,6 +6196,66 @@ describe('changes', () => {
   })
 })
 
+describe('openFolder', () => {
+  const wt = '/repos/shop-wt.noindex/147-dark-mode-toggle'
+  const cursor = { command: 'cursor', name: 'Cursor', path: '/x/cursor' }
+  const idea = { command: 'idea', name: 'IntelliJ IDEA', path: '/x/idea' }
+  const ready = async (over: Partial<SessionRecord> = {}): Promise<ReturnType<typeof setup>> => {
+    const t = setup({ sessions: [session(over)] })
+    t.deps.editors.mockResolvedValue([cursor, idea])
+    await t.orch.reconnect()
+    return t
+  }
+
+  it('opens the worktree in Finder', async () => {
+    const t = await ready()
+    await t.orch.openFolder('s1', wt, 'finder')
+    expect(t.deps.openFolder).toHaveBeenCalledWith(wt, undefined)
+  })
+
+  it("opens the worktree in the project's editor, or the first one found", async () => {
+    const t = await ready()
+    await t.orch.openFolder('s1', wt, 'editor')
+    expect(t.deps.openFolder).toHaveBeenLastCalledWith(wt, cursor)
+    await t.orch.saveProject({ ...project, editor: 'idea' })
+    await t.orch.openFolder('s1', wt, 'editor')
+    expect(t.deps.openFolder).toHaveBeenLastCalledWith(wt, idea)
+  })
+
+  it('opens the main checkout of a session without worktrees', async () => {
+    const t = await ready({ worktrees: [], checkout: '/repos/shop' })
+    await t.orch.openFolder('s1', '/repos/shop', 'finder')
+    expect(t.deps.openFolder).toHaveBeenCalledWith('/repos/shop', undefined)
+  })
+
+  it("refuses a folder that isn't the session's", async () => {
+    const t = await ready({ checkout: '/repos/shop' })
+    for (const f of ['/etc', '/repos/shop'])
+      await expect(t.orch.openFolder('s1', f, 'finder')).rejects.toThrow(
+        "Not this session's folder"
+      )
+    expect(t.deps.openFolder).not.toHaveBeenCalled()
+  })
+
+  it('refuses a removed worktree', async () => {
+    const t = await ready({ state: 'finished', removedAt: '2026-10-25T00:00:00Z' })
+    await expect(t.orch.openFolder('s1', wt, 'finder')).rejects.toThrow('The worktree was removed')
+  })
+
+  it('says why it could not open the folder', async () => {
+    const t = await ready()
+    t.deps.openFolder.mockResolvedValue('The file does not exist')
+    await expect(t.orch.openFolder('s1', wt, 'finder')).rejects.toThrow('The file does not exist')
+    t.deps.editors.mockResolvedValue([])
+    await expect(t.orch.openFolder('s1', wt, 'editor')).rejects.toThrow('No editor found')
+  })
+
+  it('refuses to save an editor it does not support', async () => {
+    const t = await ready()
+    await expect(t.orch.saveProject({ ...project, editor: 'rm' })).rejects.toThrow('Not an editor')
+  })
+})
+
 describe('send and interrupt', () => {
   const tmux = 'st-p1-octo-shop-147'
   const ready = async (over: Partial<SessionRecord> = {}): Promise<ReturnType<typeof setup>> => {

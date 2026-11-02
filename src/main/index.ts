@@ -21,6 +21,7 @@ import {
   checkTools,
   claudeFolders,
   claudeSignedIn,
+  findEditors,
   findTools,
   loginShellPath,
   run,
@@ -362,6 +363,14 @@ async function start(): Promise<void> {
     githubReposOf,
     pullRequests: (repo, branch) => fetchPullRequests(github.gql, repo, branch),
     failedLog: (repo, jobId) => failedLog(run, tools.paths.gh ?? 'gh', repo, jobId),
+    editors: () => findEditors(toolsPath),
+    openFolder: async (folder, editor) => {
+      if (!editor) return shell.openPath(folder)
+      const { code, stderr } = await run(editor.path, [folder], undefined, 30000)
+      return code === 0
+        ? ''
+        : stderr.trim().split('\n')[0] || `${editor.name} exited with code ${code}`
+    },
     git: { ensureWorktree, removeWorktree, checkRemovable, changes: worktreeChanges },
     setup: { problem: ignoredProblem, copy: copyPaths, run: runSetup, suggest: suggestSetup },
     tmux: {
@@ -515,6 +524,7 @@ async function start(): Promise<void> {
           PATH: toolsPath,
           ...accountEnv(dir, claudeDir)
         }),
+      'app.editors': () => findEditors(toolsPath),
       'app.tools': async () => {
         github.reset()
         linearClients.clear()

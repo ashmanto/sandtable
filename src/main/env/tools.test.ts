@@ -1,5 +1,5 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { setupSteps } from '../../shared/setup'
@@ -9,6 +9,7 @@ import {
   checkTools,
   claudeFolders,
   claudeSignedIn,
+  findEditors,
   findTools,
   loginShellPath,
   run,
@@ -541,5 +542,22 @@ describe('run', () => {
   it('stops a timed-out run with SIGTERM, so git can clean up, and keeps the arguments out', async () => {
     const r = await run('/bin/sh', ['-c', 'sleep 30', 'secret-arg'], undefined, 200)
     expect(r).toEqual({ stdout: '', stderr: 'killed by SIGTERM', code: -1 })
+  })
+})
+
+describe('findEditors', () => {
+  it('returns the editors whose launcher resolves, also in the Toolbox scripts folder', async () => {
+    const fake: RunFn = async (_file, args, env) => {
+      expect(env?.PATH).toBe(
+        `/bin:${join(homedir(), 'Library/Application Support/JetBrains/Toolbox/scripts')}`
+      )
+      return ['cursor', 'idea'].includes(args[3])
+        ? { stdout: `/x/${args[3]}\n`, stderr: '', code: 0 }
+        : { stdout: '', stderr: '', code: 1 }
+    }
+    expect(await findEditors('/bin', fake)).toEqual([
+      { command: 'cursor', name: 'Cursor', path: '/x/cursor' },
+      { command: 'idea', name: 'IntelliJ IDEA', path: '/x/idea' }
+    ])
   })
 })

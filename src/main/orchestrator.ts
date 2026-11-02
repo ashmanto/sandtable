@@ -58,6 +58,7 @@ import type {
 } from '../shared/types'
 import type { PromptAnswer, SessionPrompt } from '../shared/prompt'
 import { MODELS, reassign, withGroup } from '../shared/types'
+import { EDITORS, editorFor, type Editor } from '../shared/editors'
 import { isSandboxDomain, sandboxDomains } from '../shared/sandbox'
 import { branchName } from './git/branchName'
 import { worktreePath } from './git/worktree'
@@ -238,6 +239,9 @@ export type OrchestratorDeps = {
   githubReposOf(path: string): Promise<string[]>
   pullRequests(repo: string, branch: string): Promise<PullRequestState[]>
   failedLog(repo: string, jobId: number): Promise<string>
+  editors(): Promise<Editor[]>
+  /** Opens a folder in Finder, or in the editor; resolves to an error message, or '' when it opened. */
+  openFolder(folder: string, editor?: Editor): Promise<string>
   git: {
     ensureWorktree(
       repoPath: string,
@@ -410,6 +414,8 @@ export type Orchestrator = {
   ): Promise<string>
   rename(sessionId: string, name: string): Promise<void>
   changes(sessionId: string): Promise<RepoChanges[]>
+  /** Opens one of the session's folders in Finder or the project's editor. */
+  openFolder(sessionId: string, folder: string, how: 'finder' | 'editor'): Promise<void>
   findings(sessionId: string): Promise<FindingsState>
   addFinding(sessionId: string, f: NewFinding): Promise<Finding>
   updateFinding(sessionId: string, id: string, patch: FindingPatch): Promise<void>
@@ -2049,6 +2055,8 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       if (project.tokenCap !== undefined && !TOKEN_CAPS.includes(project.tokenCap))
         throw new Error('Not a token cap')
       assertModel(project.model)
+      if (project.editor !== undefined && !EDITORS.some((e) => e.command === project.editor))
+        throw new Error('Not an editor')
       if (project.sandbox !== undefined && project.sandbox !== true)
         throw new Error('Not a sandbox choice')
       if (project.sandboxDomains !== undefined && !Array.isArray(project.sandboxDomains))
@@ -2824,6 +2832,20 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     removeWorktree,
 
     changes: changesOf,
+
+    async openFolder(sessionId, folder, how) {
+      const s = sessionById(sessionId)
+      if (s.removedAt) throw new Error('The worktree was removed')
+      const folders = s.worktrees.length ? s.worktrees : s.checkout ? [s.checkout] : []
+      if (!folders.includes(folder)) throw new Error("Not this session's folder")
+      let editor: Editor | undefined
+      if (how === 'editor') {
+        editor = editorFor(projectById(s.projectId).editor, await deps.editors())
+        if (!editor) throw new Error('No editor found')
+      }
+      const error = await deps.openFolder(folder, editor)
+      if (error) throw new Error(error)
+    },
 
     ...reviewLoop,
     ...usageApi,

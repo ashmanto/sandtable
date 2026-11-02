@@ -1,6 +1,8 @@
 import { execFile, type ChildProcess } from 'node:child_process'
 import { readdir } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { EDITORS, type Editor } from '../../shared/editors'
 import { parseJson } from '../../shared/json'
 import { setupSteps } from '../../shared/setup'
 import type { Account, ToolCheck } from '../../shared/types'
@@ -75,15 +77,32 @@ export async function findTools(
   path: string,
   runFn: RunFn = run
 ): Promise<Pick<ToolCheck, 'paths' | 'missing'>> {
-  const env = { ...process.env, PATH: path }
+  const found = await lookUp(TOOLS, path, runFn)
   const paths: Record<string, string> = {}
   const missing: ToolCheck['missing'] = []
-  for (const tool of TOOLS) {
-    const { stdout, code } = await runFn('/bin/sh', ['-c', 'command -v "$1"', 'sh', tool], env)
-    if (code === 0 && stdout.trim()) paths[tool] = stdout.trim()
-    else missing.push(tool)
-  }
+  TOOLS.forEach((tool, i) => (found[i] ? (paths[tool] = found[i]) : missing.push(tool)))
   return { paths, missing }
+}
+
+const lookUp = async (names: readonly string[], path: string, runFn: RunFn): Promise<string[]> => {
+  const env = { ...process.env, PATH: path }
+  const found: string[] = []
+  for (const name of names) {
+    const { stdout, code } = await runFn('/bin/sh', ['-c', 'command -v "$1"', 'sh', name], env)
+    found.push(code === 0 ? stdout.trim() : '')
+  }
+  return found
+}
+
+/** Resolves each editor's launcher against the given PATH and JetBrains Toolbox's scripts folder. */
+export async function findEditors(path: string, runFn: RunFn = run): Promise<Editor[]> {
+  const toolbox = join(homedir(), 'Library/Application Support/JetBrains/Toolbox/scripts')
+  const found = await lookUp(
+    EDITORS.map((e) => e.command),
+    `${path}:${toolbox}`,
+    runFn
+  )
+  return EDITORS.flatMap((e, i) => (found[i] ? [{ ...e, path: found[i] }] : []))
 }
 
 type GhHost = { active?: boolean; state?: string; error?: string; scopes?: unknown }

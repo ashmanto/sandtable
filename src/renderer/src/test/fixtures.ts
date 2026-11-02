@@ -220,6 +220,7 @@ export function fakeSandtable(): SandtableApi {
       onLiveUsage: vi.fn(() => () => {}),
       raiseCap: vi.fn<SandtableApi['sessions']['raiseCap']>(async () => undefined),
       changes: vi.fn<SandtableApi['sessions']['changes']>(async () => []),
+      openFolder: vi.fn<SandtableApi['sessions']['openFolder']>(async () => undefined),
       findings: vi.fn<SandtableApi['sessions']['findings']>(async () => ({
         findings: [],
         reviewing: false
@@ -279,6 +280,7 @@ export function fakeSandtable(): SandtableApi {
     app: {
       onOpen: vi.fn(() => () => {}),
       pendingOpen: vi.fn<SandtableApi['app']['pendingOpen']>(async () => null),
+      editors: vi.fn<SandtableApi['app']['editors']>(async () => []),
       tools: vi.fn<SandtableApi['app']['tools']>(async () => ({
         ok: true,
         missing: [],
