@@ -28,7 +28,7 @@ export type RepoIssuesClient = {
 }
 
 /** The issue fields behind `issueProps`, shared by both sync queries. */
-export const ISSUE_PROPS = `number title body url closedAt repository { nameWithOwner } labels(first: 100) { nodes { name color } } createdAt updatedAt assignees(first: 10) { nodes { id login name } } parent { number title url state stateReason repository { nameWithOwner } subIssuesSummary { completed total } } subIssuesSummary { completed total } subIssues(first: 50) { nodes { number title url state stateReason repository { nameWithOwner } } } blockedBy(first: 20) { nodes { number title state repository { nameWithOwner } } } closedByPullRequestsReferences(first: 10) { nodes { url mergedAt state createdAt reviewDecision mergeable isDraft commits(last: 1) { nodes { commit { statusCheckRollup { state } } } } } }`
+export const ISSUE_PROPS = `number title body url closedAt repository { nameWithOwner } labels(first: 100) { nodes { name color } } createdAt updatedAt assignees(first: 10) { nodes { id login name } } parent { number title url state stateReason repository { nameWithOwner } subIssuesSummary { completed total } } subIssuesSummary { completed total } subIssues(first: 20) { nodes { number title url state stateReason repository { nameWithOwner } } } blockedBy(first: 10) { nodes { number title state repository { nameWithOwner } } } closedByPullRequestsReferences(first: 5) { nodes { url mergedAt state createdAt reviewDecision mergeable isDraft commits(last: 1) { nodes { commit { statusCheckRollup { state } } } } } }`
 
 const ISSUE_FIELDS = `id state stateReason ${ISSUE_PROPS}`
 
