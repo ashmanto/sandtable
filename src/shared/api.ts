@@ -123,7 +123,8 @@ export type SandtableApi = {
       mainRepo?: string,
       note?: string,
       model?: Model | null,
-      setup?: false
+      setup?: false,
+      plan?: true
     ): Promise<void>
     checkStart(projectId: string, ticketKey: string): Promise<StartCheck>
     checkOverlap(projectId: string, ticketKey: string): Promise<Overlap[]>
