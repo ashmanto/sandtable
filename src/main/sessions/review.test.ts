@@ -172,6 +172,12 @@ describe('reviewPrompt', () => {
     expect(prompt.length).toBeLessThan(202_500)
   })
 
+  it('removes invisible characters from the issue', () => {
+    expect(reviewPrompt('+a', 'Fix\u200b the\u202e login.')).toContain(
+      '<issue>\nFix the login.\n</issue>'
+    )
+  })
+
   it('asks only about scope when the issue has no Done when', () => {
     const prompt = reviewPrompt('+a', 'Fix the login.')
     expect(prompt).toContain('<issue>\nFix the login.\n</issue>')
@@ -327,7 +333,40 @@ describe('parseReview with an issue', () => {
       [changes()],
       md
     )
-    expect(out.map((f) => f.title)).toEqual(['alpha works', 'npm test passes'])
+    expect(out.map((f) => f.title)).toEqual(['Alpha works', 'npm test passes'])
+  })
+
+  it('takes only a whole item of the Done when section, wrapped lines joined', () => {
+    const md =
+      'Gamma works is the goal, see https://x.\n\n## Done when\n\n- Alpha\n  works.\n- Beta works\n\n## Notes\n\n- Gamma works'
+    const out = parseReview(
+      unmet(
+        ['a', 'works', 'Alpha', 'Gamma works', 'https', 'Alpha works', 'Beta works.'].map((c) => ({
+          criterion: c,
+          severity: 'low',
+          reason: 'r'
+        }))
+      ),
+      [changes()],
+      md
+    )
+    expect(out.map((f) => f.title)).toEqual(['Alpha works.', 'Beta works'])
+  })
+
+  it('drops an unmet item with a bad severity, an empty reason, or a repeat, and keeps 20', () => {
+    const many = Array.from({ length: 25 }, (_, i) => `C${i} works`)
+    const md = `## Done when\n\n${many.map((c) => `- ${c}`).join('\n')}`
+    const out = parseReview(
+      unmet([
+        { criterion: 'C0 works', severity: 'urgent', reason: 'r' },
+        { criterion: 'C0 works', severity: 'low', reason: '  ' },
+        ...many.map((c) => ({ criterion: c, severity: 'low', reason: 'r' })),
+        { criterion: 'C1 works', severity: 'high', reason: 'again' }
+      ]),
+      [changes()],
+      md
+    )
+    expect(out.map((f) => f.title)).toEqual(many.slice(0, 20))
   })
 
   it('drops unmet without an issue or a Done when section', () => {

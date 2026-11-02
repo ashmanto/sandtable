@@ -101,8 +101,36 @@ const hasCriteria = (issue: string): boolean =>
   /^\s*(?:#{1,6}\s*|\*\*)?\s*(?:done when|acceptance criteria)\b/im.test(issue)
 
 const squeezed = (s: string): string => s.replace(/\s+/g, ' ').trim()
-const unmarked = (s: string): string => s.replace(/^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/, '')
-const plain = (s: string): string => squeezed(s.replace(/[*_`]/g, '')).toLowerCase()
+const MARKER = /^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/
+const HEADING = /^\s*(?:#{1,6}\s|\*\*[^*]+\*\*:?\s*$)/
+const keyOf = (s: string): string =>
+  squeezed(s.replace(MARKER, '').replace(/[*_`]/g, ''))
+    .replace(/[.;:,]+$/, '')
+    .toLowerCase()
+
+const criteriaOf = (issue: string): Map<string, string> => {
+  const items = new Map<string, string>()
+  let inside = false
+  let item: string[] = []
+  const end = (): void => {
+    const text = squeezed(item.join(' ').replace(/[*`]/g, ''))
+    if (text) items.set(keyOf(text), text)
+    item = []
+  }
+  for (const line of issue.split('\n')) {
+    if (HEADING.test(line) || hasCriteria(line)) {
+      end()
+      inside = hasCriteria(line)
+    } else if (!inside) continue
+    else if (!line.trim()) end()
+    else if (MARKER.test(line)) {
+      end()
+      item = [line.replace(MARKER, '')]
+    } else item.push(line)
+  }
+  end()
+  return items
+}
 
 /** The prompt that asks Claude to review a diff, read as data inside `<diff>` tags, against the `issue` it works on inside `<issue>` tags when given. */
 export function reviewPrompt(diff: string, issue?: string): string {
@@ -126,12 +154,12 @@ export function reviewPrompt(diff: string, issue?: string): string {
     ...(hasCriteria(issue)
       ? [
           '',
-          'In "unmet", list each Done when or acceptance criterion of the issue that the changes don\'t meet, with the criterion quoted word for word from the issue, a severity of high, medium, or low, and a reason under 500 characters. Leave it empty when every criterion is met.'
+          'In "unmet", list each Done when or acceptance criterion of the issue that the changes don\'t meet, with the whole criterion quoted word for word from the issue, a severity of high, medium, or low, and a reason under 500 characters. Leave it empty when every criterion is met.'
         ]
       : []),
     '',
     '<issue>',
-    withoutTags(issue, tags),
+    withoutTags(withoutUnsafe(issue), tags),
     '</issue>'
   ].join('\n')
 }
@@ -166,16 +194,15 @@ function fileOf(
 const SEVERITIES = ['high', 'medium', 'low']
 
 const unmetOf = (unmet: unknown, issue: string | undefined): Proposal[] => {
-  if (!issue || !hasCriteria(issue) || !Array.isArray(unmet)) return []
-  const text = plain(issue)
+  const criteria = issue ? criteriaOf(issue) : new Map<string, string>()
+  if (!criteria.size || !Array.isArray(unmet)) return []
   const seen = new Set<string>()
   return (unmet as Unmet[])
     .flatMap((u): Proposal[] => {
-      const title = squeezed(unmarked(withoutUnsafe(String(u.criterion)))).slice(0, 500)
-      const key = plain(title)
+      const key = keyOf(withoutUnsafe(String(u.criterion)))
+      const title = criteria.get(key)?.slice(0, 500)
       const reason = withoutUnsafe(String(u.reason)).trim().slice(0, 500)
-      if (!key || !reason || !SEVERITIES.includes(u.severity) || seen.has(key)) return []
-      if (!text.includes(key)) return []
+      if (!title || !reason || !SEVERITIES.includes(u.severity) || seen.has(key)) return []
       seen.add(key)
       return [{ title, severity: u.severity, text: reason }]
     })

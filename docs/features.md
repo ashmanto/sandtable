@@ -795,10 +795,11 @@ refusal, a notification title, or a format example.
 - The review also reads the ticket and the note you started it with. Work that neither asked for
   comes back as a finding of at most **Medium**.
 - When the ticket has a **Done when** or acceptance section, each criterion the changes miss comes
-  back as a proposal named by that criterion, quoted from the ticket. A criterion the ticket doesn't
-  contain is dropped. A ticket missing from the sync gets a review of the diff alone.
-- Up to 20 findings, each with a severity of **High**, **Medium**, or **Low**, show as **Review
-  proposals** until you **Keep** or **Discard** each, or **Keep all**.
+  back as a proposal named by that criterion, quoted from the ticket. An answer that isn't a whole
+  item of that section is dropped. A ticket missing from the sync gets a review of the diff alone.
+- Up to 20 line findings and 20 **Done when** proposals, each with a severity of **High**,
+  **Medium**, or **Low**, show as **Review proposals** until you **Keep** or **Discard** each, or
+  **Keep all**.
 - A new review replaces the proposals you haven't decided on.
 - The rail says when Claude last reviewed and how many reviews ran, and from the second review on,
   marks what the latest review proposed as **New**.
