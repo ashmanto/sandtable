@@ -92,9 +92,10 @@ refusal, a notification title, or a format example.
 - Switching tabs inside a ticket doesn't add a step, and a view's own **Back** goes back a step
   when it returns to the screen before.
 - A step whose project, ticket, or session is gone, or an ended session, is skipped.
-- **View > Next Needs You** or Shift-Command-J opens the next sidebar session in **Needs you**,
-  across projects, and adds a step. A ticket opens on **Changes** when its last review round left
-  proposals waiting, and on **Conversation** otherwise. The item is off while nothing waits.
+- **View > Next Needs You** or Shift-Command-J opens the sidebar session in **Needs you** after
+  the one you're on, or the first, in sidebar order across projects, wrapping around; **Go back**
+  returns. A ticket opens on **Changes** when its last review round left proposals waiting, and on
+  **Conversation** otherwise. The item is off while nothing waits, and opens a closed window.
 
 ## Window
 

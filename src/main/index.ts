@@ -300,7 +300,11 @@ async function start(): Promise<void> {
               label: 'Next Needs You',
               accelerator: 'CmdOrCtrl+Shift+J',
               enabled: waitingCount > 0,
-              click: () => orch.openNextNeedsYou(windowState.get().view ?? null)
+              click: () => {
+                const w = win ?? openWindow()
+                if (rendererStarted) toFront(w)
+                orch.openNextNeedsYou(windowState.get().view ?? null)
+              }
             },
             ...(app.isPackaged
               ? []

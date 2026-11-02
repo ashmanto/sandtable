@@ -72,6 +72,7 @@ import { mergedFor, prsNaming, type MergedPr } from './github/merged'
 import { linearProjectIn, repoOf, trackerOf, type Tracker } from './tracker'
 import { parseBoardUrl } from '../shared/boardUrl'
 import { APPLIED_BUT, AREA_PREFIX, areaOf, overlapCandidates, startProblems } from '../shared/areas'
+import { sections } from '../shared/projectGroups'
 import {
   currentSession,
   isDoneOpen,
@@ -744,8 +745,12 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       )
       .sort((a, b) => Number(!!a.done) - Number(!!b.done))
   }
-  const waitingList = (): SidebarSession[] =>
-    sidebarList().filter((s) => waiting(s) && projects.some((p) => p.id === s.projectId))
+  const waitingList = (): SidebarSession[] => {
+    const order = sections(projects, groups).flatMap((s) => s.projects.map((p) => p.id))
+    return sidebarList()
+      .filter((s) => waiting(s) && order.includes(s.projectId))
+      .sort((a, b) => order.indexOf(a.projectId) - order.indexOf(b.projectId))
+  }
 
   const setAsking = (s: SessionRecord, asking: boolean): void => {
     if (asking) s.asking = true
@@ -2200,8 +2205,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
 
     async getBoard(projectId: string): Promise<BoardView> {
       const needsYou: Record<string, number> = {}
-      for (const s of sessions)
-        if (waiting(s)) needsYou[s.projectId] = (needsYou[s.projectId] ?? 0) + 1
+      for (const s of waitingList()) needsYou[s.projectId] = (needsYou[s.projectId] ?? 0) + 1
       const { tickets, syncedAt, error } = synced.get(projectId) ?? {
         tickets: [],
         syncedAt: null,

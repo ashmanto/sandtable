@@ -89,7 +89,7 @@ test('a test run stays out of the Dock and does not take focus', async () => {
   await app.close()
 })
 
-test('View > Next Needs You is disabled while nothing waits', async () => {
+test('View > Next Needs You is disabled while nothing waits, and opens a closed window', async () => {
   const app = await launchShown(tempDir('sandtable-e2e-'))
   expect(
     await app.evaluate(({ Menu }) => {
@@ -97,6 +97,16 @@ test('View > Next Needs You is disabled while nothing waits', async () => {
       return item && { label: item.label, accelerator: item.accelerator, enabled: item.enabled }
     })
   ).toEqual({ label: 'Next Needs You', accelerator: 'CmdOrCtrl+Shift+J', enabled: false })
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.close())
+  await expect
+    .poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length))
+    .toBe(0)
+  await app.evaluate(({ Menu }) =>
+    Menu.getApplicationMenu()!.getMenuItemById('nextNeedsYou')!.click()
+  )
+  await expect
+    .poll(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length))
+    .toBe(1)
 })
 
 const focused = (app: ElectronApplication): Promise<boolean> =>

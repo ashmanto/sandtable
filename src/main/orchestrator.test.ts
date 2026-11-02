@@ -1334,6 +1334,16 @@ describe('needsYouCount', () => {
     expect(t.orch.needsYouCount()).toBe(0)
   })
 
+  it("leaves a hidden ticket's session out of the board's Needs you counts", async () => {
+    const t = setup({
+      tickets: [ticket({ status: 'Wont fix' })],
+      sessions: [session({ state: 'needsYou' })]
+    })
+    await t.orch.reconnect(false)
+    await t.orch.sync('p1')
+    expect((await t.orch.getBoard('p1')).needsYou).toEqual({})
+  })
+
   it("stops counting a removed project's sessions and recounts", async () => {
     const t = setup({ sessions: [session({ state: 'needsYou' })] })
     t.live.add('st-p1-octo-shop-147')
@@ -1377,6 +1387,12 @@ describe('openNextNeedsYou', () => {
     t.orch.openNextNeedsYou(opened[0])
     t.orch.openNextNeedsYou(opened[1])
     expect(opened).toEqual([p1Ticket, p2Session, p1Ticket])
+  })
+
+  it("follows the sidebar's project order, not the order the sessions started in", async () => {
+    const { t, opened } = await twoProjects([...waitingPair].reverse())
+    t.orch.openNextNeedsYou(null)
+    expect(opened).toEqual([p1Ticket])
   })
 
   it('opens Changes only when the last review round left proposals waiting', async () => {
