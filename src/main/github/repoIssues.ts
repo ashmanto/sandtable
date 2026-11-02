@@ -1,5 +1,6 @@
 import { IN_PROGRESS_LABEL, REPO_STATUS } from '../../shared/columns'
 import { prStage } from '../../shared/findings'
+import { knownMergeable } from './mergeable'
 import type { BoardColumn, PrStage, Ticket, IssueRef } from '../../shared/types'
 import { paginate, splitRepo as split, type GraphqlFn } from './graphql'
 
@@ -123,24 +124,15 @@ mutation($repositoryId: ID!, $title: String!, $body: String!, $parentIssueId: ID
 const hasInProgressLabel = (i: any): boolean =>
   i.labels.nodes.some((l: any) => l.name === IN_PROGRESS_LABEL.name)
 
-const lastStages = new Map<string, PrStage>()
-
-/** `prStage` for the pull request at `url`, remembering it so an `UNKNOWN` mergeable keeps the last known stage. */
-export const rememberedStage = (url: string, pr: Parameters<typeof prStage>[0]): PrStage => {
-  const stage = prStage(pr, lastStages.get(url) ?? null)
-  lastStages.set(url, stage)
-  return stage
-}
-
 const openPrStage = (prs: any[]): PrStage | null => {
   const pr = prs
     .filter((p) => p.state === 'OPEN')
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
   return pr
-    ? rememberedStage(pr.url, {
+    ? prStage({
         rollup: pr.commits.nodes[0]?.commit.statusCheckRollup?.state ?? null,
         reviewDecision: pr.reviewDecision,
-        mergeable: pr.mergeable,
+        mergeable: knownMergeable(pr.url, pr.mergeable),
         isDraft: pr.isDraft
       })
     : null

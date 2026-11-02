@@ -69,31 +69,21 @@ export function findingsMessage(findings: Finding[], several = false, automated 
   return [...caution, 'Review findings to address:', '', ...items].join('\n')
 }
 
-const KNOWN_MERGEABLE: Partial<Record<PrStage, string>> = {
-  conflicts: 'CONFLICTING',
-  readyToMerge: 'MERGEABLE'
-}
-
-/** Where an open pull request stands, from GitHub's status rollup state, review decision, mergeable enums, and draft flag; `last` stands in for an `UNKNOWN` mergeable. */
-export function prStage(
-  pr: {
-    rollup: string | null
-    reviewDecision: string | null
-    mergeable: string
-    isDraft?: boolean
-  },
-  last: PrStage | null = null
-): PrStage {
-  const mergeable =
-    pr.mergeable === 'UNKNOWN' ? ((last && KNOWN_MERGEABLE[last]) ?? 'UNKNOWN') : pr.mergeable
+/** Where an open pull request stands, from GitHub's status rollup state, review decision, mergeable enums, and draft flag. */
+export function prStage(pr: {
+  rollup: string | null
+  reviewDecision: string | null
+  mergeable: string
+  isDraft?: boolean
+}): PrStage {
   if (pr.isDraft) return 'open'
-  if (mergeable === 'CONFLICTING') return 'conflicts'
+  if (pr.mergeable === 'CONFLICTING') return 'conflicts'
   if (pr.rollup === 'FAILURE' || pr.rollup === 'ERROR') return 'checksFailing'
   if (pr.reviewDecision === 'CHANGES_REQUESTED') return 'changesRequested'
   if (
     (pr.rollup === null || pr.rollup === 'SUCCESS') &&
     (pr.reviewDecision === null || pr.reviewDecision === 'APPROVED') &&
-    mergeable === 'MERGEABLE'
+    pr.mergeable === 'MERGEABLE'
   )
     return 'readyToMerge'
   return 'open'

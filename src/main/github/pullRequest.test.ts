@@ -13,7 +13,6 @@ const answer = {
           reviewDecision: 'CHANGES_REQUESTED',
           mergeable: 'MERGEABLE',
           isDraft: false,
-          baseRefName: 'main',
           headRepository: { nameWithOwner: 'o/r' },
           commits: {
             nodes: [
@@ -133,7 +132,6 @@ const answer = {
           reviewDecision: null,
           mergeable: 'CONFLICTING',
           isDraft: false,
-          baseRefName: 'main',
           headRepository: { nameWithOwner: 'fork/r' },
           commits: { nodes: [] },
           reviewThreads: { nodes: [] }
@@ -153,7 +151,6 @@ describe('fetchPullRequests', () => {
         title: 'Dark mode',
         url: 'https://github.com/o/r/pull/12',
         reviewDecision: 'changesRequested',
-        base: 'main',
         stage: 'checksFailing',
         checks: [
           {

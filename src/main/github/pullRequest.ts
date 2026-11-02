@@ -3,7 +3,8 @@ import type { PullRequestState } from '../../shared/types'
 import type { RunFn } from '../env/tools'
 import { fitBytes, withoutUnsafe } from '../sessions/claudeLaunch'
 import { splitRepo, type GraphqlFn } from './graphql'
-import { rememberedStage } from './repoIssues'
+import { prStage } from '../../shared/findings'
+import { knownMergeable } from './mergeable'
 
 const MAX_LOG_LINES = 200
 const MAX_LOG_BYTES = 50_000
@@ -12,7 +13,7 @@ const QUERY = `query($owner: String!, $name: String!, $branch: String!) {
   repository(owner: $owner, name: $name) {
     pullRequests(headRefName: $branch, states: OPEN, first: 10) {
       nodes {
-        number title url reviewDecision mergeable isDraft baseRefName headRepository { nameWithOwner }
+        number title url reviewDecision mergeable isDraft headRepository { nameWithOwner }
         commits(last: 1) { nodes { commit { statusCheckRollup { state contexts(first: 100) { nodes {
           __typename
           ... on CheckRun { databaseId name status conclusion detailsUrl checkSuite { app { slug } } }
@@ -82,11 +83,10 @@ export async function fetchPullRequests(
       title: p.title,
       url: p.url,
       reviewDecision: DECISIONS[p.reviewDecision as keyof typeof DECISIONS] ?? null,
-      base: p.baseRefName,
-      stage: rememberedStage(p.url, {
+      stage: prStage({
         rollup: p.commits.nodes[0]?.commit.statusCheckRollup?.state ?? null,
         reviewDecision: p.reviewDecision,
-        mergeable: p.mergeable,
+        mergeable: knownMergeable(p.url, p.mergeable),
         isDraft: p.isDraft
       }),
       checks: (p.commits.nodes[0]?.commit.statusCheckRollup?.contexts.nodes ?? []).map(checkOf),

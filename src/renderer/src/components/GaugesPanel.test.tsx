@@ -339,7 +339,11 @@ describe('GaugesPanel', () => {
     expect(screen.queryByRole('button', { name: '1 file' })).not.toBeInTheDocument()
   })
 
-  it('shows the pull request and its stage', async () => {
+  it.each([
+    ['checksFailing', 'Checks failing'],
+    ['conflicts', 'Conflicts'],
+    ['readyToMerge', 'Ready to merge']
+  ] as const)('shows the pull request and its %s stage as "%s"', async (stage, word) => {
     vi.mocked(api.sessions.pullRequests).mockResolvedValue([
       {
         repo: 'o/r',
@@ -347,8 +351,7 @@ describe('GaugesPanel', () => {
         title: 'Fix',
         url: 'https://github.com/o/r/pull/286',
         reviewDecision: null,
-        base: 'main',
-        stage: 'checksFailing',
+        stage,
         checks: [{ name: 'ci', state: 'failing' }],
         threads: []
       }
@@ -358,7 +361,7 @@ describe('GaugesPanel', () => {
       'href',
       'https://github.com/o/r/pull/286'
     )
-    expect(screen.getByRole('button', { name: /^Work/ })).toHaveTextContent('#286 Checks failing')
+    expect(screen.getByRole('button', { name: /^Work/ })).toHaveTextContent(`#286 ${word}`)
   })
   it('switches the view, announced as a radio group, and saves the choice', async () => {
     await show(status())

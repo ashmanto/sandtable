@@ -567,7 +567,6 @@ export type PullRequestState = {
   title: string
   url: string
   reviewDecision: 'approved' | 'changesRequested' | 'reviewRequired' | null
-  base: string
   stage: PrStage
   checks: { name: string; state: 'passing' | 'failing' | 'pending'; jobId?: number; url?: string }[]
   threads: {

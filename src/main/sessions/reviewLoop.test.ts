@@ -621,7 +621,6 @@ describe('automatic review', () => {
     title: 'Dark mode',
     url: 'https://github.com/octo/shop/pull/12',
     reviewDecision: null,
-    base: 'main',
     stage: 'checksFailing',
     checks: [
       { name: 'test', state: 'failing', jobId: 501 },
@@ -1630,7 +1629,6 @@ describe('pull requests', () => {
     title: 'Dark mode',
     url: 'https://github.com/octo/shop/pull/12',
     reviewDecision: null,
-    base: 'main',
     stage: 'checksFailing',
     checks: [
       { name: 'test', state: 'failing', jobId: 501 },

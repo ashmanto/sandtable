@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { anchorLine, findingsMessage, prStage } from './findings'
-import type { Finding, PrStage } from './types'
+import type { Finding } from './types'
 
 const file = (...texts: string[]): { new: number; text: string }[] =>
   texts.map((text, i) => ({ new: i + 1, text }))
@@ -161,9 +161,8 @@ describe('prStage', () => {
     rollup: string | null,
     reviewDecision: string | null,
     mergeable = 'MERGEABLE',
-    isDraft = false,
-    last: PrStage | null = null
-  ): string => prStage({ rollup, reviewDecision, mergeable, isDraft }, last)
+    isDraft = false
+  ): string => prStage({ rollup, reviewDecision, mergeable, isDraft })
 
   it('says checks failing first, for a failing or errored rollup', () => {
     expect(stage('FAILURE', 'CHANGES_REQUESTED')).toBe('checksFailing')
@@ -189,13 +188,6 @@ describe('prStage', () => {
   it('says conflicts before failing checks and requested changes', () => {
     expect(stage('FAILURE', 'CHANGES_REQUESTED', 'CONFLICTING')).toBe('conflicts')
     expect(stage('SUCCESS', 'APPROVED', 'CONFLICTING')).toBe('conflicts')
-  })
-
-  it('keeps the last known mergeability while GitHub computes it', () => {
-    expect(stage('SUCCESS', 'APPROVED', 'UNKNOWN', false, 'conflicts')).toBe('conflicts')
-    expect(stage('SUCCESS', 'APPROVED', 'UNKNOWN', false, 'readyToMerge')).toBe('readyToMerge')
-    expect(stage('FAILURE', 'APPROVED', 'UNKNOWN', false, 'readyToMerge')).toBe('checksFailing')
-    expect(stage('SUCCESS', 'APPROVED', 'UNKNOWN', false, 'checksFailing')).toBe('open')
   })
 
   it('is open while a draft, even when it conflicts', () => {
