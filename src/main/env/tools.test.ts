@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
@@ -10,6 +10,7 @@ import {
   claudeFolders,
   claudeSignedIn,
   findEditors,
+  launchDetached,
   openInEditor,
   findTools,
   loginShellPath,
@@ -583,11 +584,38 @@ describe('openInEditor', () => {
     writeFileSync(join(dir, 'idea'), '')
     const idea = { command: 'idea', name: 'IntelliJ IDEA', path: join(dir, 'idea') }
     const fake = vi.fn<RunFn>(ok)
-    expect(await openInEditor(idea, '/w/shop', fake)).toBe('')
-    expect(fake).toHaveBeenCalledWith(idea.path, ['/w/shop'], undefined, 30000)
+    expect(await openInEditor(idea, '/w/shop', run, fake)).toBe('')
+    expect(fake).toHaveBeenCalledWith(idea.path, ['/w/shop'])
     fake.mockResolvedValue({ stdout: '', stderr: 'no display\nmore', code: 1 })
-    expect(await openInEditor(idea, '/w/shop', fake)).toBe('no display')
+    expect(await openInEditor(idea, '/w/shop', run, fake)).toBe('no display')
     fake.mockResolvedValue({ stdout: '', stderr: '', code: 2 })
-    expect(await openInEditor(idea, '/w/shop', fake)).toBe('IntelliJ IDEA exited with code 2')
+    expect(await openInEditor(idea, '/w/shop', run, fake)).toBe('IntelliJ IDEA exited with code 2')
+  })
+
+  it('follows a launcher symlinked into an app, as code is', async () => {
+    const dir = tempDir('sandtable-ed-')
+    const app = join(dir, 'Visual Studio Code.app')
+    const bin = join(app, 'Contents/Resources/app/bin')
+    mkdirSync(bin, { recursive: true })
+    writeFileSync(join(bin, 'code'), '')
+    symlinkSync(join(bin, 'code'), join(dir, 'code'))
+    const fake = vi.fn<RunFn>(ok)
+    const code = { command: 'code', name: 'VS Code', path: join(dir, 'code') }
+    expect(await openInEditor(code, '/w/shop', fake)).toBe('')
+    expect(fake).toHaveBeenCalledWith('/usr/bin/open', ['-a', realpathSync(app), '/w/shop'])
+  })
+})
+
+describe('launchDetached', () => {
+  it('reports a launcher that fails at once, and leaves one that keeps running alone', async () => {
+    expect(await launchDetached('/bin/sh', ['-c', 'echo nope >&2; exit 3'], 2000)).toEqual({
+      stdout: '',
+      stderr: 'nope\n',
+      code: 3
+    })
+    const started = Date.now()
+    expect(await launchDetached('/bin/sleep', ['5'], 200)).toMatchObject({ code: 0 })
+    expect(Date.now() - started).toBeLessThan(2000)
+    expect((await launchDetached('/nowhere/editor', [], 2000)).code).toBe(-1)
   })
 })

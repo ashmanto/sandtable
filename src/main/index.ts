@@ -200,6 +200,7 @@ async function start(): Promise<void> {
   process.env.LANG ??= 'en_US.UTF-8'
   const toolsPath = process.env.SANDTABLE_TOOLS_PATH ?? process.env.PATH ?? ''
   const tools = await findTools(toolsPath)
+  let editors = findEditors(toolsPath)
 
   const terminals = createTerminals({
     tmuxBin: tools.paths.tmux ?? 'tmux',
@@ -364,7 +365,7 @@ async function start(): Promise<void> {
     githubReposOf,
     pullRequests: (repo, branch) => fetchPullRequests(github.gql, repo, branch),
     failedLog: (repo, jobId) => failedLog(run, tools.paths.gh ?? 'gh', repo, jobId),
-    editors: () => findEditors(toolsPath),
+    editors: () => editors,
     openFolder: (folder, editor) =>
       editor ? openInEditor(editor, folder) : shell.openPath(folder),
     git: { ensureWorktree, removeWorktree, checkRemovable, changes: worktreeChanges },
@@ -520,8 +521,9 @@ async function start(): Promise<void> {
           PATH: toolsPath,
           ...accountEnv(dir, claudeDir)
         }),
-      'app.editors': () => findEditors(toolsPath),
+      'app.editors': () => editors,
       'app.tools': async () => {
+        editors = findEditors(toolsPath)
         github.reset()
         linearClients.clear()
         orch.resetViewers()
