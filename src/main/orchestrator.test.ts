@@ -506,6 +506,16 @@ describe('your instructions and note', () => {
     expect(cmd.at(-1)).toMatch(/Add a toggle\.$/)
   })
 
+  it('keeps the trimmed note on the session for its reviews, and no empty one', async () => {
+    const t = setup({ tickets: [ticket(), ticket({ key: 'octo/shop#148', number: 148 })] })
+    await t.orch.reconnect()
+    await t.orch.sync('p1')
+    await t.orch.start('p1', 'octo/shop#147', [], undefined, ' Hi ')
+    await t.orch.start('p1', 'octo/shop#148', [], undefined, '  ')
+    await t.orch.flush()
+    expect(t.saved().sessions.map((s) => s.note)).toEqual(['Hi', undefined])
+  })
+
   it('refuses a note that is not text', async () => {
     const t = setup()
     await t.orch.reconnect()

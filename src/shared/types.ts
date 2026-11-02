@@ -194,6 +194,8 @@ export type SessionRecord = {
   projectId: string
   ticketKey?: string
   name?: string
+  /** The note you wrote when you started the ticket, for its reviews. */
+  note?: string
   tmuxName: string
   branch?: string
   worktrees: string[]
