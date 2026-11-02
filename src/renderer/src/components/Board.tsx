@@ -22,10 +22,12 @@ import {
   RefreshCw,
   SquareKanban,
   Tag,
-  UserRound
+  UserRound,
+  X
 } from 'lucide-react'
 import { useEffect, useRef, useState, type ComponentProps } from 'react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { SheetBar } from './SheetBar'
 import { Tip } from './Tip'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -43,6 +45,7 @@ import {
 } from '@/lib/assigneeFilter'
 import { boardLabels, loadLabelFilter, passes, saveLabelFilter } from '@/lib/labelFilter'
 import { filterRepos, loadRepoFilter, passesRepo, saveRepoFilter } from '@/lib/repoFilter'
+import { passesSearch } from '@/lib/searchFilter'
 import {
   droppedWords,
   inLane,
@@ -155,6 +158,8 @@ export function Board({
   const [repos, setRepos] = useState(() => loadRepoFilter(project.id))
   const multiRepo = project.repos.length >= 2
   const [people, setPeople] = useState(() => loadAssigneeFilter(project.id))
+  const [search, setSearch] = useState('')
+  const searchField = useRef<HTMLInputElement>(null)
   const [me, setMe] = useState<string | null>(null)
   const wantsMe = people.people.includes('@me')
   useEffect(() => {
@@ -230,7 +235,10 @@ export function Board({
       .map(assigned)
       .filter(
         (t) =>
-          passes(filter, t) && (!multiRepo || passesRepo(repos, t)) && passesAssignee(people, t, me)
+          passes(filter, t) &&
+          (!multiRepo || passesRepo(repos, t)) &&
+          passesAssignee(people, t, me) &&
+          passesSearch(search, t)
       ),
     display
   )
@@ -653,6 +661,38 @@ export function Board({
             }
           ]}
         />
+        <div className="relative">
+          <Input
+            ref={searchField}
+            type="search"
+            aria-label="Search tickets"
+            placeholder="Search tickets"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== 'Escape') return
+              e.stopPropagation()
+              setSearch('')
+            }}
+            className="h-7 w-44 pr-7 text-xs md:text-xs [&::-webkit-search-cancel-button]:hidden"
+          />
+          {search && (
+            <Tip label="Clear search">
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label="Clear search"
+                className="absolute top-1/2 right-1 -translate-y-1/2 text-fg-3"
+                onClick={() => {
+                  setSearch('')
+                  searchField.current?.focus()
+                }}
+              >
+                <X />
+              </Button>
+            </Tip>
+          )}
+        </div>
         {shown.length < onBoard.length && (
           <span className="text-xs text-fg-3">
             {onBoard.length - shown.length} hidden by filter

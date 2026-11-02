@@ -1623,6 +1623,84 @@ describe('Board', () => {
     })
   })
 
+  describe('search', () => {
+    const view = (): BoardView =>
+      boardView({
+        tickets: [ticket(1, { labels: [{ name: 'bug', color: 'd73a4a' }] }), ticket(2), ticket(3)]
+      })
+    const field = (): HTMLElement => screen.getByRole('searchbox', { name: 'Search tickets' })
+
+    beforeEach(() => localStorage.clear())
+
+    it('filters the board by title and says how many are hidden', async () => {
+      renderBoard(view(), vi.fn(), solo)
+      await userEvent.type(field(), 'Ticket 2')
+      expect(screen.getByText('Ticket 2')).toBeInTheDocument()
+      expect(screen.queryByText('Ticket 1')).not.toBeInTheDocument()
+      expect(screen.queryByText('Ticket 3')).not.toBeInTheDocument()
+      expect(screen.getByText('2 hidden by filter')).toBeInTheDocument()
+    })
+
+    it('filters by #number', async () => {
+      renderBoard(view(), vi.fn(), solo)
+      await userEvent.type(field(), '#3')
+      expect(screen.getByText('Ticket 3')).toBeInTheDocument()
+      expect(screen.queryByText('Ticket 1')).not.toBeInTheDocument()
+      expect(screen.queryByText('Ticket 2')).not.toBeInTheDocument()
+    })
+
+    it('adds to the label filter', async () => {
+      renderBoard(view(), vi.fn(), solo)
+      await openFilters()
+      await userEvent.click(screen.getByRole('menuitemcheckbox', { name: 'bug' }))
+      await userEvent.keyboard('{Escape}')
+      await userEvent.type(field(), 'Ticket 2')
+      expect(screen.queryByText(/^Ticket \d$/)).not.toBeInTheDocument()
+      expect(screen.getByText('3 hidden by filter')).toBeInTheDocument()
+    })
+
+    it('clears with its own button and leaves the label filter', async () => {
+      renderBoard(view(), vi.fn(), solo)
+      await openFilters()
+      await userEvent.click(screen.getByRole('menuitemcheckbox', { name: 'bug' }))
+      await userEvent.keyboard('{Escape}')
+      await userEvent.type(field(), 'zzz')
+      await userEvent.click(screen.getByRole('button', { name: 'Clear search' }))
+      expect(field()).toHaveValue('')
+      expect(field()).toHaveFocus()
+      expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument()
+      expect(screen.getByText('Ticket 1')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Filters, 1 checked' })).toBeInTheDocument()
+    })
+
+    it('clears on Escape', async () => {
+      renderBoard(view(), vi.fn(), solo)
+      await userEvent.type(field(), 'zzz{Escape}')
+      expect(field()).toHaveValue('')
+      expect(screen.getByText('Ticket 1')).toBeInTheDocument()
+      expect(screen.getByText('Ticket 3')).toBeInTheDocument()
+    })
+
+    it('Clear filter leaves the search', async () => {
+      renderBoard(view(), vi.fn(), solo)
+      await userEvent.type(field(), 'Ticket 1')
+      await openFilters()
+      await userEvent.click(screen.getByRole('menuitemcheckbox', { name: 'bug' }))
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Clear filter' }))
+      expect(field()).toHaveValue('Ticket 1')
+      expect(screen.queryByText('Ticket 2')).not.toBeInTheDocument()
+    })
+
+    it("doesn't save the search", async () => {
+      renderBoard(view(), vi.fn(), solo)
+      await userEvent.type(field(), 'Ticket 2')
+      cleanup()
+      renderBoard(view(), vi.fn(), solo)
+      expect(field()).toHaveValue('')
+      expect(screen.getByText('Ticket 1')).toBeInTheDocument()
+    })
+  })
+
   describe('repo filter', () => {
     const front = 'octo/shop-web'
     const spread = (): BoardView =>
@@ -2186,6 +2264,15 @@ describe('Board', () => {
     })
 
     afterEach(() => vi.restoreAllMocks())
+
+    it('search filters the list', async () => {
+      renderBoard(mixed())
+      await showList()
+      await userEvent.type(screen.getByRole('searchbox', { name: 'Search tickets' }), '#2')
+      expect(row('#2 Ticket 2')).toBeInTheDocument()
+      expect(screen.queryByRole('group', { name: '#1 Ticket 1' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('group', { name: '#3 Ticket 3' })).not.toBeInTheDocument()
+    })
 
     it('groups the tickets by status in board order with a count on each header', async () => {
       renderBoard(mixed())

@@ -414,8 +414,13 @@ them through Tailwind classes and never name a raw color.
   to the project's ticket source, GitHub, the project's Linear workspace, or its Jira site. Sandtable asks for it
   while **Me** is checked, once per source per launch, again after the next sync if the ask
   fails, and again after **Check again** in the setup guide. A GitHub or Linear call that fails
-  makes the next call read the CLI's token again, so a refreshed login takes effect. "<n> hidden by filter" in 11 px `fg-3` sits 6 px after **Assignees** while any filter
-  hides tickets; a ticket shows only when it passes the label, repo, and assignee filters.
+  makes the next call read the CLI's token again, so a refreshed login takes effect. A 28 px,
+  176 px wide search field, labeled "Search tickets" with that placeholder in `fg-4` and 11 px
+  text, sits 6 px after **Assignees**. While it holds text, a ghost `icon-xs` **Clear search**
+  button with `X` in `fg-3` sits inside its end; it and Esc empty the field. "<n> hidden by
+  filter" in 11 px `fg-3` sits 6 px after the search field while any filter or the search hides
+  tickets; a ticket shows only when it passes the label, repo, and assignee filters and the
+  search.
   Under the header sits one message line in `danger` on `danger-soft`, with a ghost **Dismiss**
   button: the last sync's error, "Started, but couldn't set In Progress: <message>", "Couldn't
   move #<number>: <reason>", "The board has more than 1,000 <open items | recently done items |
