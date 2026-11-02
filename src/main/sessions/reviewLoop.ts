@@ -8,16 +8,18 @@ import type {
   PullRequestState,
   RepoChanges,
   ReviewRound,
-  SessionRecord
+  SessionRecord,
+  Ticket
 } from '../../shared/types'
 import { AUTO_REVIEW_ROUNDS } from '../../shared/types'
 import { anchorLine, findingsMessage } from '../../shared/findings'
 import { sessionRepos } from '../../shared/sessions'
+import type { Service } from '../../shared/repo'
 import { sessionDraft } from '../../shared/drafts'
 import type { Orchestrator, OrchestratorDeps } from '../orchestrator'
 import type { PrintRun } from './chat'
-import { oneLine, redact, withoutUnsafe } from './claudeLaunch'
-import { diffText, parseReview, reviewArgs, reviewPrompt } from './review'
+import { oneLine, openingPrompt, redact, withoutUnsafe } from './claudeLaunch'
+import { diffText, MAX_ISSUE_BYTES, parseReview, reviewArgs, reviewPrompt } from './review'
 import { typeIntoTmux } from './tmux'
 import { promptTyped } from './prompt'
 import { messageOf } from '../../shared/errors'
@@ -25,7 +27,11 @@ import { messageOf } from '../../shared/errors'
 const MAX_ANCHOR_FILE_BYTES = 5_000_000
 
 const sameLines = (a: Finding, b: Finding): boolean =>
-  a.worktree === b.worktree && a.path === b.path && a.start === b.start && a.end === b.end
+  a.worktree === b.worktree &&
+  a.path === b.path &&
+  a.start === b.start &&
+  a.end === b.end &&
+  a.title === b.title
 
 type PrsOf = { worktree: string; prs: PullRequestState[] }[]
 
@@ -66,6 +72,8 @@ export function createReviewLoop(ctx: {
   changesOf: (sessionId: string) => Promise<RepoChanges[]>
   labelOf: (ticketKey: string) => string
   printRun: PrintRun
+  ticketOf: (s: SessionRecord) => Ticket | undefined
+  serviceOf: (s: SessionRecord) => Service
   notifyWaiting: (s: SessionRecord, ticketKey: string, body: string) => void
   entryCount: (sessionId: string) => Promise<number>
   roundStarted: (s: SessionRecord, ticketKey: string) => boolean
@@ -174,16 +182,18 @@ export function createReviewLoop(ctx: {
       const changes = await changesOf(s.id)
       const diff = diffText(changes)
       if (!diff) throw new Error(changes.find((c) => c.error)?.error ?? 'No changes to review')
+      const ticket = ctx.ticketOf(s)
+      const issue = ticket && openingPrompt(ticket, ctx.serviceOf(s), s.note, MAX_ISSUE_BYTES)
       const stdout = await printRun(
         s.projectId,
         ticketKey,
         'Review',
         s.worktrees[0],
-        (id) => reviewArgs(reviewPrompt(diff), id, labelOf(ticketKey), s.worktrees.slice(1)),
+        (id) => reviewArgs(reviewPrompt(diff, issue), id, labelOf(ticketKey), s.worktrees.slice(1)),
         600_000
       )
       assertCurrent(s)
-      const parsed = parseReview(stdout, changes)
+      const parsed = parseReview(stdout, changes, issue)
       const count = (s.reviews?.count ?? 0) + 1
       s.reviews = { count, at: now().toISOString() }
       const proposals: Finding[] = parsed.map((p) => ({
@@ -383,7 +393,7 @@ export function createReviewLoop(ctx: {
         auto.rounds += 1
         auto.reviewed = hash
         const mine = (): Finding[] => ctx.findings().filter((f) => f.sessionId === s.id)
-        const high = proposals.filter((f) => f.severity === 'high')
+        const high = proposals.filter((f) => f.severity === 'high' && f.path)
         for (const f of high) delete f.proposed
         if (!high.length) auto.stopped = 'clean'
         else if (auto.rounds >= AUTO_REVIEW_ROUNDS) auto.stopped = 'rounds'

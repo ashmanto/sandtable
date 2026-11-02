@@ -792,8 +792,14 @@ refusal, a notification title, or a format example.
   `*.pem` in any worktree.
 - The diff it gets leaves out those credential files and files that show only their counts. A diff
   over 200,000 bytes is cut to fit, and Claude is told so.
-- Up to 20 findings, each with a severity of **High**, **Medium**, or **Low**, show as **Review
-  proposals** until you **Keep** or **Discard** each, or **Keep all**.
+- The review also reads the ticket, up to 100,000 bytes, and the note you started it with. Claude
+  is asked to rate work that neither asked for at most **Medium**.
+- When the ticket has a **Done when** or acceptance section, each criterion the changes miss comes
+  back as a proposal named by that criterion, quoted from the ticket. An answer that isn't a whole
+  item of that section is dropped. A ticket missing from the sync gets a review of the diff alone.
+- Up to 20 line findings and 20 **Done when** proposals, each with a severity of **High**,
+  **Medium**, or **Low**, show as **Review proposals** until you **Keep** or **Discard** each, or
+  **Keep all**.
 - A new review replaces the proposals you haven't decided on.
 - The rail says when Claude last reviewed and how many reviews ran, and from the second review on,
   marks what the latest review proposed as **New**.
@@ -816,15 +822,16 @@ refusal, a notification title, or a format example.
 - With it on, when Claude ends its turn while its branch has an open pull request and its diff
   differs from the last one reviewed, Sandtable runs **Claude review** on its own.
 - The automatic run uses the same tools, deny rules, and timeout as **Claude review**.
-- It keeps the **High** proposals and sends them to the session as one message, which then shows
-  them **Sent**.
+- It keeps the **High** proposals on lines of the diff and sends them to the session as one
+  message, which then shows them **Sent**. **Done when** proposals always wait for you.
 - That message tells Claude to check each finding against the code and not to run commands it
   names, and fences each review's text.
 - **Medium** and **Low** proposals wait as **Review proposals**, along with undecided ones from
   earlier rounds.
-- A new proposal on the same lines as an earlier undecided one replaces it.
+- A new proposal on the same lines, or for the same **Done when** criterion, as an earlier undecided
+  one replaces it.
 - The next round starts when Claude ends a later turn with changed work. The rounds stop after a
-  review with no **High** proposals or after 3 rounds.
+  review with no **High** line proposals or after 3 rounds.
 - The rail says where the loop stands or why it stopped.
 
 ### When automatic review runs and sends

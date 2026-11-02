@@ -118,7 +118,9 @@ import {
   withoutUnsafe,
   openingPrompt,
   schemaArgs,
-  sessionRules
+  sessionRules,
+  fitBytes,
+  MAX_NOTE_BYTES
 } from './sessions/claudeLaunch'
 import { readActivity } from './sessions/activity'
 import { findConversation, parseConversation, readLastEntries } from './sessions/conversation'
@@ -1652,6 +1654,8 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     changesOf,
     labelOf,
     printRun,
+    ticketOf,
+    serviceOf: (s) => serviceOf(projectById(s.projectId)),
     notifyWaiting: (s, ticketKey, body) => {
       if (doneOpen(s)) return
       deps.notify(
@@ -2461,7 +2465,8 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
             ...launched,
             startedAt: now().toISOString(),
             state: 'running',
-            startWarning: warning || undefined
+            startWarning: warning || undefined,
+            ...(note?.trim() && { note: fitBytes(note.trim(), MAX_NOTE_BYTES) })
           })
         } catch (err) {
           await removeCreated()

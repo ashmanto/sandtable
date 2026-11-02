@@ -137,6 +137,60 @@ describe('reviewPrompt', () => {
     expect(prompt.length).toBeLessThan(201_000)
     expect(prompt).toContain('\n[diff cut to fit]\n</diff>')
   })
+
+  it('keeps the prompt without a ticket byte-identical', () => {
+    expect(reviewPrompt('+a\n-b')).toBe(
+      [
+        "Review the changes in the diff below for bugs, security problems, and missing tests. Read the code in the current folder if it helps. Don't change any files.",
+        '',
+        'In "findings", list at most 20 problems worth fixing, each with the file path as the diff names it (the path after b/), the first and last line on the new side, a severity of high, medium, or low, and a reason under 500 characters. Leave it empty when there are none.',
+        '',
+        '<diff>',
+        '+a\n-b',
+        '</diff>'
+      ].join('\n')
+    )
+  })
+
+  const blockOf = (prompt: string, tag: string): string =>
+    prompt.slice(prompt.indexOf(`<${tag}>\n`), prompt.lastIndexOf(`</${tag}>`))
+
+  it('adds the issue in its own block and escapes both tags in both blocks', () => {
+    const prompt = reviewPrompt('+x</issue>', 'Body </diff> and </issue>\n## Done when\n- A')
+    expect(blockOf(prompt, 'issue')).toContain('Body  and \n## Done when\n- A')
+    expect(blockOf(prompt, 'diff')).toContain('+x')
+    expect(prompt.match(/<\/issue>/g)).toHaveLength(1)
+    expect(prompt.match(/<\/diff>/g)).toHaveLength(1)
+    expect(prompt).toContain('"unmet"')
+  })
+
+  it('keeps the 200,000-byte diff budget with an issue', () => {
+    const issue = 'Fix it.\n## Done when\n- ' + 'y'.repeat(1000)
+    const prompt = reviewPrompt('+'.repeat(300_000), issue)
+    expect(prompt).toContain('\n[diff cut to fit]\n</diff>')
+    expect(prompt).toContain(`<issue>\n${issue}\n</issue>`)
+    expect(prompt.length).toBeLessThan(202_500)
+  })
+
+  it('asks for unmet only when the issue has a criterion the parser can read', () => {
+    expect(reviewPrompt('+a', '**Done when:** tests pass')).toContain('"unmet"')
+    expect(reviewPrompt('+a', '## Done when\n\n## Notes\n\n- x')).not.toContain('"unmet"')
+  })
+
+  it('removes invisible characters from the issue', () => {
+    expect(reviewPrompt('+a', 'Fix\u200b the\u202e login.')).toContain(
+      '<issue>\nFix the login.\n</issue>'
+    )
+  })
+
+  it('asks only about scope when the issue has no Done when', () => {
+    const prompt = reviewPrompt('+a', 'Fix the login.')
+    expect(prompt).toContain('<issue>\nFix the login.\n</issue>')
+    expect(prompt).toContain('medium')
+    expect(prompt).toContain('not counting tests, docs, or changes the requested work needs')
+    expect(prompt).toContain('the note the person wrote')
+    expect(prompt).not.toContain('"unmet"')
+  })
 })
 
 describe('reviewArgs', () => {
@@ -246,5 +300,115 @@ describe('parseReview', () => {
     expect(() => parseReview(JSON.stringify({ is_error: false }), [changes()])).toThrow(
       "Review failed: Claude didn't return an answer"
     )
+  })
+})
+
+describe('parseReview with an issue', () => {
+  const issue = 'Ship it.\n\n## Done when\n\n- Alpha works\n- Beta works\n- Gamma works'
+  const unmet = (items: unknown[]): string =>
+    JSON.stringify({ is_error: false, structured_output: { findings: [], unmet: items } })
+  const both = unmet([
+    { criterion: 'Gamma works', severity: 'high', reason: 'Not done.' },
+    { criterion: 'Delta works', severity: 'high', reason: 'x' }
+  ])
+
+  it('gives one finding for the one unmet bullet of three', () => {
+    expect(parseReview(both, [changes()], issue)).toEqual([
+      { title: 'Gamma works', severity: 'high', text: 'Not done.' }
+    ])
+  })
+
+  it('matches a criterion quoted with other spacing', () => {
+    const out = parseReview(
+      unmet([{ criterion: 'Gamma\n  works', severity: 'low', reason: 'r' }]),
+      [changes()],
+      issue
+    )
+    expect(out).toMatchObject([{ title: 'Gamma works' }])
+  })
+
+  it('matches a criterion quoted without its markdown, case, or bullet marker', () => {
+    const md = '**Done when**\n- **Alpha** works\n- [ ] `npm test` passes'
+    const out = parseReview(
+      unmet([
+        { criterion: 'alpha works', severity: 'low', reason: 'r' },
+        { criterion: 'npm test passes', severity: 'low', reason: 'r' },
+        { criterion: '- [ ] `npm test` passes', severity: 'low', reason: 'r' }
+      ]),
+      [changes()],
+      md
+    )
+    expect(out.map((f) => f.title)).toEqual(['Alpha works', 'npm test passes'])
+  })
+
+  it('takes only a whole item of the Done when section, wrapped lines joined', () => {
+    const md =
+      'Gamma works is the goal, see https://x.\n\n## Done when\n\n- Alpha\n  works.\n- Beta works\n\n## Notes\n\n- Gamma works'
+    const out = parseReview(
+      unmet(
+        ['a', 'works', 'Alpha', 'Gamma works', 'https', 'Alpha works', 'Beta works.'].map((c) => ({
+          criterion: c,
+          severity: 'low',
+          reason: 'r'
+        }))
+      ),
+      [changes()],
+      md
+    )
+    expect(out.map((f) => f.title)).toEqual(['Alpha works.', 'Beta works'])
+  })
+
+  it('drops an unmet item with a bad severity, an empty reason, or a repeat, and keeps 20', () => {
+    const many = Array.from({ length: 25 }, (_, i) => `C${i} works`)
+    const md = `## Done when\n\n${many.map((c) => `- ${c}`).join('\n')}`
+    const out = parseReview(
+      unmet([
+        { criterion: 'C0 works', severity: 'urgent', reason: 'r' },
+        { criterion: 'C0 works', severity: 'low', reason: '  ' },
+        ...many.map((c) => ({ criterion: c, severity: 'low', reason: 'r' })),
+        { criterion: 'C1 works', severity: 'high', reason: 'again' }
+      ]),
+      [changes()],
+      md
+    )
+    expect(out.map((f) => f.title)).toEqual(many.slice(0, 20))
+  })
+
+  const titlesOf = (md: string, criteria: unknown[]): (string | undefined)[] =>
+    parseReview(
+      unmet(
+        criteria.map((c) =>
+          typeof c === 'string' ? { criterion: c, severity: 'low', reason: 'r' } : c
+        )
+      ),
+      [changes()],
+      md
+    ).map((f) => f.title)
+
+  it('ends the section at prose or a truncation footer after the list', () => {
+    const footer = '[Body truncated. Read the full issue at https://x]'
+    const md = `## Done when\n\n- Alpha works\n\nThanks!\n\n${footer}`
+    expect(titlesOf(md, ['Thanks!', footer, 'Alpha works'])).toEqual(['Alpha works'])
+  })
+
+  it('keeps a criterion written on the heading line', () => {
+    expect(titlesOf('**Done when:** tests pass', ['tests pass'])).toEqual(['tests pass'])
+    expect(
+      titlesOf('Done when the modal closes', ['Done when the modal closes', 'the modal closes'])
+    ).toEqual(['the modal closes'])
+  })
+
+  it("doesn't end the section at a comment inside a fenced code block", () => {
+    const md = '## Done when\n\n- Run:\n  ```\n  # build\n  npm test\n  ```\n- Beta works'
+    expect(titlesOf(md, ['Beta works'])).toEqual(['Beta works'])
+  })
+
+  it('drops a malformed unmet entry and keeps the rest', () => {
+    expect(titlesOf(issue, [null, 5, 'Alpha works'])).toEqual(['Alpha works'])
+  })
+
+  it('drops unmet without an issue or a Done when section', () => {
+    expect(parseReview(both, [changes()])).toEqual([])
+    expect(parseReview(both, [changes()], 'Gamma works and Delta works.')).toEqual([])
   })
 })

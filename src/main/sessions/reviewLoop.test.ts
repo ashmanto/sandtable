@@ -468,6 +468,50 @@ describe('review', () => {
     expect(t.saved().sessions[0].reviews).toEqual({ count: 1, at: '2026-10-24T12:00:00.000Z' })
   })
 
+  const promptOf = (t: ReturnType<typeof setup>, call = 0): string =>
+    t.deps.claude.print.mock.calls[call][1].at(-1)!
+  const withCriteria = ticket({ body: 'Add a toggle.\n\n## Done when\n\n- A works\n- B works' })
+  const synced = async (
+    note?: string,
+    over = withCriteria
+  ): Promise<ReturnType<typeof setup> & { wt: string }> => {
+    const wt = tempDir('st-wt-')
+    const t = setup({
+      sessions: [session({ state: 'needsYou', worktrees: [wt], ...(note && { note }) })],
+      tickets: [over]
+    })
+    t.deps.git.changes.mockResolvedValue(diff())
+    await t.orch.reconnect()
+    await t.orch.sync('p1')
+    return { ...t, wt }
+  }
+
+  it('reviews against the ticket and its note', async () => {
+    const t = await synced('Also rename X.')
+    t.deps.claude.print.mockResolvedValueOnce(reply('r'))
+    await t.orch.review('s1')
+    expect(promptOf(t)).toContain('<issue>\nYour note for this session:\nAlso rename X.')
+    expect(promptOf(t)).toContain('- B works\n</issue>')
+  })
+
+  it('gives the review the whole body of a long ticket', async () => {
+    const body = `${'x'.repeat(20_000)}\n\n## Done when\n\n- Z works`
+    const t = await synced(undefined, ticket({ body }))
+    t.deps.claude.print.mockResolvedValueOnce(reply('r'))
+    await t.orch.review('s1')
+    expect(promptOf(t)).toContain('- Z works\n</issue>')
+    expect(promptOf(t)).not.toContain('[Body truncated')
+  })
+
+  it('falls back to the diff-only prompt when the ticket left the sync', async () => {
+    const t = await ready()
+    t.deps.board.tickets.mockResolvedValue([])
+    await t.orch.sync('p1')
+    t.deps.claude.print.mockResolvedValueOnce(reply('r'))
+    await t.orch.review('s1')
+    expect(promptOf(t)).toBe(reviewPrompt(diffText([{ worktree: t.wt, ...diff() }])))
+  })
+
   it('numbers each review and its proposals, and leaves the count when a review fails', async () => {
     const t = await ready()
     t.deps.claude.print.mockResolvedValueOnce(reply('One.'))
@@ -1438,6 +1482,34 @@ describe('automatic review', () => {
     t.deps.git.changes.mockResolvedValue(withBig(2_001))
     await endTurn(t, 2)
     expect(t.deps.claude.print).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps Done when findings apart, replaces them by criterion, and never sends them', async () => {
+    const body = 'Add a toggle.\n\n## Done when\n\n- A works\n- B works'
+    const t = await ready(undefined, [ticket({ body })])
+    await t.orch.sync('p1')
+    const answer = (...criteria: string[]): { stdout: string; stderr: string; code: number } => ({
+      stdout: JSON.stringify({
+        is_error: false,
+        structured_output: {
+          ...JSON.parse(reply('high').stdout).structured_output,
+          unmet: criteria.map((c, i) => ({ criterion: c, severity: 'high', reason: `${c} ${i}` }))
+        }
+      }),
+      stderr: '',
+      code: 0
+    })
+    t.deps.claude.print.mockResolvedValue(answer('A works', 'B works'))
+    await endTurn(t, 1)
+    t.deps.git.changes.mockResolvedValue(diff('let i = 2'))
+    t.deps.claude.print.mockResolvedValue(answer('A works'))
+    await endTurn(t, 2)
+    const all = (await t.orch.findings('s1')).findings
+    expect(all.filter((f) => f.title).map((f) => [f.text, !!f.proposed, !!f.sentAt])).toEqual([
+      ['B works 1', true, false],
+      ['A works 0', true, false]
+    ])
+    expect(all.filter((f) => f.path && f.sentAt)).toHaveLength(2)
   })
 
   it('replaces an earlier proposal on the same lines instead of adding a copy', async () => {

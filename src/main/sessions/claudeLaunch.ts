@@ -13,7 +13,8 @@ import { shellQuote } from '../../shared/shell'
 import { instructionsSection, type Instruction } from '../../shared/instructions'
 import type { Model, Project, Ticket } from '../../shared/types'
 
-const MAX_NOTE_BYTES = 4000
+/** The most of your start note a session keeps, in UTF-8 bytes. */
+export const MAX_NOTE_BYTES = 4000
 
 /** The system-prompt line that keeps secrets out of Claude's answers. */
 export const NO_SECRETS_RULE = 'Never quote secrets, tokens, or credentials.'
@@ -186,11 +187,16 @@ function visibleMarkdown(body: string): string {
 export const visibleText = (md: string): string => withoutUnsafe(visibleMarkdown(md))
 
 /** The first message Claude Code receives: your note, then the issue line naming its service and body, cut to fit 10,000 bytes in all for tmux. */
-export function openingPrompt(t: Ticket, service: Service, note?: string): string {
+export function openingPrompt(
+  t: Ticket,
+  service: Service,
+  note?: string,
+  max = MAX_BODY_BYTES
+): string {
   const yours = fitBytes(withoutUnsafe(note ?? '').trim(), MAX_NOTE_BYTES)
   const head = `${yours && `Your note for this session:\n${yours}\n\n`}${service} issue ${t.key}: ${withoutUnsafe(t.title)}\n${t.url}\n\n`
   const body = visibleText(t.body)
-  const room = MAX_BODY_BYTES - Buffer.byteLength(head)
+  const room = max - Buffer.byteLength(head)
   if (Buffer.byteLength(body) <= room) return head + body
   const footer = `\n\n[Body truncated. Read the full issue at ${t.url}]`
   return head + fitBytes(body, Math.max(0, room - Buffer.byteLength(footer))) + footer
