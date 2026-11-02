@@ -42,6 +42,8 @@ import {
 } from '../../../shared/instructions'
 import { sameRepo } from '../../../shared/repo'
 import { isSandboxDomain, sandboxDomains } from '../../../shared/sandbox'
+import { EDITORS } from '../../../shared/editors'
+import { useLoad } from '@/hooks/useLoad'
 import { AUTO_REVIEW_ROUNDS, MODEL_CHOICES, modelLabel } from '../../../shared/types'
 import { DEFAULT_KEEP_DONE_DAYS, KEEP_DONE_DAYS } from '../../../shared/visibleTickets'
 import { TOKEN_CAPS } from '../../../shared/pricing'
@@ -315,6 +317,11 @@ export function AddProject({
   const [keepDoneDays, setKeepDoneDays] = useState(project?.keepDoneDays ?? DEFAULT_KEEP_DONE_DAYS)
   const [tokenCap, setTokenCap] = useState(project?.tokenCap ?? 0)
   const [model, setModel] = useState(project?.model)
+  const [editor, setEditor] = useState(project?.editor)
+  const found = useLoad(() => window.sandtable.app.editors(), []).data ?? []
+  const editorChoices = EDITORS.filter(
+    (e) => e.command === editor || found.some((f) => f.command === e.command)
+  )
   const [readyCheck, setReadyCheck] = useState(project?.readyCheck !== false)
   const [autoReview, setAutoReview] = useState(!!project?.autoReview)
   const [sandbox, setSandbox] = useState(!!project?.sandbox)
@@ -763,6 +770,7 @@ export function AddProject({
       ...(claudeDir !== undefined && { claudeDir }),
       ...(keepDoneDays !== DEFAULT_KEEP_DONE_DAYS && { keepDoneDays }),
       ...(model && { model }),
+      ...(editor && { editor }),
       ...(tokenCap > 0 && { tokenCap }),
       ...(!readyCheck && { readyCheck: false as const }),
       ...(autoReview && { autoReview: true as const }),
@@ -1663,6 +1671,36 @@ export function AddProject({
             </span>
           </div>
         )}
+        {editorChoices.length > 0 &&
+          row(
+            'Editor',
+            null,
+            <div className="flex items-center gap-3">
+              <Select
+                value={editor ?? 'first'}
+                onValueChange={(v) => setEditor(v === 'first' ? undefined : v)}
+              >
+                <SelectTrigger
+                  aria-label="Editor"
+                  aria-describedby="editor-help"
+                  className="w-40 shrink-0"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="first">First found</SelectItem>
+                  {editorChoices.map((e) => (
+                    <SelectItem key={e.command} value={e.command}>
+                      {e.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span id="editor-help" className="text-xs text-fg-2">
+                The editor a session&apos;s side panel opens its folders in.
+              </span>
+            </div>
+          )}
         {row(
           'Keep done tickets',
           null,

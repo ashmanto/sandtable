@@ -732,6 +732,10 @@ refusal, a notification title, or a format example.
   compactions, and the model, effort, and permission mode.
 - A **Where** row shows the worktree, removed worktree, or main checkout, its branch, repos, and
   folders, and **Sandboxed** while it isn't removed.
+- Under each folder, until the worktree is removed, **Open in Finder** and **Open in <editor>** open
+  it. The editor is the project's **Editor**, or the first launcher found: `code`, `cursor`, or a
+  JetBrains one such as `idea`, also in JetBrains Toolbox's scripts folder. With none found, only
+  **Open in Finder** shows.
 - A work row shows files changed with lines added and removed, the pull request and its stage, and
   review findings. The files and findings open **Changes**.
 - Rows also show subagents and background shells still running, and Claude's to-do list.
@@ -1055,6 +1059,11 @@ refusal, a notification title, or a format example.
   and after the merge moves the issue to its done status if it isn't done.
 
 ## Session settings
+
+### Editor
+
+- **Editor** is set per project on the **Review** step, from the editors whose launcher is found.
+  **First found**, the default, uses the first one. With none found, the row is hidden.
 
 ### Model
 

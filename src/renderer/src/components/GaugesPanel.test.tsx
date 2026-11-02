@@ -426,6 +426,33 @@ describe('GaugesPanel', () => {
     expect(screen.queryByText('Sandboxed')).not.toBeInTheDocument()
   })
 
+  it('opens each folder in Finder or the editor found', async () => {
+    vi.mocked(api.app.editors).mockResolvedValue([
+      { command: 'cursor', name: 'Cursor', path: '/x/cursor' }
+    ])
+    const worktrees = ['/w/shop-wt.noindex/feat-147', '/w/api-wt.noindex/feat-147']
+    await show(status(), { session: session('T1', { id: 's1', worktrees }) })
+    await userEvent.click(screen.getByRole('button', { name: 'Open api in Cursor' }))
+    expect(api.sessions.openFolder).toHaveBeenCalledWith('s1', worktrees[1], 'editor')
+    await userEvent.click(screen.getByRole('button', { name: 'Open shop in Finder' }))
+    expect(api.sessions.openFolder).toHaveBeenCalledWith('s1', worktrees[0], 'finder')
+  })
+
+  it('offers only Finder when no editor is found, and says why opening failed', async () => {
+    vi.mocked(api.sessions.openFolder).mockRejectedValue(new Error('The file does not exist'))
+    await show(status())
+    expect(screen.queryByRole('button', { name: /in (VS Code|Cursor)/ })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Open in Finder' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('The file does not exist')
+  })
+
+  it('offers no open buttons once the worktree is removed', async () => {
+    await show(null, {
+      session: { ...running, state: 'finished', removedAt: '2026-10-30T13:00:00Z' }
+    })
+    expect(screen.queryByRole('button', { name: /^Open .*in / })).not.toBeInTheDocument()
+  })
+
   it("shows a running session's latest step, which the header no longer does", async () => {
     vi.mocked(api.sessions.activity).mockResolvedValue({
       steps: [{ tool: 'Bash', target: 'npm test', at: new Date(NOW).toISOString() }],
