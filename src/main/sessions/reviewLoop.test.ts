@@ -757,7 +757,7 @@ describe('automatic review', () => {
     t.emit('s1', 'needsYou')
     await settle()
     expect(t.orch.session('s1')?.state).toBe('reviewing')
-    expect(t.orch.needsYouCount([])).toBe(0)
+    expect(t.orch.needsYouCount()).toBe(0)
     release()
     await vi.waitFor(async () => expect((await auto(t))?.rounds).toBe(1))
     await settle()

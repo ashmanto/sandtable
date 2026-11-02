@@ -53,7 +53,6 @@ import type {
   Ticket,
   TicketDetails,
   TicketDraft,
-  TicketRef,
   TicketUsage,
   Triage
 } from '../shared/types'
@@ -309,7 +308,9 @@ export type Orchestrator = {
   stop(): void
   flush(): Promise<void>
   anyRunning(): boolean
-  needsYouCount(failedStarts: TicketRef[]): number
+  needsYouCount(): number
+  /** Opens the waiting sidebar session after `current`, or the first one, on its tab. */
+  openNextNeedsYou(current: LastView | null): void
   onChange(cb: (projectId: string) => void): () => void
   onOpen(cb: (view: LastView) => void): () => void
   onActivity(cb: (sessionId: string, activity: Activity) => void): () => void
@@ -724,6 +725,27 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     return !!p && isDoneOpen(s, ticketOf(s), statusMapOf(p))
   }
   const waiting = (s: SessionRecord): boolean => s.state === 'needsYou' && !doneOpen(s)
+
+  const sidebarList = (): SidebarSession[] => {
+    const onBoard = isShown(shownTicketKeys())
+    return sessions
+      .flatMap<SidebarSession>((s) =>
+        !s.ticketKey
+          ? listedSessions([s])
+          : isLive(s) && onBoard(s)
+            ? [
+                {
+                  ...s,
+                  name: ticketOf(s)?.title ?? s.ticketKey,
+                  ...(doneOpen(s) && { done: true as const })
+                }
+              ]
+            : []
+      )
+      .sort((a, b) => Number(!!a.done) - Number(!!b.done))
+  }
+  const waitingList = (): SidebarSession[] =>
+    sidebarList().filter((s) => waiting(s) && projects.some((p) => p.id === s.projectId))
 
   const setAsking = (s: SessionRecord, asking: boolean): void => {
     if (asking) s.asking = true
@@ -1962,22 +1984,27 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     },
 
     anyRunning: () => pollingTmux && sessions.some((s) => s.state === 'running'),
-    needsYouCount: (failedStarts) => {
-      const startable = ({ projectId, ticketKey }: TicketRef): boolean => {
-        const p = projects.find((x) => x.id === projectId)
-        const t = p && boardTickets(p).find((x) => x.key === ticketKey)
-        const column = t && columnFor(t.status, statusMapOf(p))
-        return (
-          (column === 'todo' || column === 'inProgress') &&
-          !sessions.some(
-            (s) => s.ticketKey === ticketKey && isLive(s) && sameSource(projectId, s.projectId)
-          )
-        )
-      }
-      return (
-        sessions.filter((s) => waiting(s) && projects.some((p) => p.id === s.projectId)).length +
-        failedStarts.filter(startable).length
+    needsYouCount: () => waitingList().length,
+    openNextNeedsYou: (current) => {
+      const list = waitingList()
+      if (!list.length) return
+      const at = list.findIndex((s) =>
+        current?.sessionId
+          ? s.id === current.sessionId
+          : !!current?.ticketKey &&
+            s.ticketKey === current.ticketKey &&
+            sameSource(current.projectId, s.projectId)
       )
+      const s = list[(at + 1) % list.length]
+      open(
+        s.ticketKey
+          ? {
+              projectId: s.projectId,
+              ticketKey: s.ticketKey,
+              tab: s.reviewRounds?.at(-1)?.waiting ? 'changes' : 'conversation'
+            }
+          : { projectId: s.projectId, sessionId: s.id }
+      )()
     },
 
     onChange: (cb: (projectId: string) => void) => subscribe(changeListeners, cb),
@@ -2172,7 +2199,6 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     resetViewers: () => viewers.clear(),
 
     async getBoard(projectId: string): Promise<BoardView> {
-      const onBoard = isShown(shownTicketKeys())
       const needsYou: Record<string, number> = {}
       for (const s of sessions)
         if (waiting(s)) needsYou[s.projectId] = (needsYou[s.projectId] ?? 0) + 1
@@ -2196,21 +2222,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
             !!s.ticketKey &&
             keys.has(s.ticketKey)
         ),
-        sidebarSessions: sessions
-          .flatMap<SidebarSession>((s) =>
-            !s.ticketKey
-              ? listedSessions([s])
-              : isLive(s) && onBoard(s)
-                ? [
-                    {
-                      ...s,
-                      name: ticketOf(s)?.title ?? s.ticketKey,
-                      ...(doneOpen(s) && { done: true as const })
-                    }
-                  ]
-                : []
-          )
-          .sort((a, b) => Number(!!a.done) - Number(!!b.done)),
+        sidebarSessions: sidebarList(),
         syncedAt,
         error,
         needsYou,
