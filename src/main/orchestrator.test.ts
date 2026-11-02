@@ -1171,6 +1171,56 @@ describe('sync', () => {
         t.orch.stop()
       })
 
+      it('runs in full after a timed sync that joined one already running', async () => {
+        const t = await afterTimedSync()
+        let release = (): void => undefined
+        t.deps.board.tickets.mockImplementationOnce(
+          () => new Promise((done) => (release = () => done([])))
+        )
+        t.deps.githubStamp.mockImplementation(async () => {
+          void t.orch.sync('p1')
+          return 'moved'
+        })
+        const joined = minute()
+        await vi.waitFor(() => expect(t.deps.board.tickets).toHaveBeenCalled())
+        t.deps.githubStamp.mockResolvedValue('moved')
+        release()
+        await joined
+        await settle()
+        t.deps.board.tickets.mockClear()
+        await minute()
+        expect(synced(t)).toEqual([1])
+        t.orch.stop()
+      })
+
+      it('runs in full the minute after a failed sync on another path', async () => {
+        const t = await afterTimedSync()
+        t.deps.board.tickets.mockRejectedValueOnce(new Error('timeout'))
+        await t.orch.sync('p1')
+        t.deps.board.tickets.mockClear()
+        await minute()
+        expect(synced(t)).toEqual([1])
+        t.orch.stop()
+      })
+
+      it('still reads a live automatic review session pull request on a skipped minute', async () => {
+        const t = setup({
+          projects: three.map((p) => ({ ...p, autoReview: true as const })),
+          sessions: [session()]
+        })
+        t.live.add(session().tmuxName)
+        await t.orch.reconnect()
+        t.orch.watch('p1', true)
+        await settle()
+        await minute()
+        t.deps.board.tickets.mockClear()
+        t.deps.pullRequests.mockClear()
+        await minute()
+        expect(synced(t)).toEqual([])
+        expect(t.deps.pullRequests).toHaveBeenCalled()
+        t.orch.stop()
+      })
+
       it('syncs in full when you click Sync after a skipped minute', async () => {
         const t = await afterTimedSync()
         await minute()
