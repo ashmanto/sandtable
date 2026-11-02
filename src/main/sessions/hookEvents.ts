@@ -46,6 +46,8 @@ export function stateFromEvent(input: HookInput, agentInFlight = false): Session
       return 'running'
     case 'Stop':
       return inFlight(input).length > 0 ? null : 'needsYou'
+    case 'StopFailure':
+      return 'apiError'
     case 'Notification':
       if (input.notification_type === 'idle_prompt') return agentInFlight ? null : 'needsYou'
       return ASKING_NOTIFICATIONS.includes(input.notification_type as string) ? 'needsYou' : null
@@ -69,6 +71,7 @@ const askingFromEvent = (input: HookInput): boolean | null => {
     case 'PostToolUse':
       return input.agent_id ? null : false
     case 'Stop':
+    case 'StopFailure':
     case 'UserPromptSubmit':
     case 'SandtableStopped':
     case 'SandtableAnswered':

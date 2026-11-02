@@ -49,6 +49,7 @@ describe('stateFromEvent', () => {
     expect(stateFromEvent(ev('PostToolUse', { agent_id: 'a1' }))).toBeNull()
     expect(stateFromEvent(ev('SandtableIdle'))).toBe('idle')
     expect(stateFromEvent(JSON.parse(STOPPED_EVENT))).toBe('needsYou')
+    expect(stateFromEvent(ev('StopFailure', { error: 'rate_limit' }))).toBe('apiError')
   })
 
   it('needs you when a resumed conversation starts, and ignores other starts', () => {
@@ -288,6 +289,10 @@ describe('readAsking', () => {
     await writeFile(file, text)
     return readAsking(file)
   }
+
+  it('ends asking at a StopFailure', async () => {
+    expect(await asking(notification('permission_prompt') + line('StopFailure'))).toBe(false)
+  })
 
   it('is true from a Notification that asks you until the turn moves on', async () => {
     for (const type of [

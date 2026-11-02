@@ -2,7 +2,7 @@ import { appendFileSync, utimesSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { tempDirs } from '../test/tempDirs'
-import { activityOf, readActivity, stepsOf } from './activity'
+import { activityOf, readActivity, stepsOf, stopOf } from './activity'
 
 const cwd = '/repo-wt.noindex/7-fix'
 const user = (content: unknown, timestamp: string, over: object = {}): string =>
@@ -138,5 +138,69 @@ describe('readActivity', () => {
     expect(before.since).toBe('t0')
     appendFileSync(file, '\n' + result('t2').replace('ok', 'x'.repeat(300 * 1024)))
     expect(await readActivity(file)).toEqual(before)
+  })
+})
+
+describe('stopOf', () => {
+  const limitText = "You've hit your session limit · resets 2:30am (Europe/Oslo)"
+  const failed = (text: string, over: object = {}): string =>
+    JSON.stringify({
+      type: 'assistant',
+      isSidechain: false,
+      cwd,
+      timestamp: 't2',
+      isApiErrorMessage: true,
+      error: 'rate_limit',
+      message: { role: 'assistant', content: [{ type: 'text', text }] },
+      ...over
+    })
+  const limit = (over: object = {}): string =>
+    failed(limitText, {
+      apiError: 'usage_limit_reached',
+      apiErrorParams: { rate_limit_info: { resetsAt: 1792888200, rateLimitType: 'five_hour' } },
+      ...over
+    })
+  const said = JSON.stringify({
+    type: 'assistant',
+    cwd,
+    timestamp: 't3',
+    message: { role: 'assistant', content: [{ type: 'text', text: 'Done.' }] }
+  })
+  const prompt = (at = 't1'): string => user('Fix the bug', at)
+  const of = (...lines: string[]): ReturnType<typeof stopOf> => stopOf(lines.join('\n'))
+
+  it('reads a usage-limit row with its reset time', () => {
+    expect(of(prompt(), limit())).toEqual({
+      limit: true,
+      resetsAt: 1792888200000,
+      message: limitText
+    })
+  })
+
+  it('reads another API error without a reset time', () => {
+    const text = "API Error: Can't reach the API server"
+    expect(of(prompt(), failed(text, { error: 'server_error' }))).toEqual({
+      limit: false,
+      message: text
+    })
+  })
+
+  it('reads a limit row without params as a limit with no time', () => {
+    expect(of(prompt(), limit({ apiErrorParams: undefined }))).toEqual({
+      limit: true,
+      message: limitText
+    })
+  })
+
+  it('clears the stop after a typed prompt', () => {
+    expect(of(prompt(), limit(), prompt('t4'))).toBeNull()
+  })
+
+  it('has no stop after a normal turn', () => {
+    expect(of(prompt(), tool('Bash', { command: 'npm test' }, 't2'), result('t2'), said)).toBeNull()
+  })
+
+  it("ignores a subagent's error row", () => {
+    expect(of(prompt(), limit({ isSidechain: true }))).toBeNull()
   })
 })

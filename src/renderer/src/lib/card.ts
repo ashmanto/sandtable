@@ -9,7 +9,9 @@ import {
   GitMerge,
   GitPullRequest,
   GitPullRequestClosed,
-  ScanSearch
+  Hourglass,
+  ScanSearch,
+  TriangleAlert
 } from 'lucide-react'
 import { IN_PROGRESS_LABEL } from '../../../shared/columns'
 import { serviceOf } from '../../../shared/repo'
@@ -33,6 +35,8 @@ export const stateLook: Record<
   },
   done: { label: 'Done', icon: CircleCheckBig, className: 'bg-added-soft text-added' },
   finished: { label: 'Finished', icon: CircleCheck, className: 'bg-neutral-soft text-neutral' },
+  limitReached: { label: 'Limit reached', icon: Hourglass, className: 'bg-neutral-soft text-fg-2' },
+  apiError: { label: 'API error', icon: TriangleAlert, className: 'bg-danger-soft text-danger' },
   doneOpen: {
     label: 'Done, session open',
     icon: CircleDashed,
