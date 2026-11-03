@@ -1430,40 +1430,44 @@ describe('AddProject', () => {
     expect(api.projects.save).toHaveBeenLastCalledWith(project)
   })
 
-  it('opens sessions in the first editor found unless you pick one, and saves the pick', async () => {
-    vi.mocked(api.app.editors).mockResolvedValue([
-      { command: 'code', name: 'VS Code', path: '/x/code' },
-      { command: 'cursor', name: 'Cursor', path: '/x/cursor' }
-    ])
+  const choose = (): HTMLElement => screen.getByRole('button', { name: 'Choose editor' })
+
+  it('chooses the editor as an app and saves its path, or clears it', async () => {
+    vi.mocked(api.projects.pickEditor).mockResolvedValue('/Applications/WebStorm.app')
     const { rerender } = render(<AddProject {...props} project={project} />)
     await userEvent.click(screen.getByRole('button', { name: /Review/ }))
-    const editor = await screen.findByRole('combobox', { name: 'Editor' })
-    expect(editor).toHaveTextContent('First found')
-    await userEvent.click(editor)
-    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
-      'First found',
-      'VS Code',
-      'Cursor'
-    ])
-    await userEvent.click(screen.getByRole('option', { name: 'Cursor' }))
+    expect(choose()).toHaveAccessibleDescription(/^None/)
+    expect(screen.queryByRole('button', { name: 'Clear editor' })).not.toBeInTheDocument()
+    await userEvent.click(choose())
+    await waitFor(() => expect(choose()).toHaveAccessibleDescription(/^WebStorm/))
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-    expect(api.projects.save).toHaveBeenCalledWith({ ...project, editor: 'cursor' })
-    rerender(<AddProject {...props} project={{ ...project, editor: 'idea' }} key="again" />)
-    await userEvent.click(screen.getByRole('button', { name: /Review/ }))
-    expect(await screen.findByRole('combobox', { name: 'Editor' })).toHaveTextContent(
-      'IntelliJ IDEA'
+    expect(api.projects.save).toHaveBeenCalledWith({
+      ...project,
+      editor: '/Applications/WebStorm.app'
+    })
+    rerender(
+      <AddProject
+        {...props}
+        project={{ ...project, editor: '/Applications/WebStorm.app' }}
+        key="again"
+      />
     )
-    await userEvent.click(screen.getByRole('combobox', { name: 'Editor' }))
-    await userEvent.click(screen.getByRole('option', { name: 'First found' }))
+    await userEvent.click(screen.getByRole('button', { name: /Review/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Clear editor' }))
+    expect(choose()).toHaveAccessibleDescription(/^None/)
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
     expect(api.projects.save).toHaveBeenLastCalledWith(project)
   })
 
-  it('hides Editor when no editor is found', async () => {
-    render(<AddProject {...props} project={project} />)
+  it('keeps the editor when the dialog is canceled, and shows a saved launcher as None', async () => {
+    render(<AddProject {...props} project={{ ...project, editor: 'code' }} />)
     await userEvent.click(screen.getByRole('button', { name: /Review/ }))
+    expect(choose()).toHaveAccessibleDescription(/^None/)
+    await userEvent.click(choose())
     await act(async () => {})
-    expect(screen.queryByRole('combobox', { name: 'Editor' })).not.toBeInTheDocument()
+    expect(choose()).toHaveAccessibleDescription(/^None/)
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(api.projects.save).toHaveBeenCalledWith(project)
   })
 
   it('checks readiness at Start by default, and saves it turned off and back on', async () => {
