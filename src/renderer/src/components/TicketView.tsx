@@ -611,6 +611,7 @@ export function TicketView({
       facts: c.facts,
       entries: c.entries ?? [],
       onOpenChanges: s === session && hasWorktree ? openChanges : undefined,
+      onProjectSaved,
       doneOpen: isDoneOpen(s, ticket, map)
     }
   const gauges = gaugesOf(shownSession, conversation)

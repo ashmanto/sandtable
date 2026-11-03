@@ -43,11 +43,11 @@ const stubs = <T extends object>(): T =>
 
 const appHandlers = (): AppHandlers => ({
   'projects.pickFolder': vi.fn(),
+  'projects.pickEditor': vi.fn(),
   'accounts.folders': vi.fn(async () => ['/Users/a/.claude-work']),
   'accounts.signedIn': vi.fn(),
   'app.pendingOpen': vi.fn(),
   'app.tools': vi.fn(),
-  'app.editors': vi.fn(),
   'app.theme': vi.fn(() => 'dark' as const),
   'app.setTheme': vi.fn(),
   'app.keepAwake': vi.fn(),

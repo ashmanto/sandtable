@@ -158,7 +158,7 @@ Click **Add project**, the plus beside the sidebar's **Projects** heading, then 
    choose whether its sessions start with Remote Control, which
    Claude Code account they use, which model they run on (**Model**: **Account default**, the
    default, or **Fable**, **Opus**, **Sonnet**, or **Haiku**), which editor a session's folders
-   open in (**Editor**: the first launcher found by default), how long done tickets stay on the board (**Keep done
+   open in (**Editor**: an app you choose), how long done tickets stay on the board (**Keep done
    tickets**: 1, 3, 7, 14, or 30 days, 7 by default), how many tokens a session may use before
    Sandtable stops its tool calls (**Token cap**: 10M, 25M, 50M, 100M, or 250M, off by default), whether **Start** first checks that a
    ticket is ready (**Readiness check**, on by default), whether Claude reviews a ticket

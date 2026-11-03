@@ -27,7 +27,13 @@ function renderView(
 ): void {
   render(
     <HeaderFrame value={{ inset: false, needsYou: 0, width }}>
-      <SessionView session={s} project={project} onBack={onBack} onRoutine={onRoutine} />
+      <SessionView
+        session={s}
+        project={project}
+        onBack={onBack}
+        onRoutine={onRoutine}
+        onProjectSaved={vi.fn()}
+      />
     </HeaderFrame>
   )
 }
@@ -82,6 +88,7 @@ describe('SessionView', () => {
           project={{ ...project, sandbox: true }}
           onBack={vi.fn()}
           onRoutine={vi.fn()}
+          onProjectSaved={vi.fn()}
         />
       </HeaderFrame>
     )
@@ -105,7 +112,13 @@ describe('SessionView', () => {
 
   it('reattaches the terminal after the toggle restarts the session', () => {
     const { rerender } = render(
-      <SessionView session={adhoc()} project={project} onBack={vi.fn()} onRoutine={vi.fn()} />
+      <SessionView
+        session={adhoc()}
+        project={project}
+        onBack={vi.fn()}
+        onRoutine={vi.fn()}
+        onProjectSaved={vi.fn()}
+      />
     )
     const before = screen.getByTestId('terminal')
     rerender(
@@ -114,6 +127,7 @@ describe('SessionView', () => {
         project={project}
         onBack={vi.fn()}
         onRoutine={vi.fn()}
+        onProjectSaved={vi.fn()}
       />
     )
     expect(screen.getByTestId('terminal')).not.toBe(before)

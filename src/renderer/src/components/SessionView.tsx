@@ -29,12 +29,14 @@ export function SessionView({
   session,
   project,
   onBack,
-  onRoutine
+  onRoutine,
+  onProjectSaved
 }: {
   session: SessionRecord
   project: Project
   onBack: () => void
   onRoutine: OpenRoutine
+  onProjectSaved: () => void
 }): React.JSX.Element {
   const { error, result, pending, clear, run } = useRun()
   const [draft, setDraft] = useState<string | null>(null)
@@ -51,7 +53,8 @@ export function SessionView({
     session,
     project,
     facts: conversation.facts,
-    entries: conversation.entries ?? []
+    entries: conversation.entries ?? [],
+    onProjectSaved
   }
   const actions: [string, Parameters<typeof run>[0]][] = live
     ? [['End session', () => window.sandtable.sessions.end(id)]]

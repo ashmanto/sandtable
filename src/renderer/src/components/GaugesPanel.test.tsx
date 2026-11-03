@@ -1,10 +1,15 @@
-import { act, cleanup, render, screen, within } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SandtableApi } from '../../../shared/api'
 import { prepareText } from '../../../shared/compact'
 import type { SessionStatus } from '../../../shared/sessionStatus'
-import type { ConversationEntry, SessionRecord, TranscriptFacts } from '../../../shared/types'
+import type {
+  ConversationEntry,
+  Project,
+  SessionRecord,
+  TranscriptFacts
+} from '../../../shared/types'
 import { adhoc, fakeSandtable, project, session } from '../test/fixtures'
 import { GaugesButton, GaugesPanel } from './GaugesPanel'
 
@@ -49,16 +54,19 @@ const show = async (
     facts?: TranscriptFacts
     entries?: ConversationEntry[]
     onOpenChanges?: () => void
+    project?: Project
+    onProjectSaved?: () => void
   } = {}
 ): Promise<void> => {
   vi.mocked(api.sessions.status).mockResolvedValue(s)
   render(
     <GaugesPanel
       session={over.session ?? running}
-      project={project}
+      project={over.project ?? project}
       facts={over.facts ?? facts()}
       entries={over.entries ?? []}
       onOpenChanges={'onOpenChanges' in over ? over.onOpenChanges : vi.fn()}
+      onProjectSaved={over.onProjectSaved}
     />
   )
   await act(async () => {})
@@ -426,31 +434,54 @@ describe('GaugesPanel', () => {
     expect(screen.queryByText('Sandboxed')).not.toBeInTheDocument()
   })
 
-  it('opens each folder in Finder or the editor found', async () => {
-    vi.mocked(api.app.editors).mockResolvedValue([
-      { command: 'cursor', name: 'Cursor', path: '/x/cursor' }
-    ])
+  it("opens each folder in Finder or the project's editor from the Open in menu", async () => {
     const worktrees = ['/w/shop-wt.noindex/feat-147', '/w/api-wt.noindex/feat-147']
-    await show(status(), { session: session('T1', { id: 's1', worktrees }) })
-    await userEvent.click(screen.getByRole('button', { name: 'Open in Cursor, api' }))
+    await show(status(), {
+      session: session('T1', { id: 's1', worktrees }),
+      project: { ...project, editor: '/Applications/WebStorm.app' }
+    })
+    await userEvent.click(screen.getByRole('button', { name: 'Open in, api' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'WebStorm' }))
     expect(api.sessions.openFolder).toHaveBeenCalledWith('s1', worktrees[1], 'editor')
-    await userEvent.click(screen.getByRole('button', { name: 'Open in Finder, shop' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Open in, shop' }))
+    expect(screen.queryByRole('menuitem', { name: 'Set editor…' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Finder' }))
     expect(api.sessions.openFolder).toHaveBeenCalledWith('s1', worktrees[0], 'finder')
   })
 
-  it('offers only Finder when no editor is found, and says why opening failed', async () => {
+  it('sets the editor from the menu when none is chosen, and says why opening failed', async () => {
+    const onProjectSaved = vi.fn()
+    vi.mocked(api.projects.pickEditor).mockResolvedValue('/Applications/Zed.app')
     vi.mocked(api.sessions.openFolder).mockRejectedValue(new Error('The file does not exist'))
-    await show(status())
-    expect(screen.queryByRole('button', { name: /in (VS Code|Cursor)/ })).not.toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Open in Finder' }))
+    await show(status(), { project: { ...project, editor: 'code' }, onProjectSaved })
+    await userEvent.click(screen.getByRole('button', { name: 'Open in' }))
+    expect(screen.getAllByRole('menuitem').map((m) => m.textContent)).toEqual([
+      'Finder',
+      'Set editor…'
+    ])
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Set editor…' }))
+    await waitFor(() =>
+      expect(api.projects.setEditor).toHaveBeenCalledWith(project.id, '/Applications/Zed.app')
+    )
+    await waitFor(() => expect(onProjectSaved).toHaveBeenCalled())
+    await userEvent.click(screen.getByRole('button', { name: 'Open in' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Finder' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('The file does not exist')
+  })
+
+  it('saves nothing when Set editor is canceled', async () => {
+    await show(status())
+    await userEvent.click(screen.getByRole('button', { name: 'Open in' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Set editor…' }))
+    await act(async () => {})
+    expect(api.projects.setEditor).not.toHaveBeenCalled()
   })
 
   it('offers no open buttons once the worktree is removed', async () => {
     await show(null, {
       session: { ...running, state: 'finished', removedAt: '2026-10-30T13:00:00Z' }
     })
-    expect(screen.queryByRole('button', { name: /^Open in / })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Open in/ })).not.toBeInTheDocument()
   })
 
   it("shows a running session's latest step, which the header no longer does", async () => {

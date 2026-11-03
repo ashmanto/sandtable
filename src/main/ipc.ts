@@ -5,7 +5,11 @@ import type { Terminals } from './terminal'
 
 type WaitingChannel = Exclude<
   keyof Handlers,
-  `app.${string}` | 'projects.pickFolder' | 'accounts.folders' | 'accounts.signedIn'
+  | `app.${string}`
+  | 'projects.pickFolder'
+  | 'projects.pickEditor'
+  | 'accounts.folders'
+  | 'accounts.signedIn'
 >
 
 const waitingHandlers = (
@@ -14,6 +18,7 @@ const waitingHandlers = (
 ): Pick<Handlers, WaitingChannel> => ({
   'projects.list': orch.listProjects,
   'projects.save': orch.saveProject,
+  'projects.setEditor': orch.setEditor,
   'projects.remove': orch.removeProject,
   'projects.groups': orch.listGroups,
   'projects.arrange': orch.arrangeProjects,

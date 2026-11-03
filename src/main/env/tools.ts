@@ -1,8 +1,7 @@
-import { execFile, spawn, type ChildProcess } from 'node:child_process'
-import { readdir, realpath } from 'node:fs/promises'
-import { homedir } from 'node:os'
+import { execFile, type ChildProcess } from 'node:child_process'
+import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { EDITORS, type Editor } from '../../shared/editors'
+import { appName } from '../../shared/editors'
 import { parseJson } from '../../shared/json'
 import { setupSteps } from '../../shared/setup'
 import type { Account, ToolCheck } from '../../shared/types'
@@ -94,56 +93,17 @@ const lookUp = async (names: readonly string[], path: string, runFn: RunFn): Pro
   return found
 }
 
-/** Resolves each editor's launcher against the given PATH and JetBrains Toolbox's scripts folder. */
-export async function findEditors(path: string, runFn: RunFn = run): Promise<Editor[]> {
-  const toolbox = join(homedir(), 'Library/Application Support/JetBrains/Toolbox/scripts')
-  const found = await lookUp(
-    EDITORS.map((e) => e.command),
-    `${path}:${toolbox}`,
-    runFn
-  )
-  return EDITORS.flatMap((e, i) => (found[i] ? [{ ...e, path: found[i] }] : []))
-}
-
-/** Opens folder in editor, through `open -a` when its launcher lives in an app; resolves to an error message, or '' when it opened. */
+/** Opens folder in the app with `open -a`; resolves to an error message, or '' when it opened. */
 export async function openInEditor(
-  editor: Editor,
+  app: string,
   folder: string,
-  runFn: RunFn = run,
-  launch: (file: string, args: string[]) => ReturnType<RunFn> = launchDetached
+  runFn: RunFn = run
 ): Promise<string> {
-  const app = /^.*?\.app(?=\/)/.exec(await realpath(editor.path).catch(() => editor.path))?.[0]
-  const { code, stderr } = app
-    ? await runFn('/usr/bin/open', ['-a', app, folder])
-    : await launch(editor.path, [folder])
-  return code === 0 ? '' : stderr.trim().split('\n')[0] || `${editor.name} exited with code ${code}`
+  const { code, stderr } = await runFn('/usr/bin/open', ['-a', app, folder])
+  return code === 0
+    ? ''
+    : stderr.trim().split('\n')[0] || `${appName(app)} exited with code ${code}`
 }
-
-/** Starts a program in its own process group, never killed; reports its exit if it ends within graceMs, else code 0. */
-export const launchDetached = (
-  file: string,
-  args: string[],
-  graceMs = 3000
-): Promise<{ stdout: string; stderr: string; code: number }> =>
-  new Promise((resolve) => {
-    let stderr = ''
-    const child = spawn(file, args, { detached: true, stdio: ['ignore', 'ignore', 'pipe'] })
-    const timer = setTimeout(() => {
-      child.stderr?.destroy()
-      child.unref()
-      resolve({ stdout: '', stderr: '', code: 0 })
-    }, graceMs)
-    child.stderr?.on('data', (chunk: Buffer) => (stderr += chunk))
-    child.on('error', (err) => {
-      clearTimeout(timer)
-      resolve({ stdout: '', stderr: err.message, code: -1 })
-    })
-    child.on('close', (code) => {
-      clearTimeout(timer)
-      resolve({ stdout: '', stderr, code: code ?? -1 })
-    })
-  })
-
 type GhHost = { active?: boolean; state?: string; error?: string; scopes?: unknown }
 
 const ghCheck = (answer: unknown): ToolCheck['gh'] => {

@@ -47,7 +47,6 @@ import type {
 } from './types'
 import type { PromptAnswer, SessionPrompt } from './prompt'
 import type { SessionStatus } from './sessionStatus'
-import type { Editor } from './editors'
 
 /** A session the sidebar lists; `done` marks Done, session open. */
 export type SidebarSession = SessionRecord & { done?: true }
@@ -83,6 +82,8 @@ export type SandtableApi = {
   projects: {
     list(): Promise<Project[]>
     save(p: Project): Promise<void>
+    /** Sets only the project's editor app, keeping the rest of its saved settings. */
+    setEditor(projectId: string, app: string): Promise<void>
     remove(id: string): Promise<void>
     groups(): Promise<ProjectGroup[]>
     arrange(groups: ProjectGroup[], order: { id: string; group?: string }[]): Promise<void>
@@ -99,6 +100,8 @@ export type SandtableApi = {
     jiraProjects(site: string): Promise<{ key: string; name: string }[]>
     jiraBoards(site: string, project: string): Promise<{ id: number; name: string }[]>
     pickFolder(): Promise<{ path: string; repos: string[] } | null>
+    /** Asks for an app in the open dialog; resolves to its path, or null when canceled. */
+    pickEditor(): Promise<string | null>
     /** Each project's token use by week, leaving out projects without any. */
     usage(): Promise<UsageByWeek>
   }
@@ -283,8 +286,6 @@ export type SandtableApi = {
     onOpen(cb: (view: LastView) => void): () => void
     pendingOpen(): Promise<LastView | 'settings' | null>
     tools(): Promise<ToolCheck>
-    /** The editors whose command-line launcher is installed, in the order Sandtable prefers them. */
-    editors(): Promise<Editor[]>
     theme(): Promise<Theme>
     setTheme(theme: Theme): Promise<void>
     keepAwake(): Promise<boolean>

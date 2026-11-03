@@ -6345,11 +6345,8 @@ describe('openFolder', () => {
   beforeEach(() => {
     wt = tempDir('st-wt-')
   })
-  const cursor = { command: 'cursor', name: 'Cursor', path: '/x/cursor' }
-  const idea = { command: 'idea', name: 'IntelliJ IDEA', path: '/x/idea' }
   const ready = async (over: Partial<SessionRecord> = {}): Promise<ReturnType<typeof setup>> => {
     const t = setup({ sessions: [session({ worktrees: [wt], ...over })] })
-    t.deps.editors.mockResolvedValue([cursor, idea])
     await t.orch.reconnect()
     return t
   }
@@ -6360,13 +6357,28 @@ describe('openFolder', () => {
     expect(t.deps.openFolder).toHaveBeenCalledWith(wt, undefined)
   })
 
-  it("opens the worktree in the project's editor, or the first one found", async () => {
+  it("opens the worktree in the project's editor", async () => {
     const t = await ready()
+    const app = join(tempDir('st-apps-'), 'WebStorm.app')
+    mkdirSync(app)
+    await t.orch.saveProject({ ...project, editor: app })
     await t.orch.openFolder('s1', wt, 'editor')
-    expect(t.deps.openFolder).toHaveBeenLastCalledWith(wt, cursor)
-    await t.orch.saveProject({ ...project, editor: 'idea' })
-    await t.orch.openFolder('s1', wt, 'editor')
-    expect(t.deps.openFolder).toHaveBeenLastCalledWith(wt, idea)
+    expect(t.deps.openFolder).toHaveBeenLastCalledWith(wt, app)
+  })
+
+  it('refuses to open in an editor when none is chosen', async () => {
+    const t = await ready()
+    await expect(t.orch.openFolder('s1', wt, 'editor')).rejects.toThrow('No editor chosen')
+    expect(t.deps.openFolder).not.toHaveBeenCalled()
+  })
+
+  it('says the app is gone instead of opening nothing', async () => {
+    const t = await ready()
+    await t.orch.saveProject({ ...project, editor: '/nowhere/WebStorm.app' })
+    await expect(t.orch.openFolder('s1', wt, 'editor')).rejects.toThrow(
+      "WebStorm isn't at /nowhere/WebStorm.app; choose another on the project's Review step"
+    )
+    expect(t.deps.openFolder).not.toHaveBeenCalled()
   })
 
   it('opens the main checkout of a session without worktrees', async () => {
@@ -6401,13 +6413,36 @@ describe('openFolder', () => {
     const t = await ready()
     t.deps.openFolder.mockResolvedValue('The file does not exist')
     await expect(t.orch.openFolder('s1', wt, 'finder')).rejects.toThrow('The file does not exist')
-    t.deps.editors.mockResolvedValue([])
-    await expect(t.orch.openFolder('s1', wt, 'editor')).rejects.toThrow('No editor found')
   })
 
-  it('refuses to save an editor it does not support', async () => {
+  it('sets only the editor on the saved project, without a sync', async () => {
     const t = await ready()
-    await expect(t.orch.saveProject({ ...project, editor: 'rm' })).rejects.toThrow('Not an editor')
+    const before = t.deps.githubStamp.mock.calls.length
+    await t.orch.saveProject({ ...project, model: 'haiku' })
+    await vi.waitFor(() => expect(t.deps.githubStamp.mock.calls.length).toBeGreaterThan(before))
+    const synced = t.deps.githubStamp.mock.calls.length
+    await t.orch.setEditor(project.id, '/Applications/Zed.app')
+    await new Promise((r) => setTimeout(r, 20))
+    expect((await t.orch.listProjects())[0]).toMatchObject({
+      model: 'haiku',
+      editor: '/Applications/Zed.app'
+    })
+    expect(t.deps.githubStamp.mock.calls.length).toBe(synced)
+    await expect(t.orch.setEditor(project.id, 'code')).rejects.toThrow('Not an editor')
+    await expect(t.orch.setEditor('nope', '/Applications/Zed.app')).rejects.toThrow(
+      'Unknown project'
+    )
+  })
+
+  it('drops a saved launcher name, and refuses an editor that is not a string', async () => {
+    const t = await ready()
+    for (const editor of ['code', 'WebStorm.app']) {
+      await t.orch.saveProject({ ...project, editor })
+      expect((await t.orch.listProjects())[0].editor).toBeUndefined()
+    }
+    await expect(
+      t.orch.saveProject({ ...project, editor: 3 as unknown as string })
+    ).rejects.toThrow('Not an editor')
   })
 })
 
