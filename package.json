@@ -1,6 +1,6 @@
 {
   "name": "sandtable",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "A kanban board of GitHub Projects tickets with one Claude Code session per ticket",
   "main": "./out/main/index.js",
   "author": "Ashkan Vahidishams",
