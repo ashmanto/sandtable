@@ -300,7 +300,7 @@ function OpenFolder({
     void run(async () => {
       const app = await window.sandtable.projects.pickEditor()
       if (!app) return
-      await window.sandtable.projects.save({ ...project, editor: app })
+      await window.sandtable.projects.setEditor(project.id, app)
       onProjectSaved?.()
     })
   return (

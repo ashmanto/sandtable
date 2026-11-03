@@ -122,6 +122,7 @@ export function fakeSandtable(): SandtableApi {
     projects: {
       list: vi.fn(async () => [project]),
       save: vi.fn(async () => {}),
+      setEditor: vi.fn(async () => {}),
       remove: vi.fn(async () => {}),
       groups: vi.fn(async () => []),
       arrange: vi.fn(async () => {}),

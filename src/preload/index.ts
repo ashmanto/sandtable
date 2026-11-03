@@ -22,6 +22,7 @@ const api: SandtableApi = {
   projects: {
     list: invoke('projects.list'),
     save: invoke('projects.save'),
+    setEditor: invoke('projects.setEditor'),
     remove: invoke('projects.remove'),
     groups: invoke('projects.groups'),
     arrange: invoke('projects.arrange'),

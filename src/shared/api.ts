@@ -82,6 +82,8 @@ export type SandtableApi = {
   projects: {
     list(): Promise<Project[]>
     save(p: Project): Promise<void>
+    /** Sets only the project's editor app, keeping the rest of its saved settings. */
+    setEditor(projectId: string, app: string): Promise<void>
     remove(id: string): Promise<void>
     groups(): Promise<ProjectGroup[]>
     arrange(groups: ProjectGroup[], order: { id: string; group?: string }[]): Promise<void>

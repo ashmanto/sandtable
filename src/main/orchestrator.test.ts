@@ -6271,6 +6271,25 @@ describe('openFolder', () => {
     await expect(t.orch.openFolder('s1', wt, 'finder')).rejects.toThrow('The file does not exist')
   })
 
+  it('sets only the editor on the saved project, without a sync', async () => {
+    const t = await ready()
+    const before = t.deps.githubStamp.mock.calls.length
+    await t.orch.saveProject({ ...project, model: 'haiku' })
+    await vi.waitFor(() => expect(t.deps.githubStamp.mock.calls.length).toBeGreaterThan(before))
+    const synced = t.deps.githubStamp.mock.calls.length
+    await t.orch.setEditor(project.id, '/Applications/Zed.app')
+    await new Promise((r) => setTimeout(r, 20))
+    expect((await t.orch.listProjects())[0]).toMatchObject({
+      model: 'haiku',
+      editor: '/Applications/Zed.app'
+    })
+    expect(t.deps.githubStamp.mock.calls.length).toBe(synced)
+    await expect(t.orch.setEditor(project.id, 'code')).rejects.toThrow('Not an editor')
+    await expect(t.orch.setEditor('nope', '/Applications/Zed.app')).rejects.toThrow(
+      'Unknown project'
+    )
+  })
+
   it('drops a saved launcher name, and refuses an editor that is not a string', async () => {
     const t = await ready()
     for (const editor of ['code', 'WebStorm.app']) {

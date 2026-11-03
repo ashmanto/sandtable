@@ -461,10 +461,7 @@ describe('GaugesPanel', () => {
     ])
     await userEvent.click(screen.getByRole('menuitem', { name: 'Set editor…' }))
     await waitFor(() =>
-      expect(api.projects.save).toHaveBeenCalledWith({
-        ...project,
-        editor: '/Applications/Zed.app'
-      })
+      expect(api.projects.setEditor).toHaveBeenCalledWith(project.id, '/Applications/Zed.app')
     )
     await waitFor(() => expect(onProjectSaved).toHaveBeenCalled())
     await userEvent.click(screen.getByRole('button', { name: 'Open in' }))
@@ -477,7 +474,7 @@ describe('GaugesPanel', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Open in' }))
     await userEvent.click(screen.getByRole('menuitem', { name: 'Set editor…' }))
     await act(async () => {})
-    expect(api.projects.save).not.toHaveBeenCalled()
+    expect(api.projects.setEditor).not.toHaveBeenCalled()
   })
 
   it('offers no open buttons once the worktree is removed', async () => {

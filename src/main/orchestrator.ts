@@ -332,6 +332,8 @@ export type Orchestrator = {
   raiseCap(sessionId: string): Promise<void>
   listProjects(): Promise<Project[]>
   saveProject(p: Project): Promise<void>
+  /** Sets only the project's editor app on its saved copy, without a sync. */
+  setEditor(projectId: string, app: string): Promise<void>
   listGroups(): Promise<ProjectGroup[]>
   arrangeProjects(groups: ProjectGroup[], order: { id: string; group?: string }[]): Promise<void>
   removeProject(id: string): Promise<void>
@@ -2094,6 +2096,13 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         persistCache()
       }
       void sync(p.id)
+    },
+
+    async setEditor(projectId, app) {
+      if (!isApp(app)) throw new Error('Not an editor')
+      const p = projectById(projectId)
+      projects = projects.map((x) => (x === p ? { ...p, editor: app } : x))
+      await persist()
     },
 
     listGroups: async (): Promise<ProjectGroup[]> => groups,
