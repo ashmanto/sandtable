@@ -404,6 +404,7 @@ function App(): React.JSX.Element | null {
                 project={project}
                 onBack={() => toBoard(project.id)}
                 onRoutine={onRoutine}
+                onProjectSaved={() => void reload()}
               />
             )}
             {route?.name === 'ticket' && project && view && (

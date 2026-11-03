@@ -1,9 +1,15 @@
 import { ChevronRight, MessagesSquare, SquareTerminal } from 'lucide-react'
 import { useEffect, useId, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useLiveUsage } from '@/hooks/useLiveUsage'
-import { useLoad } from '@/hooks/useLoad'
 import { useRun } from '@/hooks/useRun'
 import { useSessionStatus } from '@/hooks/useSessionStatus'
 import { stageLook } from '@/lib/card'
@@ -20,7 +26,7 @@ import {
 import { cn, plural, textLink, visible } from '@/lib/utils'
 import { isPrepared } from '../../../shared/compact'
 import { folderRepo, isLive, tokenCapOf } from '../../../shared/sessions'
-import { editorFor, type Editor } from '../../../shared/editors'
+import { appName, isApp } from '../../../shared/editors'
 import {
   CONTEXT_WARN,
   LIMIT_WARN,
@@ -54,6 +60,7 @@ export type GaugesPanelProps = {
   onOpenChanges?: () => void
   doneOpen?: boolean
   hideView?: boolean
+  onProjectSaved?: () => void
 }
 
 const MODES: Record<string, string> = {
@@ -274,40 +281,52 @@ function Compact({
 
 function OpenFolder({
   session,
+  project,
   folder,
   name,
-  editor
+  onProjectSaved
 }: {
   session: SessionRecord
+  project: Project
   folder: string
   name: string
-  editor: Editor | undefined
+  onProjectSaved?: () => void
 }): React.JSX.Element {
   const { error, run } = useRun()
+  const editor = isApp(project.editor) ? project.editor : undefined
   const open = (how: 'finder' | 'editor'): void =>
     void run(() => window.sandtable.sessions.openFolder(session.id, folder, how))
+  const setEditor = (): void =>
+    void run(async () => {
+      const app = await window.sandtable.projects.pickEditor()
+      if (!app) return
+      await window.sandtable.projects.save({ ...project, editor: app })
+      onProjectSaved?.()
+    })
   return (
     <>
-      <span className="flex flex-wrap gap-x-3">
-        <button
-          type="button"
-          className={textLink}
-          aria-label={`Open in Finder${name}`}
-          onClick={() => open('finder')}
-        >
-          Open in Finder
-        </button>
-        {editor && (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className={textLink}
-            aria-label={`Open in ${editor.name}${name}`}
-            onClick={() => open('editor')}
+            className={cn(textLink, 'self-start')}
+            aria-label={`Open in${name}`}
           >
-            Open in {editor.name}
+            Open in
           </button>
-        )}
-      </span>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          <DropdownMenuItem onSelect={() => open('finder')}>Finder</DropdownMenuItem>
+          {editor ? (
+            <DropdownMenuItem onSelect={() => open('editor')}>{appName(editor)}</DropdownMenuItem>
+          ) : (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={setEditor}>Set editor…</DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
       {error && (
         <p role="alert" className="text-danger">
           {error}
@@ -324,7 +343,8 @@ function Panel({
   entries,
   onOpenChanges,
   doneOpen,
-  hideView
+  hideView,
+  onProjectSaved
 }: GaugesPanelProps): React.JSX.Element {
   const status = useSessionStatus(session.id)
   const usage = useLiveUsage(session.id)
@@ -361,8 +381,6 @@ function Panel({
   const folders = worktree ? session.worktrees : session.checkout ? [session.checkout] : []
   const byCount = (one: string, many: string): string => (folders.length > 1 ? many : one)
   const [view, setView] = useSessionView()
-  const editors = useLoad(() => window.sandtable.app.editors(), []).data ?? []
-  const editor = editorFor(project.editor, editors)
   const viewId = useId()
 
   return (
@@ -486,9 +504,10 @@ function Panel({
                     {!session.removedAt && (
                       <OpenFolder
                         session={session}
+                        project={project}
                         folder={f}
                         name={folders.length > 1 ? `, ${folderRepo(session, f)}` : ''}
-                        editor={editor}
+                        onProjectSaved={onProjectSaved}
                       />
                     )}
                   </div>
