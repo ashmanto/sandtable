@@ -32,6 +32,11 @@ describe('SessionBadge stop', () => {
     expect(screen.getByText('API error').closest('[title]')).toHaveAttribute('title', login)
   })
 
+  it('has no tooltip outside the two stop states', () => {
+    render(<SessionBadge state="running" stop={{ message: login }} />)
+    expect(screen.getByText('Running').closest('[title]')).toBeNull()
+  })
+
   it('shows neither word for a running session', () => {
     render(<SessionBadge state="running" />)
     expect(screen.queryByText(/Limit reached|API error/)).toBeNull()

@@ -1608,6 +1608,34 @@ describe('hook events', () => {
     expect(t.orch.session('s1')?.stop).toBeUndefined()
   })
 
+  it('leaves no stop when a prompt lands during the read', async () => {
+    const t = await live()
+    writeTranscript(t.claudeDir, [limitRow])
+    t.emit('s1', 'apiError')
+    t.emit('s1', 'running')
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(t.orch.session('s1')?.state).toBe('running')
+    expect(t.orch.session('s1')?.stop).toBeUndefined()
+  })
+
+  it('keeps the read when an event without a state lands during it', async () => {
+    const t = await live()
+    writeTranscript(t.claudeDir, [limitRow])
+    t.emit('s1', 'apiError')
+    t.emit('s1', null)
+    await vi.waitFor(() => expect(t.orch.session('s1')?.state).toBe('limitReached'))
+  })
+
+  it('drops a stale stop at reconnect', async () => {
+    const stale = session({ state: 'limitReached', stop: { message: limitText, resetsAt: 1 } })
+    const t = setup({ sessions: [stale] })
+    t.live.add('st-p1-octo-shop-147')
+    t.lastState.set(stale.eventsFile, 'running')
+    await t.orch.reconnect()
+    expect(t.orch.session('s1')?.state).toBe('running')
+    expect(t.orch.session('s1')?.stop).toBeUndefined()
+  })
+
   it('keeps Limit reached across reconnect', async () => {
     const t = setup({ sessions: [session()] })
     t.live.add('st-p1-octo-shop-147')
@@ -1665,6 +1693,16 @@ describe('hook events', () => {
 })
 
 describe('clearNeedsYou', () => {
+  it('clears an API error too', async () => {
+    const eventsFile = join(tempDir('st-events-'), 's1.jsonl')
+    writeFileSync(eventsFile, '{"hook_event_name":"StopFailure"}\n')
+    const t = setup({ sessions: [session({ eventsFile, state: 'apiError' })] })
+    t.live.add('st-p1-octo-shop-147')
+    await t.orch.reconnect()
+    await t.orch.clearNeedsYou('s1')
+    expect(readFileSync(eventsFile, 'utf8').trimEnd().split('\n').at(-1)).toBe(IDLE_EVENT)
+  })
+
   it('appends the clear to the events file and leaves the state to the watcher', async () => {
     const eventsFile = join(tempDir('st-events-'), 's1.jsonl')
     writeFileSync(eventsFile, '{"hook_event_name":"Stop"}\n')

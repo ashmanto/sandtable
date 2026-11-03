@@ -45,6 +45,7 @@ import type {
   SessionCommand,
   SessionRecord,
   SessionState,
+  SessionStop,
   SetupProgress,
   SetupSuggestion,
   Step,
@@ -856,7 +857,9 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     notifyNeedsYou(s, project, fresh)
   }
 
-  const failedState = async (s: SessionRecord): Promise<SessionState> => {
+  const failedState = async (
+    s: SessionRecord
+  ): Promise<{ state: SessionState; stop: SessionStop }> => {
     let stop: Stopped | null = null
     for (let read = 0; read < STOP_READS && !stop; read++) {
       if (read) await new Promise((resolve) => setTimeout(resolve, STOP_RETRY_MS))
@@ -864,12 +867,14 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       stop = file ? await readStop(file).catch(() => null) : null
     }
     const { limit, ...rest } = stop ?? { limit: false, message: '' }
-    s.stop = rest
-    return limit ? 'limitReached' : 'apiError'
+    return { state: limit ? 'limitReached' : 'apiError', stop: rest }
   }
   const lastStateOf = async (s: SessionRecord): Promise<SessionState | null> => {
     const last = await deps.events.readLastState(s.eventsFile)
-    return last === 'apiError' ? failedState(s) : last
+    if (last !== 'apiError') return last
+    const { state, stop } = await failedState(s)
+    s.stop = stop
+    return state
   }
   const eventCounts = new Map<string, number>()
 
@@ -877,13 +882,17 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     void liveView.eventSeen(sessionId)
     const s = sessions.find((x) => x.id === sessionId)
     if (!s || !isLive(s)) return
-    const count = (eventCounts.get(s.id) ?? 0) + 1
+    const count = (eventCounts.get(s.id) ?? 0) + (state ? 1 : 0)
     eventCounts.set(s.id, count)
     const askingChanged = !!s.asking !== asking
     setAsking(s, asking)
     if (state === 'apiError')
-      void failedState(s).then((next) => {
-        if (eventCounts.get(s.id) === count && isLive(s)) setState(s, next)
+      void failedState(s).then(({ state: next, stop }) => {
+        if (eventCounts.get(s.id) !== count || !isLive(s)) return
+        s.stop = stop
+        if (s.state !== next) return setState(s, next)
+        void persist().catch(() => undefined)
+        changed(s.projectId)
       })
     else if (state && shownState(s, state) !== s.state) setState(s, state)
     else if (askingChanged) {
@@ -1981,6 +1990,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         }
         setAsking(s, alive && (notStarted(s) || (await deps.events.readAsking(s.eventsFile))))
         if (alive) s.state = shownState(s, (await lastStateOf(s)) ?? s.state)
+        if (s.state !== 'limitReached' && s.state !== 'apiError') delete s.stop
         if (alive && notStarted(s)) startBy.set(s.id, now().getTime())
       }
     await persist()
@@ -2635,7 +2645,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
 
     async clearNeedsYou(sessionId: string): Promise<void> {
       const s = sessionById(sessionId)
-      if (s.state !== 'needsYou') return
+      if (s.state !== 'needsYou' && s.state !== 'apiError') return
       if (s.capped) throw new Error('Raise its token cap first.')
       if (notStarted(s))
         throw new Error("Answer Claude Code's folder trust prompt in the terminal first.")

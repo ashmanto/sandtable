@@ -203,6 +203,16 @@ describe('readLastState', () => {
     return readLastState(file)
   }
 
+  it("keeps a failed turn through Claude Code's idle reminder", async () => {
+    expect(
+      await last(line('UserPromptSubmit') + line('StopFailure') + notification('idle_prompt'))
+    ).toBe('apiError')
+  })
+
+  it('clears a failed turn to Idle', async () => {
+    expect(await last(line('StopFailure') + IDLE_EVENT + '\n')).toBe('idle')
+  })
+
   it('returns the state of the last known event, skipping blank and malformed lines', async () => {
     expect(
       await last(line('UserPromptSubmit') + line('Stop') + line('PreToolUse') + '\n{oops\n')

@@ -47,9 +47,10 @@ function SessionAction({
   )
 }
 
-/** Moves a Needs you session to Idle; renders nothing in any other state or while capped, where RaiseCap takes its place. */
+/** Moves a Needs you or API error session to Idle; renders nothing in any other state or while capped, where RaiseCap takes its place. */
 export const ClearNeedsYou = (props: Props): React.JSX.Element | null =>
-  props.session.state === 'needsYou' && !props.session.capped ? (
+  (props.session.state === 'needsYou' || props.session.state === 'apiError') &&
+  !props.session.capped ? (
     <SessionAction
       {...props}
       label="Clear Needs you"

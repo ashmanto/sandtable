@@ -971,7 +971,7 @@ refusal, a notification title, or a format example.
 
 ### Clear Needs you
 
-- **Clear Needs you**, on a **Needs you** card, in the ticket and session view headers, and on a
+- **Clear Needs you**, on a **Needs you** or **API error** card, in the ticket and session view headers, and on a
   sidebar session row, moves the session to **Idle** without ending it.
 - An **Idle** session doesn't count toward the sidebar's **Needs you** and sends no notification.
 - A session stays **Idle** across restarts until Claude stops again, asks you something, or is

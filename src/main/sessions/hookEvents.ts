@@ -106,8 +106,10 @@ function stateFromLine(line: string, memory: Memory): SessionState | null {
   if (typeof input !== 'object' || !input) return null
   const name = (input as HookInput).hook_event_name
   const repeat = name === 'Notification' && (input as HookInput).notification_type === 'idle_prompt'
+  const failed = memory.last === 'apiError'
   const ignored =
-    (name === 'SandtableIdle' && memory.last !== 'needsYou') || (repeat && memory.last === 'idle')
+    (name === 'SandtableIdle' && memory.last !== 'needsYou' && !failed) ||
+    (repeat && (memory.last === 'idle' || failed))
   const state = ignored ? null : stateFromEvent(input, memory.agentInFlight)
   memory.asking = askingFromEvent(input) ?? memory.asking
   memory.background = Array.isArray((input as HookInput).background_tasks)

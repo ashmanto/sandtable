@@ -28,7 +28,14 @@ export function SessionBadge({
       label
     )
   return (
-    <Badge className={className} title={stop?.message || undefined}>
+    <Badge
+      className={className}
+      title={
+        (state === 'limitReached' || state === 'apiError') && stop?.message
+          ? stop.message
+          : undefined
+      }
+    >
       <Icon aria-hidden />
       {labelClassName ? <span className={labelClassName}>{words}</span> : words}
     </Badge>
