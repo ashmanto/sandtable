@@ -1522,6 +1522,102 @@ describe('hook events', () => {
     expect(vi.getTimerCount()).toBe(timers)
   })
 
+  const limitText = "You've hit your session limit · resets 2:30am (Europe/Oslo)"
+  const failedRow = (text: string, over: object = {}): object => ({
+    type: 'assistant',
+    timestamp: '2026-10-24T11:59:00.000Z',
+    isApiErrorMessage: true,
+    error: 'rate_limit',
+    message: { role: 'assistant', content: [{ type: 'text', text }] },
+    ...over
+  })
+  const limitRow = failedRow(limitText, {
+    apiError: 'usage_limit_reached',
+    apiErrorParams: { rate_limit_info: { resetsAt: 1792888200, rateLimitType: 'five_hour' } }
+  })
+  const writeTranscript = (claudeDir: string, rows: object[]): void => {
+    const folder = join(claudeDir, 'projects', 'x')
+    mkdirSync(folder, { recursive: true })
+    const prompt = { type: 'user', message: { role: 'user', content: 'Fix it' } }
+    writeFileSync(
+      join(folder, 's1.jsonl'),
+      [prompt, ...rows].map((r) => JSON.stringify(r)).join('\n') + '\n'
+    )
+  }
+  const live = async (): Promise<ReturnType<typeof setup>> => {
+    const t = setup({ sessions: [session()] })
+    t.live.add('st-p1-octo-shop-147')
+    await t.orch.reconnect()
+    await t.orch.sync('p1')
+    return t
+  }
+
+  it("shows Limit reached with its reset time and doesn't notify", async () => {
+    const t = await live()
+    writeTranscript(t.claudeDir, [limitRow])
+    t.emit('s1', 'apiError')
+    await vi.waitFor(() => expect(t.orch.session('s1')?.state).toBe('limitReached'))
+    expect(t.orch.session('s1')?.stop).toEqual({ message: limitText, resetsAt: 1792888200000 })
+    await settle()
+    expect(t.deps.notify).not.toHaveBeenCalled()
+    expect(t.orch.needsYouCount()).toBe(0)
+  })
+
+  it('shows API error, counts it, and notifies', async () => {
+    const t = await live()
+    const text = "API Error: Can't reach the API server"
+    writeTranscript(t.claudeDir, [failedRow(text, { error: 'server_error' })])
+    t.emit('s1', 'apiError')
+    await vi.waitFor(() => expect(t.deps.notify).toHaveBeenCalledTimes(1))
+    expect(t.orch.session('s1')?.state).toBe('apiError')
+    expect(t.orch.session('s1')?.stop).toEqual({ message: text })
+    expect(t.orch.needsYouCount()).toBe(1)
+    expect(t.deps.notify.mock.calls[0][1]).toBe(`API error: ${text}`)
+  })
+
+  it('shows API error with no message when the transcript has no error row', async () => {
+    const t = await live()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
+    t.emit('s1', 'apiError')
+    await vi.waitFor(async () => {
+      await vi.advanceTimersByTimeAsync(500)
+      expect(t.orch.session('s1')?.state).toBe('apiError')
+    })
+    expect(t.orch.session('s1')?.stop).toEqual({ message: '' })
+  })
+
+  it('waits for a late error row', async () => {
+    const t = await live()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
+    t.emit('s1', 'apiError')
+    await vi.advanceTimersByTimeAsync(600)
+    writeTranscript(t.claudeDir, [limitRow])
+    await vi.advanceTimersByTimeAsync(1000)
+    await vi.waitFor(() => expect(t.orch.session('s1')?.state).toBe('limitReached'))
+    await vi.advanceTimersByTimeAsync(11_000)
+    expect(t.deps.notify).not.toHaveBeenCalled()
+  })
+
+  it('clears the stop when you send a prompt', async () => {
+    const t = await live()
+    writeTranscript(t.claudeDir, [limitRow])
+    t.emit('s1', 'apiError')
+    await vi.waitFor(() => expect(t.orch.session('s1')?.state).toBe('limitReached'))
+    t.emit('s1', 'running')
+    expect(t.orch.session('s1')?.state).toBe('running')
+    expect(t.orch.session('s1')?.stop).toBeUndefined()
+  })
+
+  it('keeps Limit reached across reconnect', async () => {
+    const t = setup({ sessions: [session()] })
+    t.live.add('st-p1-octo-shop-147')
+    t.lastState.set(session().eventsFile, 'apiError')
+    writeTranscript(t.claudeDir, [limitRow])
+    await t.orch.reconnect()
+    await vi.waitFor(() => expect(t.orch.session('s1')?.state).toBe('limitReached'))
+    expect(t.orch.session('s1')?.stop?.resetsAt).toBe(1792888200000)
+  })
+
   it('ignores unknown and finished sessions', async () => {
     const t = setup({ sessions: [session({ state: 'finished' })] })
     await t.orch.reconnect()
