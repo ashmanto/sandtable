@@ -24,7 +24,12 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { cn, errorMessage } from '@/lib/utils'
 import { findRepo } from '../../../shared/repo'
-import { DEFAULT_DAILY_CAP, rulesProblem, scheduleLabel } from '../../../shared/routines'
+import {
+  capProblem,
+  DEFAULT_DAILY_CAP,
+  rulesProblem,
+  scheduleLabel
+} from '../../../shared/routines'
 import type {
   Project,
   Routine,
@@ -164,6 +169,7 @@ export function RoutineEditor({
     ...(checksFail && { checksFail: true as const })
   }
   const triggered = Object.keys(on).length > 0
+  const capRefused = triggered && capProblem(dailyCap.trim() ? Number(dailyCap) : NaN)
   const form: RoutineProposal = {
     name,
     repo: github,
@@ -476,9 +482,12 @@ export function RoutineEditor({
                   value={dailyCap}
                   onChange={(e) => setDailyCap(e.target.value)}
                 />
-                <p id="routine-cap-help" className="text-xs text-fg-2">
-                  Label and check starts past this many in a day are skipped and listed in Run
-                  history.
+                <p
+                  id="routine-cap-help"
+                  className={cn('text-xs', capRefused ? 'text-danger' : 'text-fg-2')}
+                >
+                  {capRefused ||
+                    'Label and check starts past this many in a day are skipped and listed in Run history.'}
                 </p>
               </div>
             )}

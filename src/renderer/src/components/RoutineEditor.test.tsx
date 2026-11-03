@@ -136,6 +136,21 @@ describe('RoutineEditor', () => {
     )
   })
 
+  it('says what is wrong with a daily cap outside 1 to 50', async () => {
+    render(
+      <RoutineEditor
+        project={project}
+        routine={{ ...triage, on: { label: 'bug' } }}
+        onClose={vi.fn()}
+      />
+    )
+    const cap = screen.getByRole('spinbutton', { name: 'Automatic starts a day' })
+    await userEvent.clear(cap)
+    expect(cap).toHaveAccessibleDescription('Enter a daily cap from 1 to 50')
+    await userEvent.type(cap, '7')
+    expect(cap).not.toHaveAccessibleDescription('Enter a daily cap from 1 to 50')
+  })
+
   it('shows a saved trigger and saves no trigger when cleared', async () => {
     render(
       <RoutineEditor

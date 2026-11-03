@@ -970,6 +970,11 @@ describe('routine triggers', () => {
     await t.orch.flush()
   }
   const unlabeled = (n: number): Ticket => ({ ...labeled(n), labels: [] })
+  const startsNothing = async (t: ReturnType<typeof setup>, before = 0): Promise<void> => {
+    await t.orch.startRoutine('r1')
+    await startsBy(t, before + 1)
+    expect(t.deps.tmux.startTmux.mock.calls[before][2].at(-1)).toBe('Triage the ticket')
+  }
   const syncWith = async (t: ReturnType<typeof setup>, tickets: Ticket[]): Promise<void> => {
     t.deps.board.tickets.mockResolvedValueOnce(structuredClone(tickets))
     await t.orch.sync('p1')
@@ -980,7 +985,6 @@ describe('routine triggers', () => {
     const t = setup({ routines: [routine()] })
     await t.orch.reconnect()
     await syncWith(t, [ticket({ key: 'octo/shop#12', number: 12 })])
-    expect(t.deps.tmux.startTmux).not.toHaveBeenCalled()
     await syncWith(t, [labeled(12)])
     await startsBy(t, 1)
     const prompt = t.deps.tmux.startTmux.mock.calls[0][2].at(-1)
@@ -1004,14 +1008,14 @@ describe('routine triggers', () => {
     expect(run.trigger).toEqual({ kind: 'checks', ticket: 'octo/shop#147' })
     await t.orch.end(run.kind === 'session' ? run.sessionId : '')
     await syncWith(t, [ticket({ prStage: 'checksFailing' })])
-    await startsBy(t, 1)
+    await startsNothing(t, 1)
   })
 
   it('starts nothing on the first sync without a baseline', async () => {
     const t = setup({ routines: [routine()] })
     await t.orch.reconnect()
     await syncWith(t, [labeled(12)])
-    expect(t.deps.tmux.startTmux).not.toHaveBeenCalled()
+    await startsNothing(t)
   })
 
   it('starts nothing after a failed first sync', async () => {
@@ -1020,7 +1024,7 @@ describe('routine triggers', () => {
     t.deps.board.tickets.mockRejectedValueOnce(new Error('offline'))
     await t.orch.sync('p1')
     await syncWith(t, [labeled(12)])
-    expect(t.deps.tmux.startTmux).not.toHaveBeenCalled()
+    await startsNothing(t)
   })
 
   it('starts for a label added while Sandtable was closed', async () => {
@@ -1074,8 +1078,8 @@ describe('routine triggers', () => {
     await t.orch.reconnect()
     await syncWith(t, [])
     await syncWith(t, [labeled(12), { ...labeled(13), prStage: 'checksFailing' }])
-    expect(t.deps.tmux.startTmux).not.toHaveBeenCalled()
-    expect(await t.orch.routineHistory('r1')).toEqual([])
+    await startsNothing(t)
+    expect((await t.orch.routineHistory('r1')).filter((r) => r.kind === 'skipped')).toEqual([])
   })
 
   it('starts for a ticket created with the label after the last sync', async () => {
@@ -1106,11 +1110,48 @@ describe('routine triggers', () => {
     expect(t.deps.board.tickets).toHaveBeenCalled()
   })
 
+  it('counts a failed start toward the daily cap', async () => {
+    const t = setup({ routines: [routine({ dailyCap: 1 })] })
+    await t.orch.reconnect()
+    t.deps.tmux.startTmux.mockRejectedValueOnce(new Error('no tmux'))
+    await syncWith(t, [unlabeled(12), unlabeled(13)])
+    await syncWith(t, [labeled(12), unlabeled(13)])
+    await vi.waitFor(async () =>
+      expect((await t.orch.routineHistory('r1'))[0]).toMatchObject({ reason: 'failed' })
+    )
+    await syncWith(t, [labeled(12), labeled(13)])
+    expect((await t.orch.routineHistory('r1')).filter((r) => r.kind === 'skipped')).toEqual([
+      expect.objectContaining({ reason: 'failed' }),
+      expect.objectContaining({
+        reason: 'capped',
+        trigger: expect.objectContaining({ ticket: 'octo/shop#13' })
+      })
+    ])
+  })
+
+  it('starts no second run for an event a run before the restart already took', async () => {
+    const cache = {
+      p1: { tickets: [unlabeled(12)], syncedAt: '2026-10-23T00:00:00.000Z' }
+    }
+    const earlier = session({
+      id: 's9',
+      ticketKey: undefined,
+      routineId: 'r1',
+      trigger: { kind: 'label', label: 'triage', ticket: 'octo/shop#12' },
+      startedAt: '2026-10-23T00:00:30.000Z',
+      state: 'finished'
+    })
+    const t = setup({ routines: [routine()], cache, sessions: [earlier] })
+    await t.orch.reconnect()
+    await syncWith(t, [labeled(12)])
+    await startsNothing(t)
+  })
+
   it('ignores a routine with no matching trigger', async () => {
     const t = setup({ routines: [routine({ on: { checksFail: true } })] })
     await t.orch.reconnect()
     await syncWith(t, [])
     await syncWith(t, [labeled(12)])
-    expect(t.deps.tmux.startTmux).not.toHaveBeenCalled()
+    await startsNothing(t)
   })
 })

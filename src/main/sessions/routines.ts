@@ -214,6 +214,19 @@ export function createRoutines(ctx: {
     const at = now()
     const known = new Map(before.tickets.map((t) => [t.key, t]))
     const created = (t: Ticket): boolean => Date.parse(t.createdAt) > Date.parse(before.syncedAt)
+    const since = (iso: string): boolean => Date.parse(iso) > Date.parse(before.syncedAt)
+    const taken = (r: Routine, trigger: RunTrigger): boolean =>
+      [
+        ...ctx
+          .sessions()
+          .map((s) => ({ routineId: s.routineId, at: s.startedAt, trigger: s.trigger })),
+        ...ctx.skippedRuns()
+      ].some(
+        (x) =>
+          x.routineId === r.id &&
+          since(x.at) &&
+          JSON.stringify(x.trigger) === JSON.stringify(trigger)
+      )
     let dirty = false
     for (const r of ctx.routines()) {
       if (r.projectId !== projectId || !r.on) continue
@@ -221,6 +234,7 @@ export function createRoutines(ctx: {
         const was = known.get(t.key)
         if (!was && !created(t)) continue
         for (const trigger of eventsOf(r, was, t)) {
+          if (taken(r, trigger)) continue
           if (routineBusy(r)) skipRun(r, at, 'running', undefined, trigger)
           else if (startsToday(r, at) >= (r.dailyCap ?? DEFAULT_DAILY_CAP))
             skipRun(r, at, 'capped', undefined, trigger)

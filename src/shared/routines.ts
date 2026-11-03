@@ -89,6 +89,12 @@ export function rulesProblem(rules: unknown[]): string | null {
   return null
 }
 
+/** What is wrong with a daily cap, or null when it is a whole number from 1 to 50. */
+export const capProblem = (cap: unknown): string | null =>
+  Number.isInteger(cap) && (cap as number) >= 1 && (cap as number) <= 50
+    ? null
+    : 'Enter a daily cap from 1 to 50'
+
 /** What stops `input` from saving among the project's `others`, or null when nothing does. */
 export function routineProblem(
   input: RoutineInput,
@@ -120,8 +126,5 @@ export function routineProblem(
     if (typeof label !== 'string' || !label.trim()) return 'Enter a label'
     if (label.trim().length > 100) return 'Shorten the label'
   }
-  const cap = input.dailyCap
-  if (cap !== undefined && !(Number.isInteger(cap) && cap >= 1 && cap <= 50))
-    return 'Enter a daily cap from 1 to 50'
-  return null
+  return input.dailyCap === undefined ? null : capProblem(input.dailyCap)
 }
