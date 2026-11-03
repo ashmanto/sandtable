@@ -43,7 +43,6 @@ import {
 import { sameRepo } from '../../../shared/repo'
 import { isSandboxDomain, sandboxDomains } from '../../../shared/sandbox'
 import { appName, isApp } from '../../../shared/editors'
-import { useLoad } from '@/hooks/useLoad'
 import { AUTO_REVIEW_ROUNDS, MODEL_CHOICES, modelLabel } from '../../../shared/types'
 import { DEFAULT_KEEP_DONE_DAYS, KEEP_DONE_DAYS } from '../../../shared/visibleTickets'
 import { TOKEN_CAPS } from '../../../shared/pricing'
