@@ -158,6 +158,11 @@ export function createRoutines(ctx: {
       if (input.id !== undefined && !old) throw new Error('Unknown routine')
       const { worktree, message, schedule } = input
       const allow = input.allow?.map((rule) => rule.trim()).filter(Boolean) ?? []
+      const on = {
+        ...(input.on?.label && { label: input.on.label.trim() }),
+        ...(input.on?.checksFail === true && { checksFail: true as const })
+      }
+      const triggered = Object.keys(on).length > 0
       const routine: Routine = {
         id: old?.id ?? randomUUID(),
         projectId: project.id,
@@ -167,6 +172,8 @@ export function createRoutines(ctx: {
         message,
         ...(allow.length > 0 && { allow }),
         ...(schedule && { schedule: { days: [...schedule.days], time: schedule.time } }),
+        ...(triggered && { on }),
+        ...(triggered && input.dailyCap !== undefined && { dailyCap: input.dailyCap }),
         scheduledThrough:
           old && sameSchedule(old.schedule, schedule) ? old.scheduledThrough : now().toISOString()
       }

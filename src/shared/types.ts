@@ -220,6 +220,7 @@ export type SessionRecord = {
   model?: Model
   routineId?: string
   scheduled?: true
+  trigger?: RunTrigger
   tokenCap?: number
   capped?: true
   sandbox?: { allowedDomains: string[] }
@@ -259,7 +260,15 @@ export type AutoReview = {
 /** When a routine runs: days as `Date.getDay()` and a 24-hour "HH:MM" local time. */
 export type Schedule = { days: number[]; time: string }
 
-/** A saved way to start a session without a ticket; `repo` is `owner/name`, `allow` the permission rules its sessions use without asking, and `scheduledThrough` the ISO time the timer last checked it up to. */
+/** The events that start a routine: a ticket getting `label`, or a ticket's pull request checks starting to fail. */
+export type RoutineEvents = { label?: string; checksFail?: true }
+
+/** The event that started a routine's run; `ticket` is the ticket key. */
+export type RunTrigger =
+  | { kind: 'label'; label: string; ticket: string }
+  | { kind: 'checks'; ticket: string }
+
+/** A saved way to start a session without a ticket; `repo` is `owner/name`, `allow` the permission rules its sessions use without asking, `scheduledThrough` the ISO time the timer last checked it up to, and `dailyCap` the most event starts a day. */
 export type Routine = {
   id: string
   projectId: string
@@ -270,12 +279,14 @@ export type Routine = {
   allow?: string[]
   schedule?: Schedule
   scheduledThrough?: string
+  on?: RoutineEvents
+  dailyCap?: number
 }
 
 /** A routine as the form saves it, with no `id` when it is new. */
 export type RoutineInput = Pick<
   Routine,
-  'projectId' | 'name' | 'repo' | 'worktree' | 'message' | 'allow' | 'schedule'
+  'projectId' | 'name' | 'repo' | 'worktree' | 'message' | 'allow' | 'schedule' | 'on' | 'dailyCap'
 > & {
   id?: string
 }
@@ -308,16 +319,17 @@ export type RoutineChatTurn = {
 /** Claude's answer in the routine chat, with the whole routine when it proposes one. */
 export type RoutineChatReply = { conversationId: string; reply: string; routine?: RoutineProposal }
 
-/** A scheduled run that didn't start: Sandtable was closed, its last session was open, or the start failed with `error`. */
+/** A scheduled or event run that didn't start: Sandtable was closed, its last session was open, the daily cap was reached, or the start failed with `error`. */
 export type SkippedRun = {
   routineId: string
   at: string
-  reason: 'closed' | 'running' | 'failed'
+  reason: 'closed' | 'running' | 'failed' | 'capped'
   error?: string
+  trigger?: RunTrigger
 }
 
 /** One run in a routine's history: a skipped time or a session, where `place` is its branch or "main checkout", `waitingFor` the tool it stopped to ask permission for, and `warning` its start warning. */
-export type RoutineRun = { at: string; scheduled: boolean } & (
+export type RoutineRun = { at: string; scheduled: boolean; trigger?: RunTrigger } & (
   | { kind: 'skipped'; reason: SkippedRun['reason']; error?: string }
   | {
       kind: 'session'

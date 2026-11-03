@@ -61,6 +61,24 @@ describe('routines', () => {
     expect(await t.orch.listRoutines('p1')).toEqual([moved])
   })
 
+  it('saves triggers and a cap', async () => {
+    const t = setup()
+    await t.orch.reconnect()
+    const r = await t.orch.saveRoutine({
+      ...input,
+      on: { label: ' triage ', checksFail: true },
+      dailyCap: 3
+    })
+    expect(r).toMatchObject({ on: { label: 'triage', checksFail: true }, dailyCap: 3 })
+    const off = await t.orch.saveRoutine({
+      ...r,
+      on: { checksFail: false as unknown as true },
+      dailyCap: 3
+    })
+    expect(off).not.toHaveProperty('on')
+    expect(off).not.toHaveProperty('dailyCap')
+  })
+
   it('asks for a repo when none is picked', async () => {
     const t = setup()
     await t.orch.reconnect()

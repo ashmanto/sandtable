@@ -138,4 +138,21 @@ describe('routines', () => {
       'Shorten the first message'
     )
   })
+
+  it('checks the trigger label and the daily cap', () => {
+    const base = { projectId: 'p1', name: 'N', repo: 'a/b', worktree: false, message: 'Go' }
+    const on = { label: 'triage' }
+    expect(routineProblem({ ...base, on, dailyCap: 50 }, [], 'Shop')).toBeNull()
+    expect(routineProblem({ ...base, on: { label: ' ' } }, [], 'Shop')).toBe('Enter a label')
+    expect(routineProblem({ ...base, on: { label: 3 as unknown as string } }, [], 'Shop')).toBe(
+      'Enter a label'
+    )
+    expect(routineProblem({ ...base, on: { label: 'l'.repeat(101) } }, [], 'Shop')).toBe(
+      'Shorten the label'
+    )
+    for (const dailyCap of [0, 51, 2.5, '5' as unknown as number])
+      expect(routineProblem({ ...base, on, dailyCap }, [], 'Shop')).toBe(
+        'Enter a daily cap from 1 to 50'
+      )
+  })
 })

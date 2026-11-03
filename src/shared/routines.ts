@@ -1,6 +1,9 @@
 import { tooLong } from './sessions'
 import type { Routine, RoutineInput, Schedule } from './types'
 
+/** The most event starts a day a routine has unless it sets its own. */
+export const DEFAULT_DAILY_CAP = 5
+
 const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 /** The local times `schedule` falls on after `after`, up to and including `until`, oldest first. */
@@ -112,5 +115,13 @@ export function routineProblem(
       return 'Pick days from the list'
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(input.schedule.time)) return 'Enter a time such as 02:00'
   }
+  const label = input.on?.label
+  if (label !== undefined) {
+    if (typeof label !== 'string' || !label.trim()) return 'Enter a label'
+    if (label.trim().length > 100) return 'Shorten the label'
+  }
+  const cap = input.dailyCap
+  if (cap !== undefined && !(Number.isInteger(cap) && cap >= 1 && cap <= 50))
+    return 'Enter a daily cap from 1 to 50'
   return null
 }
