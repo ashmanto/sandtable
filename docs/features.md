@@ -735,10 +735,9 @@ refusal, a notification title, or a format example.
   compactions, and the model, effort, and permission mode.
 - A **Where** row shows the worktree, removed worktree, or main checkout, its branch, repos, and
   folders, and **Sandboxed** while it isn't removed.
-- Under each folder, until the worktree is removed, **Open in Finder** and **Open in <editor>** open
-  it. The editor is the project's **Editor**, or the first launcher found: `code`, `cursor`, or a
-  JetBrains one such as `idea`, also in JetBrains Toolbox's scripts folder. With none found, only
-  **Open in Finder** shows.
+- Under each folder, until the worktree is removed, **Open in** lists **Finder** and the project's
+  editor, which opens with `open -a`. With no editor chosen, it lists **Set editor…**, which saves
+  the app you choose to the project. A missing app is refused.
 - A work row shows files changed with lines added and removed, the pull request and its stage, and
   review findings. The files and findings open **Changes**.
 - Rows also show subagents and background shells still running, and Claude's to-do list.
@@ -1065,9 +1064,9 @@ refusal, a notification title, or a format example.
 
 ### Editor
 
-- **Editor** is set per project on the **Review** step, from the editors whose launcher is found.
-  **First found**, the default, uses the first one. The row is hidden when none is found
-  and the project saved none.
+- **Editor** is set per project on the **Review** step: **Choose…** opens the open dialog in
+  `/Applications` and saves the app, and **Clear** removes it. Sandtable never picks an editor on
+  its own, and a saved launcher name such as `code` counts as none.
 
 ### Model
 
