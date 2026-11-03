@@ -1176,7 +1176,8 @@ refusal, a notification title, or a format example.
 - A routine is a saved way to start a session without a ticket: a name, a repo, the main checkout
   or a new worktree, and a first message.
 - You start it with one click, or give it days and a time and Sandtable starts it then, while
-  Sandtable is open.
+  Sandtable is open. It can also start on its own when a ticket gets a label or its checks fail
+  (see [Triggers](#triggers)).
 - Each run is a new session named after the routine and its start time, such as "Dependency check,
   Oct 28, 02:00".
 - Sandtable changes nothing on GitHub, Linear, or Jira for a routine.
@@ -1190,10 +1191,25 @@ refusal, a notification title, or a format example.
 - With remote control on for the project, a routine's session can also be reached from claude.ai
   while no one watches the Mac.
 
+### Triggers
+
+- A routine can start when a ticket on the board gets a label you name, in any case, and when a
+  GitHub ticket's pull request checks start failing. Linear and Jira tickets have only the label.
+- Sandtable sees both at the board sync, about once a minute, and starts one run per event. A
+  label added while Sandtable was closed starts its run at the next sync.
+- The run's first message ends with the trigger and the ticket's key, title, and URL. The run
+  keeps the routine's place and allowed rules, and Sandtable changes nothing on the ticket.
+- A routine with a trigger has **Automatic starts a day**, 5 unless you change it, from 1 to 50.
+  Events past it that day are skipped as "Daily cap reached". Scheduled runs and your clicks
+  don't count.
+- An event that arrives while the routine's last session is open and not **Done** is skipped.
+- Saving a routine doesn't start runs for tickets that already have its label.
+
 ### Run history and states
 
-- **Run history** lists the routine's runs and skipped times, newest first, with each run's tokens,
-  API price, and Claude's last message.
+- **Run history** lists the routine's runs and skipped times, newest first, with what started
+  each one (**On schedule**, **Started by you**, the label and ticket, or failed checks and the
+  ticket), its tokens, API price, and Claude's last message.
 - A run waiting at a permission prompt names the tool it asked for, such as `Bash(npm outdated)`,
   in **Run history**.
 - A run that ends its turn on its own shows **Done**, sends no notification, and doesn't hold the
