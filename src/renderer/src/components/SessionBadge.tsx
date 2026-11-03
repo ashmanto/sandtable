@@ -1,20 +1,33 @@
+import { useEffect, useReducer } from 'react'
 import { Badge } from '@/components/ui/badge'
-import { countLabel, stateLook, type CardState, type Counted } from '@/lib/card'
+import { countLabel, stateLook, stateWords, type CardState, type Counted } from '@/lib/card'
 import { cn } from '@/lib/utils'
+import type { SessionStop } from '../../../shared/types'
 
 export type { CardState }
 
-/** A state as a colored chip with its icon and its name in words; `short` shows Done, session open as Done, and `labelClassName` styles the words. */
+/** A state as a colored chip with its icon and its name in words; `short` shows Done, session open as Done, `stop` adds a limit's reset time and the failure as a tooltip, and `labelClassName` styles the words. */
 export function SessionBadge({
   state,
+  stop,
   short = false,
   labelClassName
 }: {
   state: CardState
+  stop?: SessionStop
   short?: boolean
   labelClassName?: string
 }): React.JSX.Element {
-  const { label, icon: Icon, className } = stateLook[state]
+  const { icon: Icon, className } = stateLook[state]
+  const [, rerender] = useReducer((n: number) => n + 1, 0)
+  const resetsAt = state === 'limitReached' ? stop?.resetsAt : undefined
+  useEffect(() => {
+    const wait = resetsAt === undefined ? 0 : resetsAt - Date.now()
+    if (wait <= 0) return
+    const timer = setTimeout(rerender, wait)
+    return () => clearTimeout(timer)
+  }, [resetsAt])
+  const label = stateWords(state, stop)
   const words =
     short && state === 'doneOpen' ? (
       <>
@@ -24,9 +37,17 @@ export function SessionBadge({
       label
     )
   return (
-    <Badge className={className}>
+    <Badge
+      className={className}
+      title={
+        (state === 'limitReached' || state === 'apiError') && stop?.message
+          ? stop.message
+          : undefined
+      }
+    >
       <Icon aria-hidden />
       {labelClassName ? <span className={labelClassName}>{words}</span> : words}
+      {state === 'apiError' && stop?.message && <span className="sr-only">: {stop.message}</span>}
     </Badge>
   )
 }

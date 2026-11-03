@@ -263,7 +263,7 @@ export const Changes = memo(function Changes({
     setLastState(session.state)
     if (
       lastState === 'running' &&
-      (session.state === 'needsYou' || session.state === 'reviewing' || session.state === 'idle')
+      ['needsYou', 'reviewing', 'idle', 'limitReached', 'apiError'].includes(session.state)
     )
       setAttempt((n) => n + 1)
   }

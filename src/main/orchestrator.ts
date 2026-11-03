@@ -45,6 +45,7 @@ import type {
   SessionCommand,
   SessionRecord,
   SessionState,
+  SessionStop,
   SetupProgress,
   SetupSuggestion,
   Step,
@@ -123,7 +124,7 @@ import {
   fitBytes,
   MAX_NOTE_BYTES
 } from './sessions/claudeLaunch'
-import { readActivity } from './sessions/activity'
+import { readActivity, readStop, type Stopped } from './sessions/activity'
 import { findConversation, parseConversation, readLastEntries } from './sessions/conversation'
 import { commandsOf } from './sessions/commands'
 import {
@@ -168,6 +169,8 @@ const SYNC_MS = 60_000
 const STALE_MS = 30 * 60_000
 const POLL_MS = 3_000
 const NOTIFY_WAIT_MS = 10_000
+const STOP_READS = 4
+const STOP_RETRY_MS = 500
 const SCHEDULE_MS = 30_000
 const EARLY_EXIT_MS = 10_000
 const START_EVENT_MS = 30_000
@@ -731,7 +734,8 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     const p = projects.find((x) => x.id === s.projectId)
     return !!p && isDoneOpen(s, ticketOf(s), statusMapOf(p))
   }
-  const waiting = (s: SessionRecord): boolean => s.state === 'needsYou' && !doneOpen(s)
+  const waiting = (s: SessionRecord): boolean =>
+    (s.state === 'needsYou' || s.state === 'apiError') && !doneOpen(s)
 
   const sidebarList = (): SidebarSession[] => {
     const onBoard = isShown(shownTicketKeys())
@@ -805,11 +809,13 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
 
   const notifyNeedsYou = (s: SessionRecord, project: Project, fresh: Promise<unknown>): void => {
     const { ticketKey } = s
-    const capped = s.capped && 'Reached its token cap'
+    const reason =
+      (s.capped && 'Reached its token cap') ||
+      (s.state === 'apiError' && ['API error', s.stop?.message].filter(Boolean).join(': '))
     if (!ticketKey)
       return deps.notify(
         `Needs you: ${s.name}`,
-        capped || project.name,
+        reason || project.name,
         open({ projectId: s.projectId, sessionId: s.id })
       )
     if (reviewLoop.pending(s.id) && !s.asking && !s.capped)
@@ -818,10 +824,10 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     const limit = new Promise((resolve) => (timer = setTimeout(resolve, NOTIFY_WAIT_MS)))
     void Promise.race([fresh, limit]).then(() => {
       clearTimeout(timer)
-      if (s.state !== 'needsYou' || doneOpen(s)) return
+      if (!waiting(s)) return
       deps.notify(
         `Needs you: ${shortName(ticketKey)}`,
-        capped || (ticketOf(s)?.title ?? ticketKey),
+        reason || (ticketOf(s)?.title ?? ticketKey),
         open({ projectId: s.projectId, ticketKey })
       )
     })
@@ -831,9 +837,11 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     const state = shownState(s, next)
     if (s.state === state) return
     s.state = state
+    if (state !== 'limitReached' && state !== 'apiError') delete s.stop
     if (state === 'running') reviewLoop.leaveRound(s.id)
     if (state === 'finished') {
       commandLists.delete(s.id)
+      eventCounts.delete(s.id)
       setAsking(s, false)
       if (warning) s.startWarning = warning
       else delete s.startWarning
@@ -843,20 +851,52 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     if (state === 'finished' && s.ticketKey && !resuming.has(s.id))
       void summarize(s.id, true).catch(() => undefined)
     const project = projects.find((p) => p.id === s.projectId)
-    if ((state !== 'needsYou' && state !== 'done' && state !== 'reviewing') || !project) return
+    if (!['needsYou', 'apiError', 'done', 'reviewing'].includes(state) || !project) return
     const fresh = joinSync(s.projectId).catch(() => null)
     if (state === 'done') return
-    void reviewLoop.autoRound(s)
+    if (state !== 'apiError') void reviewLoop.autoRound(s)
     notifyNeedsYou(s, project, fresh)
   }
+
+  const failedState = async (
+    s: SessionRecord,
+    reads = STOP_READS
+  ): Promise<{ state: SessionState; stop: SessionStop }> => {
+    let stop: Stopped | null = null
+    for (let read = 0; read < reads && !stop; read++) {
+      if (read) await new Promise((resolve) => setTimeout(resolve, STOP_RETRY_MS))
+      const file = (await conversationFiles(s).catch(() => [])).at(-1)?.file
+      stop = file ? await readStop(file).catch(() => null) : null
+    }
+    const { limit, ...rest } = stop ?? { limit: false, message: '' }
+    return { state: limit ? 'limitReached' : 'apiError', stop: rest }
+  }
+  const lastStateOf = async (s: SessionRecord): Promise<SessionState | null> => {
+    const last = await deps.events.readLastState(s.eventsFile)
+    if (last !== 'apiError') return last
+    const { state, stop } = await failedState(s, 1)
+    s.stop = stop
+    return state
+  }
+  const eventCounts = new Map<string, number>()
 
   const onEvent = (sessionId: string, state: SessionState | null, asking: boolean): void => {
     void liveView.eventSeen(sessionId)
     const s = sessions.find((x) => x.id === sessionId)
     if (!s || !isLive(s)) return
+    const count = (eventCounts.get(s.id) ?? 0) + (state ? 1 : 0)
+    eventCounts.set(s.id, count)
     const askingChanged = !!s.asking !== asking
     setAsking(s, asking)
-    if (state && shownState(s, state) !== s.state) setState(s, state)
+    if (state === 'apiError')
+      void failedState(s).then(({ state: next, stop }) => {
+        if (eventCounts.get(s.id) !== count || !isLive(s)) return
+        s.stop = stop
+        if (s.state !== next) return setState(s, next)
+        void persist().catch(() => undefined)
+        changed(s.projectId)
+      })
+    else if (state && shownState(s, state) !== s.state) setState(s, state)
     else if (askingChanged) {
       void persist().catch(() => undefined)
       changed(s.projectId)
@@ -1187,10 +1227,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         if (earlier) s.startWarning = earlier
         else delete s.startWarning
         setAsking(s, await deps.events.readAsking(s.eventsFile))
-        setState(
-          s,
-          (await deps.events.readLastState(s.eventsFile)) ?? (s.unprompted ? 'idle' : 'running')
-        )
+        setState(s, (await lastStateOf(s)) ?? (s.unprompted ? 'idle' : 'running'))
         void persist().catch(() => undefined)
         changed(s.projectId)
       } else if (by <= now().getTime() && !notStarted(s)) {
@@ -1954,8 +1991,8 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           delete s.startWarning
         }
         setAsking(s, alive && (notStarted(s) || (await deps.events.readAsking(s.eventsFile))))
-        if (alive)
-          s.state = shownState(s, (await deps.events.readLastState(s.eventsFile)) ?? s.state)
+        if (alive) s.state = shownState(s, (await lastStateOf(s)) ?? s.state)
+        if (s.state !== 'limitReached' && s.state !== 'apiError') delete s.stop
         if (alive && notStarted(s)) startBy.set(s.id, now().getTime())
       }
     await persist()
@@ -2610,7 +2647,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
 
     async clearNeedsYou(sessionId: string): Promise<void> {
       const s = sessionById(sessionId)
-      if (s.state !== 'needsYou') return
+      if (s.state !== 'needsYou' && s.state !== 'apiError') return
       if (s.capped) throw new Error('Raise its token cap first.')
       if (notStarted(s))
         throw new Error("Answer Claude Code's folder trust prompt in the terminal first.")

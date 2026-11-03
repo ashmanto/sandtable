@@ -275,6 +275,7 @@ const HOOK_EVENTS = [
   'PermissionRequest',
   'SubagentStop',
   'Stop',
+  'StopFailure',
   'SessionStart'
 ]
 

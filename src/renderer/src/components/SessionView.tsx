@@ -113,7 +113,7 @@ export function SessionView({
             />
           )}
         </div>
-        <SessionBadge state={session.state} />
+        <SessionBadge state={session.state} stop={session.stop} />
         <ClearNeedsYou session={session} run={run} disabled={pending} icon={narrow} />
         <RaiseCap session={session} run={run} disabled={pending} icon={narrow} />
         {!removed && folded && <GaugesButton {...gauges} />}

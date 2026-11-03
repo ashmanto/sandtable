@@ -867,6 +867,14 @@ describe('TicketView', () => {
       expect(document.activeElement).toBe(changes)
     })
 
+    it('shows API error on the hidden Conversation tab', async () => {
+      renderView(boardView({ tickets: [t], sessions: [session(t.key, { state: 'apiError' })] }))
+      await userEvent.click(screen.getByRole('tab', { name: /Details/ }))
+      expect(
+        within(screen.getByRole('tab', { name: /Conversation/ })).getByText('API error')
+      ).toBeInTheDocument()
+    })
+
     it('shows no Needs you on the hidden Conversation tab when the session is done-open', async () => {
       const done = ticket(147, { status: 'Done' })
       renderView(

@@ -9,11 +9,21 @@ import {
   GitMerge,
   GitPullRequest,
   GitPullRequestClosed,
-  ScanSearch
+  Hourglass,
+  ScanSearch,
+  TriangleAlert
 } from 'lucide-react'
 import { IN_PROGRESS_LABEL } from '../../../shared/columns'
 import { serviceOf } from '../../../shared/repo'
-import type { PrStage, Project, SessionRecord, SessionState, Ticket } from '../../../shared/types'
+import { resetsText } from '../../../shared/sessionStatus'
+import type {
+  PrStage,
+  Project,
+  SessionRecord,
+  SessionState,
+  SessionStop,
+  Ticket
+} from '../../../shared/types'
 
 /** A card or ticket state: a session state, a done ticket whose session is open, or a failed folder check. */
 export type CardState = SessionState | 'doneOpen' | 'cantStart'
@@ -33,6 +43,8 @@ export const stateLook: Record<
   },
   done: { label: 'Done', icon: CircleCheckBig, className: 'bg-added-soft text-added' },
   finished: { label: 'Finished', icon: CircleCheck, className: 'bg-neutral-soft text-neutral' },
+  limitReached: { label: 'Limit reached', icon: Hourglass, className: 'bg-neutral-soft text-fg-2' },
+  apiError: { label: 'API error', icon: TriangleAlert, className: 'bg-danger-soft text-danger' },
   doneOpen: {
     label: 'Done, session open',
     icon: CircleDashed,
@@ -41,12 +53,19 @@ export const stateLook: Record<
   cantStart: { label: "Can't start", icon: CircleX, className: 'bg-danger-soft text-danger' }
 }
 
+/** A state's words, with a plan limit's reset time when the session has one. */
+export const stateWords = (state: CardState, stop?: SessionStop): string =>
+  state === 'limitReached' && stop?.resetsAt
+    ? `${stateLook[state].label} · ${resetsText(stop.resetsAt, new Date())}`
+    : stateLook[state].label
+
 /** Another project's session state as this board shows it: Done, session open while the ticket is in Done here. */
 export const elsewhereState = (session: SessionRecord, done: boolean): CardState =>
   done ? 'doneOpen' : session.state
 
 /** A state that has a session count. */
-export type Counted = 'needsYou' | 'running' | 'reviewing' | 'idle' | 'done' | 'doneOpen'
+export type Counted =
+  'needsYou' | 'running' | 'reviewing' | 'idle' | 'done' | 'doneOpen' | 'limitReached'
 
 /** A state's session count in words: "2 running". */
 export const countLabel: Record<Counted, (n: number) => string> = {
@@ -55,7 +74,8 @@ export const countLabel: Record<Counted, (n: number) => string> = {
   reviewing: (n) => `${n} reviewing`,
   idle: (n) => `${n} idle`,
   done: (n) => `${n} done`,
-  doneOpen: (n) => `${n} done, session open`
+  doneOpen: (n) => `${n} done, session open`,
+  limitReached: (n) => `${n} at ${n === 1 ? 'its' : 'their'} limit`
 }
 
 /** A ticket's labels without Sandtable's own `sandtable: in progress`. */

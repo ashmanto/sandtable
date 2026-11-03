@@ -469,6 +469,7 @@ describe('ProjectSidebar', () => {
       adhoc({ id: 'a2', state: 'idle' }),
       adhoc({ id: 'a3', state: 'idle' }),
       adhoc({ id: 'a5', routineId: 'r1', state: 'done' }),
+      adhoc({ id: 'a8', state: 'limitReached' }),
       { ...adhoc({ id: 'a4', ticketKey: 'o/shop#2', state: 'needsYou' }), done: true as const }
     ]
     render(sidebar({ sessions, needsYou: { p1: 1 } }))
@@ -480,7 +481,8 @@ describe('ProjectSidebar', () => {
       '2 reviewing',
       '2 idle',
       '1 done',
-      '1 done, session open'
+      '1 done, session open',
+      '1 at its limit'
     ])
   })
 

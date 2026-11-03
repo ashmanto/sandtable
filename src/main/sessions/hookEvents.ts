@@ -46,6 +46,8 @@ export function stateFromEvent(input: HookInput, agentInFlight = false): Session
       return 'running'
     case 'Stop':
       return inFlight(input).length > 0 ? null : 'needsYou'
+    case 'StopFailure':
+      return 'apiError'
     case 'Notification':
       if (input.notification_type === 'idle_prompt') return agentInFlight ? null : 'needsYou'
       return ASKING_NOTIFICATIONS.includes(input.notification_type as string) ? 'needsYou' : null
@@ -69,6 +71,7 @@ const askingFromEvent = (input: HookInput): boolean | null => {
     case 'PostToolUse':
       return input.agent_id ? null : false
     case 'Stop':
+    case 'StopFailure':
     case 'UserPromptSubmit':
     case 'SandtableStopped':
     case 'SandtableAnswered':
@@ -103,8 +106,10 @@ function stateFromLine(line: string, memory: Memory): SessionState | null {
   if (typeof input !== 'object' || !input) return null
   const name = (input as HookInput).hook_event_name
   const repeat = name === 'Notification' && (input as HookInput).notification_type === 'idle_prompt'
+  const failed = memory.last === 'apiError'
   const ignored =
-    (name === 'SandtableIdle' && memory.last !== 'needsYou') || (repeat && memory.last === 'idle')
+    (name === 'SandtableIdle' && memory.last !== 'needsYou' && !failed) ||
+    (repeat && (memory.last === 'idle' || failed))
   const state = ignored ? null : stateFromEvent(input, memory.agentInFlight)
   memory.asking = askingFromEvent(input) ?? memory.asking
   memory.background = Array.isArray((input as HookInput).background_tasks)

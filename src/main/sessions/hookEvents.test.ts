@@ -49,6 +49,7 @@ describe('stateFromEvent', () => {
     expect(stateFromEvent(ev('PostToolUse', { agent_id: 'a1' }))).toBeNull()
     expect(stateFromEvent(ev('SandtableIdle'))).toBe('idle')
     expect(stateFromEvent(JSON.parse(STOPPED_EVENT))).toBe('needsYou')
+    expect(stateFromEvent(ev('StopFailure', { error: 'rate_limit' }))).toBe('apiError')
   })
 
   it('needs you when a resumed conversation starts, and ignores other starts', () => {
@@ -202,6 +203,16 @@ describe('readLastState', () => {
     return readLastState(file)
   }
 
+  it("keeps a failed turn through Claude Code's idle reminder", async () => {
+    expect(
+      await last(line('UserPromptSubmit') + line('StopFailure') + notification('idle_prompt'))
+    ).toBe('apiError')
+  })
+
+  it('clears a failed turn to Idle', async () => {
+    expect(await last(line('StopFailure') + IDLE_EVENT + '\n')).toBe('idle')
+  })
+
   it('returns the state of the last known event, skipping blank and malformed lines', async () => {
     expect(
       await last(line('UserPromptSubmit') + line('Stop') + line('PreToolUse') + '\n{oops\n')
@@ -288,6 +299,10 @@ describe('readAsking', () => {
     await writeFile(file, text)
     return readAsking(file)
   }
+
+  it('ends asking at a StopFailure', async () => {
+    expect(await asking(notification('permission_prompt') + line('StopFailure'))).toBe(false)
+  })
 
   it('is true from a Notification that asks you until the turn moves on', async () => {
     for (const type of [

@@ -735,8 +735,10 @@ export function TicketView({
       icon: MessagesSquare,
       label: 'Conversation',
       extra: tab !== 'conversation' &&
-        (session?.state === 'needsYou' || session?.state === 'reviewing') &&
-        !doneOpen && <SessionBadge state={session.state} />,
+        (session?.state === 'needsYou' ||
+          session?.state === 'reviewing' ||
+          session?.state === 'apiError') &&
+        !doneOpen && <SessionBadge state={session.state} stop={session.stop} />,
       className: 'flex flex-col',
       content: gauges && (
         <SessionConversation
@@ -757,7 +759,7 @@ export function TicketView({
                     {sessions.map((s) => (
                       <SelectItem key={s.id} value={s.id}>
                         {fullTime(s.startedAt)}
-                        <SessionBadge state={s.state} />
+                        <SessionBadge state={s.state} stop={s.stop} />
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -861,7 +863,9 @@ export function TicketView({
         {blocked && <SessionBadge state="cantStart" />}
         {session && (
           <>
-            {!blocked && <SessionBadge state={doneOpen ? 'doneOpen' : session.state} />}
+            {!blocked && (
+              <SessionBadge state={doneOpen ? 'doneOpen' : session.state} stop={session.stop} />
+            )}
             {!doneOpen && (
               <ClearNeedsYou session={session} run={run} disabled={pending} icon={narrow} />
             )}

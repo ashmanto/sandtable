@@ -951,6 +951,10 @@ refusal, a notification title, or a format example.
 - A session stays **Running** while Claude Code's background work runs.
 - A background command that keeps running, such as a dev server, shows **Needs you** (**Done** for a
   routine's session) after about a minute.
+- **Limit reached**, with its reset time, shows when a turn ends on a plan limit, and **API error**
+  when it ends on any other API failure after Claude Code's own retries, read from Claude Code's
+  `StopFailure` hook and the transcript's error row. **API error** counts toward **Needs you** and
+  notifies; **Limit reached** doesn't.
 - Sessions live in tmux, so they survive closing Sandtable; on start Sandtable reconnects to them.
 
 ### Activity
@@ -962,12 +966,12 @@ refusal, a notification title, or a format example.
   step, opens the last five steps in place.
 - A list row and the side panel show it as a pill whose tooltip lists the last steps, and an open
   conversation shows the latest step at its end.
-- The state word stays beside the step. **Needs you**, **Reviewing**, **Idle**, **Done**, and
-  finished sessions show no step.
+- The state word stays beside the step. **Needs you**, **Reviewing**, **Idle**, **Done**,
+  **Limit reached**, **API error**, and finished sessions show no step.
 
 ### Clear Needs you
 
-- **Clear Needs you**, on a **Needs you** card, in the ticket and session view headers, and on a
+- **Clear Needs you**, on a **Needs you** or **API error** card, in the ticket and session view headers, and on a
   sidebar session row, moves the session to **Idle** without ending it.
 - An **Idle** session doesn't count toward the sidebar's **Needs you** and sends no notification.
 - A session stays **Idle** across restarts until Claude stops again, asks you something, or is

@@ -371,6 +371,11 @@ describe('hookSettings', () => {
           { hook_event_name: 'SubagentStop', agent_id: 'a1' }
         ],
         ['SessionStart', JSON.stringify(input('SessionStart')), logged('SessionStart')],
+        [
+          'StopFailure',
+          JSON.stringify({ ...input('StopFailure'), error: 'rate_limit' }),
+          { ...logged('StopFailure'), error: 'rate_limit' }
+        ],
         ['Stop', JSON.stringify(input('Stop')), logged('Stop')],
         ['Stop', JSON.stringify(input('Stop'), null, 2) + '\n', logged('Stop')]
       ]

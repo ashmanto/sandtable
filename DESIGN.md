@@ -54,15 +54,18 @@ them through Tailwind classes and never name a raw color.
   with `ScanSearch`, whose opacity pulses to 55% and back every 1.6 s. **Done,
   session open** is `neutral-soft` with `fg` text, a 1 px `line-2` inset ring, and
   `CircleDashed`; a sidebar session row shortens it to **Done**, with "Done, session open" as
-  its accessible name. A **Needs you** sidebar row follows its badge with "asking" or "capped" in
+  its accessible name. **Limit reached** is `fg-2` on `neutral-soft` with `Hourglass`, followed by
+  the reset time, as "Limit reached · Resets 16:00". **API error** is `danger` on `danger-soft`
+  with `TriangleAlert`; Claude Code's one-line message is its chip's tooltip and, hidden, part of its
+  accessible name. A **Needs you** sidebar row follows its badge with "asking" or "capped" in
   `fg-3`, hidden like the badge's word in a narrow sidebar but kept in its name. A sidebar session row's tooltip is its full title and state word, as
   "Rate limits — Idle", and a live session's usage on a line of its own. **Can't start** is `danger` on `danger-soft` with
   `CircleX`. The sidebar's per-project count is the bare number with `CircleAlert` in the same
   `amber` on `amber-soft`, with "3 need you" (or "1 needs you") as its accessible name and
   tooltip; the total beside **Show sidebar** is the same chip in those words. A collapsed
-  project's **Running**, **Reviewing**, **Idle**, **Done**, and **Done, session open** counts are
-  the same bare chip in that state's colors and icon, named "2 running", "1 reviewing", "1 idle",
-  "1 done", or "1 done, session open"; the **Reviewing** count's icon pulses too. A
+  project's **Running**, **Reviewing**, **Idle**, **Done**, **Done, session open**, and
+  **Limit reached** counts are the same bare chip in that state's colors and icon, named "2 running",
+  "1 reviewing", "1 idle", "1 done", "1 done, session open", or "1 at its limit"; the **Reviewing** count's icon pulses too. A
   project's count chips take keyboard focus, and their tooltip is the count in words followed by
   the title of each session in that state, one per line.
 - Pull request states are chips with a word: **Open** is `blue` on `blue-soft`, **Merged** is

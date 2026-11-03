@@ -162,7 +162,11 @@ export type TicketDetails = {
   }[]
 }
 
-export type SessionState = 'running' | 'needsYou' | 'reviewing' | 'idle' | 'done' | 'finished'
+export type SessionState =
+  'running' | 'needsYou' | 'reviewing' | 'idle' | 'done' | 'finished' | 'limitReached' | 'apiError'
+
+/** Why a session's turn failed: Claude Code's one-line message and, for a plan limit, its reset time in ms since the epoch. */
+export type SessionStop = { message: string; resetsAt?: number }
 
 /** What the Start check found. */
 export type StartCheck = {
@@ -204,6 +208,7 @@ export type SessionRecord = {
   eventsFile: string
   startedAt: string
   state: SessionState
+  stop?: SessionStop
   asking?: true
   removedAt?: string
   mergedAt?: string
