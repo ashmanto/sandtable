@@ -598,8 +598,8 @@ export function ProjectSidebar({
           <span className="flex gap-0.5">
             {chip('needsYou', count)}
             {!expanded &&
-              (['running', 'reviewing', 'idle', 'done', 'doneOpen'] as const).map((state) =>
-                chip(state, mine.filter((s) => stateOf(s) === state).length)
+              (['running', 'reviewing', 'idle', 'done', 'doneOpen', 'limitReached'] as const).map(
+                (state) => chip(state, mine.filter((s) => stateOf(s) === state).length)
               )}
           </span>
         </DndRow>

@@ -809,13 +809,13 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
 
   const notifyNeedsYou = (s: SessionRecord, project: Project, fresh: Promise<unknown>): void => {
     const { ticketKey } = s
-    const capped =
+    const reason =
       (s.capped && 'Reached its token cap') ||
       (s.state === 'apiError' && ['API error', s.stop?.message].filter(Boolean).join(': '))
     if (!ticketKey)
       return deps.notify(
         `Needs you: ${s.name}`,
-        capped || project.name,
+        reason || project.name,
         open({ projectId: s.projectId, sessionId: s.id })
       )
     if (reviewLoop.pending(s.id) && !s.asking && !s.capped)
@@ -827,7 +827,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       if (!waiting(s)) return
       deps.notify(
         `Needs you: ${shortName(ticketKey)}`,
-        capped || (ticketOf(s)?.title ?? ticketKey),
+        reason || (ticketOf(s)?.title ?? ticketKey),
         open({ projectId: s.projectId, ticketKey })
       )
     })
@@ -858,10 +858,11 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
   }
 
   const failedState = async (
-    s: SessionRecord
+    s: SessionRecord,
+    reads = STOP_READS
   ): Promise<{ state: SessionState; stop: SessionStop }> => {
     let stop: Stopped | null = null
-    for (let read = 0; read < STOP_READS && !stop; read++) {
+    for (let read = 0; read < reads && !stop; read++) {
       if (read) await new Promise((resolve) => setTimeout(resolve, STOP_RETRY_MS))
       const file = (await conversationFiles(s).catch(() => [])).at(-1)?.file
       stop = file ? await readStop(file).catch(() => null) : null
@@ -872,7 +873,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
   const lastStateOf = async (s: SessionRecord): Promise<SessionState | null> => {
     const last = await deps.events.readLastState(s.eventsFile)
     if (last !== 'apiError') return last
-    const { state, stop } = await failedState(s)
+    const { state, stop } = await failedState(s, 1)
     s.stop = stop
     return state
   }

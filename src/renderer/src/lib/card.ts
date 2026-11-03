@@ -65,7 +65,8 @@ export const elsewhereState = (session: SessionRecord, done: boolean): CardState
   done ? 'doneOpen' : session.state
 
 /** A state that has a session count. */
-export type Counted = 'needsYou' | 'running' | 'reviewing' | 'idle' | 'done' | 'doneOpen'
+export type Counted =
+  'needsYou' | 'running' | 'reviewing' | 'idle' | 'done' | 'doneOpen' | 'limitReached'
 
 /** A state's session count in words: "2 running". */
 export const countLabel: Record<Counted, (n: number) => string> = {
@@ -74,7 +75,8 @@ export const countLabel: Record<Counted, (n: number) => string> = {
   reviewing: (n) => `${n} reviewing`,
   idle: (n) => `${n} idle`,
   done: (n) => `${n} done`,
-  doneOpen: (n) => `${n} done, session open`
+  doneOpen: (n) => `${n} done, session open`,
+  limitReached: (n) => `${n} at ${n === 1 ? 'its' : 'their'} limit`
 }
 
 /** A ticket's labels without Sandtable's own `sandtable: in progress`. */

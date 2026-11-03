@@ -201,6 +201,17 @@ describe('Changes', () => {
     expect(api.sessions.changes).toHaveBeenCalledTimes(3)
   })
 
+  it.each(['limitReached', 'apiError'] as const)(
+    'reads again when a turn ends at %s',
+    async (state) => {
+      const s = session('T1', { state: 'running' })
+      const { rerender } = render(<Changes session={s} active />)
+      await screen.findByText('No changes')
+      rerender(<Changes session={{ ...s, state }} active />)
+      await vi.waitFor(() => expect(api.sessions.changes).toHaveBeenCalledTimes(2))
+    }
+  )
+
   it('reads again when an automatic review round starts after Claude stops', async () => {
     const s = session('T1', { state: 'running' })
     const { rerender } = render(<Changes session={s} active />)

@@ -1636,6 +1636,16 @@ describe('hook events', () => {
     expect(t.orch.session('s1')?.stop).toBeUndefined()
   })
 
+  it("doesn't wait for a missing transcript at reconnect", async () => {
+    const t = setup({ sessions: [session()] })
+    t.live.add('st-p1-octo-shop-147')
+    t.lastState.set(session().eventsFile, 'apiError')
+    const started = Date.now()
+    await t.orch.reconnect()
+    expect(Date.now() - started).toBeLessThan(400)
+    expect(t.orch.session('s1')?.state).toBe('apiError')
+  })
+
   it('keeps Limit reached across reconnect', async () => {
     const t = setup({ sessions: [session()] })
     t.live.add('st-p1-octo-shop-147')

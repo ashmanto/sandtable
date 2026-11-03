@@ -38,6 +38,7 @@ export function SessionBadge({
     >
       <Icon aria-hidden />
       {labelClassName ? <span className={labelClassName}>{words}</span> : words}
+      {state === 'apiError' && stop?.message && <span className="sr-only">: {stop.message}</span>}
     </Badge>
   )
 }

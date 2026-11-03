@@ -735,7 +735,9 @@ export function TicketView({
       icon: MessagesSquare,
       label: 'Conversation',
       extra: tab !== 'conversation' &&
-        (session?.state === 'needsYou' || session?.state === 'reviewing') &&
+        (session?.state === 'needsYou' ||
+          session?.state === 'reviewing' ||
+          session?.state === 'apiError') &&
         !doneOpen && <SessionBadge state={session.state} stop={session.stop} />,
       className: 'flex flex-col',
       content: gauges && (
