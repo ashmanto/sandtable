@@ -56,8 +56,7 @@ export const stateLook: Record<
 /** A state's words, with a plan limit's reset time when the session has one. */
 export const stateWords = (state: CardState, stop?: SessionStop): string =>
   state === 'limitReached' && stop?.resetsAt
-    ? // shortcut: the time text refreshes only on re-render; tick a clock if it goes stale on screen.
-      `${stateLook[state].label} · ${resetsText(stop.resetsAt, new Date())}`
+    ? `${stateLook[state].label} · ${resetsText(stop.resetsAt, new Date())}`
     : stateLook[state].label
 
 /** Another project's session state as this board shows it: Done, session open while the ticket is in Done here. */

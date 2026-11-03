@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SessionBadge } from './SessionBadge'
 
@@ -6,7 +6,7 @@ const NOW = new Date(2026, 9, 24, 12, 0)
 const login = 'Login expired · Please run /login'
 
 beforeEach(() => {
-  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
   vi.setSystemTime(NOW)
 })
 afterEach(() => vi.useRealTimers())
@@ -20,6 +20,14 @@ describe('SessionBadge stop', () => {
       />
     )
     expect(screen.getByText(/Limit reached/)).toHaveTextContent(/^Limit reached · Resets 16:00$/)
+  })
+
+  it('turns to Reset at once the reset time passes, without another render', async () => {
+    const resetsAt = NOW.getTime() + 60_000
+    render(<SessionBadge state="limitReached" stop={{ message: 'm', resetsAt }} />)
+    expect(screen.getByText(/Limit reached/)).toHaveTextContent(/Resets 12:01$/)
+    await act(() => vi.advanceTimersByTimeAsync(61_000))
+    expect(screen.getByText(/Limit reached/)).toHaveTextContent(/Reset at 12:01$/)
   })
 
   it('shows Limit reached alone without a reset time', () => {

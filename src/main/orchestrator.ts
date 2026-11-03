@@ -841,6 +841,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     if (state === 'running') reviewLoop.leaveRound(s.id)
     if (state === 'finished') {
       commandLists.delete(s.id)
+      eventCounts.delete(s.id)
       setAsking(s, false)
       if (warning) s.startWarning = warning
       else delete s.startWarning

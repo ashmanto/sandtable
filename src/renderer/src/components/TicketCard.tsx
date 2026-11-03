@@ -784,7 +784,7 @@ export function TicketCard({
                 </DropdownMenu>
               )}
               {session?.remoteControl && !removed && <RemoteMark />}
-              {session && state === 'needsYou' && (
+              {session && (state === 'needsYou' || state === 'apiError') && (
                 <ClearNeedsYou session={session} disabled={busy !== null} run={run} />
               )}
               {session && <RaiseCap session={session} disabled={busy !== null} run={run} />}

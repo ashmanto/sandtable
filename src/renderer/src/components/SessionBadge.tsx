@@ -1,3 +1,4 @@
+import { useEffect, useReducer } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { countLabel, stateLook, stateWords, type CardState, type Counted } from '@/lib/card'
 import { cn } from '@/lib/utils'
@@ -18,6 +19,14 @@ export function SessionBadge({
   labelClassName?: string
 }): React.JSX.Element {
   const { icon: Icon, className } = stateLook[state]
+  const [, rerender] = useReducer((n: number) => n + 1, 0)
+  const resetsAt = state === 'limitReached' ? stop?.resetsAt : undefined
+  useEffect(() => {
+    const wait = resetsAt === undefined ? 0 : resetsAt - Date.now()
+    if (wait <= 0) return
+    const timer = setTimeout(rerender, wait)
+    return () => clearTimeout(timer)
+  }, [resetsAt])
   const label = stateWords(state, stop)
   const words =
     short && state === 'doneOpen' ? (
