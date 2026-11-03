@@ -42,6 +42,7 @@ import type {
   RoutineChatTurn,
   RoutineInput,
   RoutineRun,
+  RunTrigger,
   SessionCommand,
   SessionRecord,
   SessionState,
@@ -938,6 +939,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           m.written.assignees = relane(project, fresh.assignees, m.writtenLanes)
         Object.assign(fresh, m.after)
       }
+      const before = synced.get(projectId)
       synced.set(projectId, {
         tickets,
         syncedAt: now().toISOString(),
@@ -945,6 +947,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       })
       if (merged) mergedPrs.set(projectId, merged.prs)
       persistCache()
+      onSync(projectId, before?.syncedAt ? before.tickets : null, tickets)
       autoFindings(projectId)
       if (stamp !== null) stamps.set(projectId, { stamp, at: startedAt })
     } catch (err) {
@@ -1800,6 +1803,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       routineId?: string
       allow?: string[]
       scheduled?: boolean
+      trigger?: RunTrigger
       model?: Model | null
       setupId?: string
       setup?: false
@@ -1867,7 +1871,8 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         ...(opts.prompt === undefined ? { state: 'idle', unprompted: true } : { state: 'running' }),
         startWarning: fetchWarning(repo.github, made?.fetchError),
         ...(opts.routineId && { routineId: opts.routineId }),
-        ...(opts.scheduled && { scheduled: true as const })
+        ...(opts.scheduled && { scheduled: true as const }),
+        ...(opts.trigger && { trigger: opts.trigger })
       })
     } catch (err) {
       if (made && leftover) await removeTree(made.path, [repo.path]).catch(() => undefined)
@@ -1880,7 +1885,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
   }
 
   let stopped = false
-  const { runSchedules, ...routinesApi } = createRoutines({
+  const { runSchedules, onSync, ...routinesApi } = createRoutines({
     now,
     routines: () => routines,
     setRoutines: (next) => (routines = next),

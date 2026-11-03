@@ -6,11 +6,13 @@ import type {
   Routine,
   RoutineInput,
   RoutineRun,
+  RunTrigger,
   Schedule,
   SessionRecord,
-  SkippedRun
+  SkippedRun,
+  Ticket
 } from '../../shared/types'
-import { dueTimes, routineProblem } from '../../shared/routines'
+import { DEFAULT_DAILY_CAP, dueTimes, routineProblem } from '../../shared/routines'
 import { isLive } from '../../shared/sessions'
 import { shortTime } from '../../shared/time'
 import { daysBefore } from '../../shared/visibleTickets'
@@ -22,6 +24,11 @@ import { transcriptUsage } from './usage'
 
 const START_WINDOW_MS = 2 * 60_000
 const CLOCK_SLACK_MS = 5 * 60_000
+
+const triggerLine = (trigger: RunTrigger, t: Ticket): string =>
+  trigger.kind === 'label'
+    ? `Started because ${t.key} got the label ${trigger.label}: ${t.title} (${t.url})`
+    : `Started because the pull request checks of ${t.key} are failing: ${t.title} (${t.url})`
 
 const sameSchedule = (a?: Schedule, b?: Schedule): boolean =>
   a?.time === b?.time && [...(a?.days ?? [])].sort().join() === [...(b?.days ?? [])].sort().join()
@@ -60,9 +67,13 @@ export function createRoutines(ctx: {
       routineId?: string
       allow?: string[]
       scheduled?: boolean
+      trigger?: RunTrigger
     }
   ) => Promise<string>
-}): RoutinesApi & { runSchedules: () => Promise<void> } {
+}): RoutinesApi & {
+  runSchedules: () => Promise<void>
+  onSync: (projectId: string, before: Ticket[] | null, after: Ticket[]) => void
+} {
   const {
     now,
     resuming,
@@ -84,16 +95,20 @@ export function createRoutines(ctx: {
       .some(
         (s) => s.routineId === r.id && ((isLive(s) && s.state !== 'done') || resuming.has(s.id))
       )
-  const startRoutine = async (r: Routine, scheduled: boolean): Promise<string> => {
+  const startRoutine = async (
+    r: Routine,
+    opts: { scheduled?: boolean; trigger?: RunTrigger; prompt?: string } = {}
+  ): Promise<string> => {
     if (routineBusy(r)) throw new Error(`${r.name}'s last session is still open`)
     startingRoutines.add(r.id)
     try {
       return await createSession(projectById(r.projectId), r.repo, r.worktree, {
         name: (startedAt) => `${r.name}, ${shortTime(startedAt)}`,
-        prompt: r.message,
+        prompt: opts.prompt ?? r.message,
         routineId: r.id,
         allow: r.allow,
-        scheduled
+        scheduled: opts.scheduled,
+        ...(opts.trigger && { trigger: opts.trigger })
       })
     } finally {
       startingRoutines.delete(r.id)
@@ -127,23 +142,96 @@ export function createRoutines(ctx: {
     for (const { id, at: t } of toStart) {
       const r = ctx.routines().find((x) => x.id === id)
       if (ctx.stopped() || !r) continue
-      void startRoutine(r, true).catch((err) => {
-        console.error(`Starting the routine ${r.name} failed`, err)
-        if (!ctx.routines().some((x) => x.id === r.id)) return
-        if (routineBusy(r)) skipRun(r, t, 'running')
-        else skipRun(r, t, 'failed', messageOf(err))
-        void persist().catch(() => undefined)
-        changed(r.projectId)
-      })
+      startInBackground(r, t, { scheduled: true })
     }
   }
-  const skipRun = (r: Routine, t: Date, reason: SkippedRun['reason'], error?: string): void =>
-    void ctx
-      .skippedRuns()
-      .push({ routineId: r.id, at: t.toISOString(), reason, ...(error && { error }) })
+  const startInBackground = (
+    r: Routine,
+    t: Date,
+    opts: { scheduled?: boolean; trigger?: RunTrigger; prompt?: string }
+  ): void =>
+    void startRoutine(r, opts).catch((err) => {
+      console.error(`Starting the routine ${r.name} failed`, err)
+      if (!ctx.routines().some((x) => x.id === r.id)) return
+      if (routineBusy(r)) skipRun(r, t, 'running', undefined, opts.trigger)
+      else skipRun(r, t, 'failed', messageOf(err), opts.trigger)
+      void persist().catch(() => undefined)
+      changed(r.projectId)
+    })
+  const skipRun = (
+    r: Routine,
+    t: Date,
+    reason: SkippedRun['reason'],
+    error?: string,
+    trigger?: RunTrigger
+  ): void =>
+    void ctx.skippedRuns().push({
+      routineId: r.id,
+      at: t.toISOString(),
+      reason,
+      ...(error && { error }),
+      ...(trigger && { trigger })
+    })
+
+  const eventsOf = (r: Routine, before: Ticket | undefined, t: Ticket): RunTrigger[] => {
+    const label = r.on?.label?.toLowerCase()
+    const has = (x: Ticket | undefined): boolean =>
+      !!x?.labels.some((l) => l.name.toLowerCase() === label)
+    return [
+      ...(r.on?.label && has(t) && !has(before)
+        ? [{ kind: 'label' as const, label: r.on.label, ticket: t.key }]
+        : []),
+      ...(r.on?.checksFail && t.prStage === 'checksFailing' && before?.prStage !== 'checksFailing'
+        ? [{ kind: 'checks' as const, ticket: t.key }]
+        : [])
+    ]
+  }
+  const startsToday = (r: Routine, at: Date): number => {
+    const today = at.toDateString()
+    const sameDay = (iso: string): boolean => new Date(iso).toDateString() === today
+    return (
+      ctx.sessions().filter((s) => s.routineId === r.id && s.trigger && sameDay(s.startedAt))
+        .length +
+      ctx
+        .skippedRuns()
+        .filter((x) => x.routineId === r.id && x.trigger && x.reason === 'failed' && sameDay(x.at))
+        .length
+    )
+  }
+  const onSync = (projectId: string, before: Ticket[] | null, after: Ticket[]): void => {
+    if (!before || ctx.stopped()) return
+    const at = now()
+    let dirty = false
+    for (const r of ctx.routines()) {
+      if (r.projectId !== projectId || !r.on) continue
+      for (const t of after)
+        for (const trigger of eventsOf(
+          r,
+          before.find((x) => x.key === t.key),
+          t
+        )) {
+          if (routineBusy(r)) skipRun(r, at, 'running', undefined, trigger)
+          else if (startsToday(r, at) >= (r.dailyCap ?? DEFAULT_DAILY_CAP))
+            skipRun(r, at, 'capped', undefined, trigger)
+          else {
+            startInBackground(r, at, {
+              trigger,
+              prompt: `${r.message}\n\n${triggerLine(trigger, t)}`
+            })
+            continue
+          }
+          dirty = true
+        }
+    }
+    if (dirty) {
+      void persist().catch(() => undefined)
+      changed(projectId)
+    }
+  }
 
   return {
     runSchedules,
+    onSync,
 
     listRoutines: async (projectId: string): Promise<Routine[]> =>
       ctx.routines().filter((r) => r.projectId === projectId),
@@ -195,7 +283,7 @@ export function createRoutines(ctx: {
     async startRoutine(id: string): Promise<string> {
       const r = ctx.routines().find((x) => x.id === id)
       if (!r) throw new Error('Unknown routine')
-      return startRoutine(r, false)
+      return startRoutine(r)
     },
 
     routineHistory: (id: string): Promise<RoutineRun[]> =>
@@ -208,7 +296,8 @@ export function createRoutines(ctx: {
             at: x.at,
             scheduled: true,
             reason: x.reason,
-            ...(x.error && { error: x.error })
+            ...(x.error && { error: x.error }),
+            ...(x.trigger && { trigger: x.trigger })
           }))
         for (const s of ctx.sessions().filter((x) => x.routineId === id)) {
           const entries = await transcriptOf(s)
@@ -225,7 +314,8 @@ export function createRoutines(ctx: {
             usage: await transcriptUsage(await transcriptFiles((x) => x === s)),
             lastMessage: last?.kind === 'assistant' ? last.text : null,
             ...(waitingFor && { waitingFor }),
-            ...(s.startWarning && { warning: s.startWarning })
+            ...(s.startWarning && { warning: s.startWarning }),
+            ...(s.trigger && { trigger: s.trigger })
           })
         }
         return history.sort((a, b) => b.at.localeCompare(a.at))

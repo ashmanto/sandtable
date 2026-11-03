@@ -265,8 +265,7 @@ export type RoutineEvents = { label?: string; checksFail?: true }
 
 /** The event that started a routine's run; `ticket` is the ticket key. */
 export type RunTrigger =
-  | { kind: 'label'; label: string; ticket: string }
-  | { kind: 'checks'; ticket: string }
+  { kind: 'label'; label: string; ticket: string } | { kind: 'checks'; ticket: string }
 
 /** A saved way to start a session without a ticket; `repo` is `owner/name`, `allow` the permission rules its sessions use without asking, `scheduledThrough` the ISO time the timer last checked it up to, and `dailyCap` the most event starts a day. */
 export type Routine = {
