@@ -135,6 +135,7 @@ export function fakeSandtable(): SandtableApi {
       jiraProjects: vi.fn<SandtableApi['projects']['jiraProjects']>(async () => []),
       jiraBoards: vi.fn<SandtableApi['projects']['jiraBoards']>(async () => []),
       pickFolder: vi.fn<SandtableApi['projects']['pickFolder']>(async () => null),
+      pickEditor: vi.fn<SandtableApi['projects']['pickEditor']>(async () => null),
       usage: vi.fn<SandtableApi['projects']['usage']>(async () => ({
         all: [],
         projects: [],
@@ -280,7 +281,6 @@ export function fakeSandtable(): SandtableApi {
     app: {
       onOpen: vi.fn(() => () => {}),
       pendingOpen: vi.fn<SandtableApi['app']['pendingOpen']>(async () => null),
-      editors: vi.fn<SandtableApi['app']['editors']>(async () => []),
       tools: vi.fn<SandtableApi['app']['tools']>(async () => ({
         ok: true,
         missing: [],

@@ -35,6 +35,7 @@ const api: SandtableApi = {
     boardRepos: invoke('projects.boardRepos'),
     me: invoke('projects.me'),
     pickFolder: invoke('projects.pickFolder'),
+    pickEditor: invoke('projects.pickEditor'),
     usage: invoke('projects.usage')
   },
   accounts: {
@@ -144,7 +145,6 @@ const api: SandtableApi = {
     onOpen: listen('app.onOpen'),
     pendingOpen: invoke('app.pendingOpen'),
     tools: invoke('app.tools'),
-    editors: invoke('app.editors'),
     theme: invoke('app.theme'),
     setTheme: invoke('app.setTheme'),
     keepAwake: invoke('app.keepAwake'),

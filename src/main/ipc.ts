@@ -5,7 +5,11 @@ import type { Terminals } from './terminal'
 
 type WaitingChannel = Exclude<
   keyof Handlers,
-  `app.${string}` | 'projects.pickFolder' | 'accounts.folders' | 'accounts.signedIn'
+  | `app.${string}`
+  | 'projects.pickFolder'
+  | 'projects.pickEditor'
+  | 'accounts.folders'
+  | 'accounts.signedIn'
 >
 
 const waitingHandlers = (

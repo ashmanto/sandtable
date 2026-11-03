@@ -58,7 +58,7 @@ import type {
 } from '../shared/types'
 import type { PromptAnswer, SessionPrompt } from '../shared/prompt'
 import { MODELS, reassign, withGroup } from '../shared/types'
-import { EDITORS, editorFor, type Editor } from '../shared/editors'
+import { appName, isApp } from '../shared/editors'
 import { isSandboxDomain, sandboxDomains } from '../shared/sandbox'
 import { branchName } from './git/branchName'
 import { worktreePath } from './git/worktree'
@@ -239,9 +239,8 @@ export type OrchestratorDeps = {
   githubReposOf(path: string): Promise<string[]>
   pullRequests(repo: string, branch: string): Promise<PullRequestState[]>
   failedLog(repo: string, jobId: number): Promise<string>
-  editors(): Promise<Editor[]>
-  /** Opens a folder in Finder, or in the editor; resolves to an error message, or '' when it opened. */
-  openFolder(folder: string, editor?: Editor): Promise<string>
+  /** Opens a folder in Finder, or in the app; resolves to an error message, or '' when it opened. */
+  openFolder(folder: string, app?: string): Promise<string>
   git: {
     ensureWorktree(
       repoPath: string,
@@ -2056,8 +2055,9 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       if (project.tokenCap !== undefined && !TOKEN_CAPS.includes(project.tokenCap))
         throw new Error('Not a token cap')
       assertModel(project.model)
-      if (project.editor !== undefined && !EDITORS.some((e) => e.command === project.editor))
+      if (project.editor !== undefined && typeof project.editor !== 'string')
         throw new Error('Not an editor')
+      if (!isApp(project.editor)) delete project.editor
       if (project.sandbox !== undefined && project.sandbox !== true)
         throw new Error('Not a sandbox choice')
       if (project.sandboxDomains !== undefined && !Array.isArray(project.sandboxDomains))
@@ -2840,12 +2840,10 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       const folders = s.worktrees.length ? s.worktrees : s.checkout ? [s.checkout] : []
       if (!folders.includes(folder)) throw new Error("Not this session's folder")
       if (!existsSync(folder)) throw goneError(s)
-      let editor: Editor | undefined
-      if (how === 'editor') {
-        editor = editorFor(projectById(s.projectId).editor, await deps.editors())
-        if (!editor) throw new Error('No editor found')
-      }
-      const error = await deps.openFolder(folder, editor)
+      const app = how === 'editor' ? projectById(s.projectId).editor : undefined
+      if (how === 'editor' && !isApp(app)) throw new Error('No editor chosen')
+      if (app && !existsSync(app)) throw new Error(`${appName(app)} isn't at ${app}`)
+      const error = await deps.openFolder(folder, app)
       if (error) throw new Error(error)
     },
 
