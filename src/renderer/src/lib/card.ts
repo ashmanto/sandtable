@@ -15,7 +15,15 @@ import {
 } from 'lucide-react'
 import { IN_PROGRESS_LABEL } from '../../../shared/columns'
 import { serviceOf } from '../../../shared/repo'
-import type { PrStage, Project, SessionRecord, SessionState, Ticket } from '../../../shared/types'
+import { resetsText } from '../../../shared/sessionStatus'
+import type {
+  PrStage,
+  Project,
+  SessionRecord,
+  SessionState,
+  SessionStop,
+  Ticket
+} from '../../../shared/types'
 
 /** A card or ticket state: a session state, a done ticket whose session is open, or a failed folder check. */
 export type CardState = SessionState | 'doneOpen' | 'cantStart'
@@ -44,6 +52,13 @@ export const stateLook: Record<
   },
   cantStart: { label: "Can't start", icon: CircleX, className: 'bg-danger-soft text-danger' }
 }
+
+/** A state's words, with a plan limit's reset time when the session has one. */
+export const stateWords = (state: CardState, stop?: SessionStop): string =>
+  state === 'limitReached' && stop?.resetsAt
+    ? // shortcut: the time text refreshes only on re-render; tick a clock if it goes stale on screen.
+      `${stateLook[state].label} · ${resetsText(stop.resetsAt, new Date())}`
+    : stateLook[state].label
 
 /** Another project's session state as this board shows it: Done, session open while the ticket is in Done here. */
 export const elsewhereState = (session: SessionRecord, done: boolean): CardState =>

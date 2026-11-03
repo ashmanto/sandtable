@@ -154,7 +154,10 @@ export function LeftoverList({
                         {l.kind === 'session' && l.title}
                       </span>
                       {l.kind === 'session' && (
-                        <SessionBadge state={l.done && live ? 'doneOpen' : l.session.state} />
+                        <SessionBadge
+                          state={l.done && live ? 'doneOpen' : l.session.state}
+                          stop={l.session.stop}
+                        />
                       )}
                     </span>
                     <span className="flex min-w-0 text-xs text-fg-2">

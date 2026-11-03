@@ -72,7 +72,7 @@ export function SessionCard({
         <p className="min-w-0 truncate leading-snug">{session.name}</p>
         <span className="ml-auto flex shrink-0 items-center gap-2">
           <ModelName model={session.model} />
-          <SessionBadge state={session.state} />
+          <SessionBadge state={session.state} stop={session.stop} />
         </span>
         {!session.removedAt && <EndSession session={session} run={run} disabled={pending} />}
       </div>

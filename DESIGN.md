@@ -54,7 +54,9 @@ them through Tailwind classes and never name a raw color.
   with `ScanSearch`, whose opacity pulses to 55% and back every 1.6 s. **Done,
   session open** is `neutral-soft` with `fg` text, a 1 px `line-2` inset ring, and
   `CircleDashed`; a sidebar session row shortens it to **Done**, with "Done, session open" as
-  its accessible name. A **Needs you** sidebar row follows its badge with "asking" or "capped" in
+  its accessible name. **Limit reached** is `fg-2` on `neutral-soft` with `Hourglass`, followed by
+  the reset time, as "Limit reached · Resets 16:00". **API error** is `danger` on `danger-soft`
+  with `TriangleAlert`, and its chip's tooltip is Claude Code's one-line message. A **Needs you** sidebar row follows its badge with "asking" or "capped" in
   `fg-3`, hidden like the badge's word in a narrow sidebar but kept in its name. A sidebar session row's tooltip is its full title and state word, as
   "Rate limits — Idle", and a live session's usage on a line of its own. **Can't start** is `danger` on `danger-soft` with
   `CircleX`. The sidebar's per-project count is the bare number with `CircleAlert` in the same

@@ -698,3 +698,25 @@ describe('TicketCard worktree setup', () => {
     expect(screen.queryByText(/Couldn't start/)).toBeNull()
   })
 })
+
+describe('TicketCard stop', () => {
+  it("shows Limit reached with the session's reset time", () => {
+    const resetsAt = Date.now() + 60_000
+    render(
+      <TicketCard
+        project={project}
+        ticket={t}
+        session={session(t.key, { state: 'limitReached', stop: { message: 'm', resetsAt } })}
+        state="limitReached"
+        done={false}
+        onFolderFixed={vi.fn()}
+        onSetUp={vi.fn()}
+        tickets={[]}
+        onOpenTicket={vi.fn()}
+        stateOf={() => undefined}
+        onOpen={vi.fn()}
+      />
+    )
+    expect(screen.getByText(/Limit reached/)).toHaveTextContent(/^Limit reached · Rese/)
+  })
+})

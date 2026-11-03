@@ -55,7 +55,7 @@ import {
 } from '@/lib/usage'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAfterMenu } from '@/hooks/useAfterMenu'
-import { countLabel, stateLook, type CardState, type Counted } from '@/lib/card'
+import { countLabel, stateWords, type CardState, type Counted } from '@/lib/card'
 import { moveGroup, moveProject, sections, type Section } from '@/lib/projectGroups'
 import { dropOf, type Drop } from '@/lib/sidebarDrop'
 import type { Nav } from '@/lib/headerFrame'
@@ -87,7 +87,8 @@ function SessionButton({
 }): React.JSX.Element {
   const usage = useLiveUsage(s.id)
   const label = [
-    `${s.name} — ${stateLook[stateOf(s)].label}`,
+    `${s.name} — ${stateWords(stateOf(s), s.stop)}`,
+    s.state === 'apiError' && s.stop?.message,
     usage && cardUsage(usage),
     s.capped && 'Reached its token cap'
   ]
@@ -104,7 +105,12 @@ function SessionButton({
         <span className="flex w-full items-center gap-2">
           <SessionName session={s} />
           <span className="ml-auto shrink-0">
-            <SessionBadge state={stateOf(s)} short labelClassName="@max-[263px]/sidebar:sr-only" />
+            <SessionBadge
+              state={stateOf(s)}
+              stop={s.stop}
+              short
+              labelClassName="@max-[263px]/sidebar:sr-only"
+            />
           </span>
           {stateOf(s) === 'needsYou' && (s.asking || s.capped) && (
             <span className="shrink-0 text-fg-3 @max-[263px]/sidebar:sr-only">

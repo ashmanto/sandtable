@@ -625,7 +625,7 @@ export function TicketCard({
             {done && ticket.mergedPr && <MergedMark url={ticket.mergedPr} />}
             {!done && ticket.prStage && <PrStageMark stage={ticket.prStage} />}
             {state && session && <ModelName model={session.model} />}
-            {state && <SessionBadge state={state} />}
+            {state && <SessionBadge state={state} stop={session?.stop} />}
             {ticket.assignees.length > 0 && <Assignees people={ticket.assignees} />}
           </span>
         </div>
