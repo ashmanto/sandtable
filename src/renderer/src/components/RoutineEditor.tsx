@@ -444,8 +444,7 @@ export function RoutineEditor({
                 onChange={(e) => setLabel(e.target.value)}
               />
               <p id="routine-label-help" className="text-xs text-fg-2">
-                Starts once for each ticket that gets this label, including while Sandtable was
-                closed.
+                Starts once when a ticket gets this label, unless its last session is still open.
               </p>
             </div>
             <div className="flex flex-col gap-1.5">

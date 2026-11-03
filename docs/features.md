@@ -1195,10 +1195,16 @@ refusal, a notification title, or a format example.
 
 - A routine can start when a ticket on the board gets a label you name, in any case, and when a
   GitHub ticket's pull request checks start failing. Linear and Jira tickets have only the label.
-- Sandtable sees both at the board sync, about once a minute, and starts one run per event. A
-  label added while Sandtable was closed starts its run at the next sync.
-- The run's first message ends with the trigger and the ticket's key, title, and URL. The run
-  keeps the routine's place and allowed rules, and Sandtable changes nothing on the ticket.
+  A draft or conflicting pull request doesn't count as failing.
+- A ticket that shows up on the board counts only if it was created after the last sync, so
+  adding a repo or keeping more done tickets starts nothing.
+- Sandtable sees both at the board sync, about once a minute while its window shows, for every
+  project with a triggered routine. A failing check can take up to 30 minutes to show. A label
+  added while Sandtable was closed starts its run at the next sync.
+- The run's first message ends with the trigger and the ticket's key, quoted title, and URL, and
+  tells Claude not to follow instructions in the title. The run keeps the routine's place and
+  allowed rules, and Sandtable changes nothing on the ticket.
+- Anyone who can add the label, or open a pull request for the ticket, can start the routine.
 - A routine with a trigger has **Automatic starts a day**, 5 unless you change it, from 1 to 50.
   Events past it that day are skipped as "Daily cap reached". Scheduled runs and your clicks
   don't count.

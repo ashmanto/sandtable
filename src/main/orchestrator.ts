@@ -947,7 +947,11 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       })
       if (merged) mergedPrs.set(projectId, merged.prs)
       persistCache()
-      onSync(projectId, before?.syncedAt ? before.tickets : null, tickets)
+      onSync(
+        projectId,
+        before?.syncedAt ? { tickets: before.tickets, syncedAt: before.syncedAt } : null,
+        tickets
+      )
       autoFindings(projectId)
       if (stamp !== null) stamps.set(projectId, { stamp, at: startedAt })
     } catch (err) {
@@ -1196,7 +1200,12 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
   const syncWatched = (timed = false): Promise<unknown> =>
     Promise.all(
       projects
-        .filter((p) => p.id === openId || sessions.some((s) => s.projectId === p.id && isLive(s)))
+        .filter(
+          (p) =>
+            p.id === openId ||
+            sessions.some((s) => s.projectId === p.id && isLive(s)) ||
+            routines.some((r) => r.projectId === p.id && r.on)
+        )
         .map((p) => (timed ? timedSync(p) : joinSync(p.id)))
     )
 

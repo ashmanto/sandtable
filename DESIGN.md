@@ -1809,9 +1809,8 @@ them through Tailwind classes and never name a raw color.
   gets the label**, a text field with the placeholder "triage"; **Start when a pull request's
   checks fail**, a switch like the schedule's; and, while either is set, **Automatic starts a
   day**, a 96 px number field, 5 on a new routine. Each has its help in 11 px `fg-2` under it.
-  Headings are 11 px,
-  weight 500, in `fg-2`, apart from the switch's label, 13 px at weight 500 in `fg`. When the
-  routine's repo is no longer in the project, the editor picks the project's first repo. A copy
+  Headings are 11 px, weight 500, in `fg-2`, apart from the switches' labels, 13 px at weight 500
+  in `fg`. When the routine's repo is no longer in the project, the editor picks the project's first repo. A copy
   from **Copy to project…** whose repo the project lacks starts with no repo picked when the
   project has two or more, and **Save** or **Build with Claude** then shows "Pick a repo".
 - With the switch on, seven 24 px pill toggles follow, Monday first, each showing its short day
