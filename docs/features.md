@@ -1065,7 +1065,7 @@ refusal, a notification title, or a format example.
 ### Editor
 
 - **Editor** is set per project on the **Review** step: **Choose…** opens the open dialog in
-  `/Applications` and saves the app, and **Clear** removes it. Sandtable never picks an editor on
+  `/Applications` and sets the app, and **Clear** removes it. Sandtable never picks an editor on
   its own, and a saved launcher name such as `code` counts as none.
 
 ### Model

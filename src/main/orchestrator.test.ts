@@ -6232,7 +6232,7 @@ describe('openFolder', () => {
     const t = await ready()
     await t.orch.saveProject({ ...project, editor: '/nowhere/WebStorm.app' })
     await expect(t.orch.openFolder('s1', wt, 'editor')).rejects.toThrow(
-      "WebStorm isn't at /nowhere/WebStorm.app"
+      "WebStorm isn't at /nowhere/WebStorm.app; choose another on the project's Review step"
     )
     expect(t.deps.openFolder).not.toHaveBeenCalled()
   })

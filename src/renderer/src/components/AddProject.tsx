@@ -1689,7 +1689,7 @@ export function AddProject({
                 variant="ghost"
                 size="sm"
                 aria-label="Clear editor"
-                aria-describedby="editor-help"
+                aria-describedby="editor-name editor-help"
                 onClick={() => setEditor(undefined)}
               >
                 Clear

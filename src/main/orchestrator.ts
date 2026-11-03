@@ -2842,7 +2842,10 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       if (!existsSync(folder)) throw goneError(s)
       const app = how === 'editor' ? projectById(s.projectId).editor : undefined
       if (how === 'editor' && !isApp(app)) throw new Error('No editor chosen')
-      if (app && !existsSync(app)) throw new Error(`${appName(app)} isn't at ${app}`)
+      if (app && !existsSync(app))
+        throw new Error(
+          `${appName(app)} isn't at ${app}; choose another on the project's Review step`
+        )
       const error = await deps.openFolder(folder, app)
       if (error) throw new Error(error)
     },

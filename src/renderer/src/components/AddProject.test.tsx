@@ -1453,6 +1453,9 @@ describe('AddProject', () => {
       />
     )
     await userEvent.click(screen.getByRole('button', { name: /Review/ }))
+    expect(screen.getByRole('button', { name: 'Clear editor' })).toHaveAccessibleDescription(
+      /^WebStorm/
+    )
     await userEvent.click(screen.getByRole('button', { name: 'Clear editor' }))
     expect(choose()).toHaveAccessibleDescription(/^None/)
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
