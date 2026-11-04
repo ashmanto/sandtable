@@ -118,7 +118,17 @@ export const FOREIGN_GIT_DIR =
 const real = (p: string): Promise<string> => fs.realpath(p).catch(() => '')
 
 /** The repo in `repoPaths` whose linked worktree `wtPath` is, read without running git in it. */
-export async function ownRepo(wtPath: string, repoPaths: string[]): Promise<string | undefined> {
+export const ownRepo = async (wtPath: string, repoPaths: string[]): Promise<string | undefined> =>
+  (await owned(wtPath, repoPaths))?.repo
+
+/** The git folder of `wtPath` when it's a linked worktree of a repo in `repoPaths`, read without running git in it. */
+export const ownGitDir = async (wtPath: string, repoPaths: string[]): Promise<string | undefined> =>
+  (await owned(wtPath, repoPaths))?.dir
+
+async function owned(
+  wtPath: string,
+  repoPaths: string[]
+): Promise<{ repo: string; dir: string } | undefined> {
   const link = await fs.readFile(path.join(wtPath, '.git'), 'utf8').catch(() => '')
   const gitDir = /^gitdir: (.+)$/m.exec(link)?.[1]
   if (!gitDir) return undefined
@@ -129,7 +139,7 @@ export async function ownRepo(wtPath: string, repoPaths: string[]): Promise<stri
   for (const repo of repoPaths) {
     const { stdout } = await git(repo, 'rev-parse', '--path-format=absolute', '--git-common-dir')
     const common = await real(stdout.trim())
-    if (common && path.dirname(dir) === path.join(common, 'worktrees')) return repo
+    if (common && path.dirname(dir) === path.join(common, 'worktrees')) return { repo, dir }
   }
   return undefined
 }

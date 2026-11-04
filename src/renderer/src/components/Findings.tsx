@@ -435,7 +435,9 @@ export function Findings({
             <p>
               {found.gate === 'held'
                 ? 'Automatic review: holding the pull request until the review ends and you decide every proposal.'
-                : 'Automatic review: Claude can open the pull request.'}
+                : found.gate === 'capped'
+                  ? `Automatic review: holding the pull request after ${AUTO_REVIEW_ROUNDS} rounds. Turn off Automatic review for this session to let Claude open it.`
+                  : 'Automatic review: Claude can open the pull request.'}
             </p>
           )}
         </div>

@@ -2132,7 +2132,7 @@ describe('resume and remove', () => {
           {
             script: join(t.dataDir, 'gate.sh'),
             file: join(t.dataDir, 'settings', 's1.gate'),
-            worktrees: wts
+            trees: wts.map((w) => ['', w] as [string, string])
           }
         )
       )

@@ -419,7 +419,8 @@ export function createReviewLoop(ctx: {
           changed(s.projectId)
         }
         const stopped = s.autoReview?.stopped
-        if (stopped === 'rounds' || (stopped === 'clean' && !gated)) return
+        const capped = (s.autoReview?.rounds ?? 0) >= AUTO_REVIEW_ROUNDS
+        if (stopped === 'rounds' || (stopped === 'clean' && (!gated || capped))) return
         const fingerprint = await ctx.fingerprint(s).catch(() => undefined)
         if (!gated && !(await pullRequestsOf(s)).some((w) => w.prs.length)) return
         const changes = await changesOf(s.id)
@@ -528,7 +529,12 @@ export function createReviewLoop(ctx: {
         ...(auto && { auto: s.autoReview ?? { rounds: 0 } }),
         ...(autoRunning.has(sessionId) && reviewing.has(sessionId) && { autoReviewing: true }),
         ...(s.autoReview?.held
-          ? { gate: 'held' as const }
+          ? {
+              gate:
+                s.autoReview.stopped === 'rounds' || s.autoReview.rounds >= AUTO_REVIEW_ROUNDS
+                  ? ('capped' as const)
+                  : ('held' as const)
+            }
           : reviewedGates.has(sessionId) && { gate: 'open' as const })
       }
     },

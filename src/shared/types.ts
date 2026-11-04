@@ -577,7 +577,7 @@ export type FindingsState = {
   reviewError?: string
   auto?: AutoReview
   autoReviewing?: true
-  gate?: 'held' | 'open'
+  gate?: 'held' | 'capped' | 'open'
 }
 
 /** An open pull request for a session's branch, with its review decision, checks, and unresolved threads. */

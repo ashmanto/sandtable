@@ -500,7 +500,11 @@ describe('Changes findings rail', () => {
     const open = 'Automatic review: Claude can open the pull request.'
     for (const [gate, text] of [
       ['held', held],
-      ['open', open]
+      ['open', open],
+      [
+        'capped',
+        'Automatic review: holding the pull request after 3 rounds. Turn off Automatic review for this session to let Claude open it.'
+      ]
     ] as const) {
       withFindings([], { auto: { rounds: 1 }, gate })
       render(<Changes session={session('T1', { state: 'needsYou' })} active />)

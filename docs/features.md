@@ -872,8 +872,8 @@ refusal, a notification title, or a format example.
   untracked ones included, no proposal waits, and no **High** finding is unsent. Dismissing a
   proposal counts as deciding it.
 - You tell Claude to open the pull request. Sandtable never types it.
-- A failed or timed-out round, or the 3-round cap, keeps the gate closed. It's open when
-  **Automatic review** is off for the session.
+- A failed or timed-out round, or the 3-round cap, keeps the gate closed. At the cap, the
+  **Changes** panel says to turn off **Automatic review** for the session, which opens the gate.
 
 ### Automatic pull request findings
 

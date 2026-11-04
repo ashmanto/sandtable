@@ -322,28 +322,39 @@ const GATE_OUTPUT = JSON.stringify({
   }
 })
 
-/** The `sh` script that prints a tree hash per worktree (`fingerprint <worktree>...`), or as a PreToolUse hook (`hook <gate file> <events file> <worktree>...`) denies a pull request command unless the gate file holds `open` or those hashes. */
+/** The `sh` script that prints a tree hash per worktree (`fingerprint <git dir> <worktree>...`), or as a PreToolUse hook (`hook <gate file> <events file> <git dir> <worktree>...`) denies a pull request command unless the gate file holds `open` or those hashes. */
 export const GATE_SCRIPT = String.raw`export LC_ALL=C
 print() {
-  for w in "$@"; do
-    i=$(git -C "$w" rev-parse --path-format=absolute --git-path index 2>/dev/null) && t=$(mktemp) || { echo missing; continue; }
-    cp "$i" "$t" 2>/dev/null || rm -f "$t"
-    if GIT_INDEX_FILE=$t git -C "$w" add -A 2>/dev/null && h=$(GIT_INDEX_FILE=$t git -C "$w" write-tree 2>/dev/null); then echo "$h"; else echo missing; fi
-    rm -f "$t"
+  while [ $# -ge 2 ]; do
+    g=$1; w=$2; shift 2
+    d=$(mktemp -d) || exit 1
+    h=$(
+      o=$(git --git-dir="$g" -c core.fsmonitor=false rev-parse --path-format=absolute --git-path objects) || exit 1
+      mkdir "$d/objects" && cd "$w" || exit 1
+      [ ! -f "$g/index" ] || cp -p "$g/index" "$d/index" || exit 1
+      export GIT_INDEX_FILE="$d/index" GIT_OBJECT_DIRECTORY="$d/objects" GIT_ALTERNATE_OBJECT_DIRECTORIES="$o"
+      git --git-dir="$g" --work-tree="$w" -c core.fsmonitor=false add -A &&
+        git --git-dir="$g" --work-tree="$w" -c core.fsmonitor=false write-tree
+    ) 2>/dev/null
+    c=$?
+    rm -rf "$d"
+    [ "$c" = 0 ] || exit 1
+    echo "$h"
   done
 }
 case $1 in
-  fingerprint) shift; print "$@"; exit 0 ;;
+  fingerprint) shift; print "$@"; exit ;;
   hook) gate=$2; events=$3; shift 3 ;;
   *) exit 0 ;;
 esac
 cmd=$(plutil -extract tool_input.command raw -o - - 2>/dev/null) || exit 0
+case $cmd in *gh*) ;; *) exit 0 ;; esac
 set -f
 hit=
-for s in $(printf '%s\n' "$cmd" | awk '{ if (sub(/\\$/, "")) printf "%s ", $0; else print }' | tr ';&|()\140' '\n\n\n\n\n\n' | tr ' \t' '\001\001'); do
+for s in $(printf '%s\n' "$cmd" | awk '{ if (sub(/\\$/, "")) printf "%s ", $0; else print }' | tr ';&|()<>\140' '\n\n\n\n\n\n\n\n' | tr ' \t' '\001\001'); do
   s=$(printf '%s' "$s" | tr '\001' ' ')
-  if printf '%s' "$s" | grep -Eq '(^|[[:space:]])gh[[:space:]]+pr[[:space:]]+create([[:space:]]|$)'; then hit=1; break; fi
-  printf '%s' "$s" | grep -Eq '(^|[[:space:]])gh[[:space:]]+api[[:space:]]' || continue
+  if printf '%s' "$s" | grep -Eq '(^|[[:space:]/"'"'"'])gh[[:space:]]+pr[[:space:]]+(create|new)([[:space:]"'"'"']|$)'; then hit=1; break; fi
+  printf '%s' "$s" | grep -Eq '(^|[[:space:]/"'"'"'])gh[[:space:]]+api[[:space:]]' || continue
   printf '%s' "$s" | grep -Eq '(^|[[:space:]/])pulls["'"'"']?([[:space:]]|$)' || continue
   printf '%s' "$s" | grep -Eiq -- '-X[[:space:]]*GET|--method[[:space:]=]+GET' && continue
   if printf '%s' "$s" | grep -Eiq -- '-X[[:space:]]*POST|--method[[:space:]=]+POST' ||
@@ -402,7 +413,7 @@ export function hookSettings(
   statusScript: string,
   allow: string[] = [],
   sandbox?: object,
-  gate?: { script: string; file: string; worktrees: string[] }
+  gate?: { script: string; file: string; trees: [string, string][] }
 ): object {
   const quoted = shellQuote(eventsFile)
   const line = (name: string): string =>
@@ -443,7 +454,7 @@ export function hookSettings(
                 hooks: [
                   {
                     type: 'command',
-                    command: `sh ${shellQuote(gate.script)} hook ${[gate.file, eventsFile, ...gate.worktrees].map(shellQuote).join(' ')}`
+                    command: `sh ${shellQuote(gate.script)} hook ${[gate.file, eventsFile, ...gate.trees.flat()].map(shellQuote).join(' ')}`
                   }
                 ]
               }

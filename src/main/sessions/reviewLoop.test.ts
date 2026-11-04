@@ -1735,7 +1735,7 @@ describe('automatic review', () => {
       await endTurn(t, 1)
       expect(gateOf(t)).toBe('tree\n')
       expect(t.deps.fingerprint).toHaveBeenCalledWith(join(t.dataDir, 'gate.sh'), [
-        t.orch.session('s1')!.worktrees[0]
+        ['', t.orch.session('s1')!.worktrees[0]]
       ])
       expect(await gateState(t)).toBe('open')
     })
@@ -1825,7 +1825,27 @@ describe('automatic review', () => {
       t.emit('s1', 'running')
       t.emit('s1', 'needsYou')
       await settle()
-      await vi.waitFor(async () => expect(await gateState(t)).toBe('held'))
+      await vi.waitFor(async () => expect(await gateState(t)).toBe('capped'))
+      expect(t.deps.claude.print).not.toHaveBeenCalled()
+      expect(gateOf(t)).toBeNull()
+    })
+
+    it('never opens on a fingerprint that failed', async () => {
+      const { t, deny } = await gated()
+      t.deps.fingerprint.mockResolvedValue('')
+      deny()
+      await endTurn(t, 1)
+      expect(gateOf(t)).toBeNull()
+    })
+
+    it("doesn't clear a clean stop at the cap, and says how to open the gate", async () => {
+      const { t, deny } = await gated({
+        autoReview: { on: true, rounds: 3, stopped: 'clean', fingerprint: 'old\n' }
+      })
+      deny()
+      t.emit('s1', 'running')
+      t.emit('s1', 'needsYou')
+      await vi.waitFor(async () => expect(await gateState(t)).toBe('capped'))
       expect(t.deps.claude.print).not.toHaveBeenCalled()
       expect(gateOf(t)).toBeNull()
     })
