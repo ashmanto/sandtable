@@ -1876,6 +1876,32 @@ describe('automatic review', () => {
       expect(gateOf(t)).toBeNull()
     })
 
+    it("doesn't say Claude can open the pull request when nothing was held", async () => {
+      const { t } = await gated()
+      t.deps.pullRequests.mockResolvedValue([{ ...pr, checks: [], threads: [] }])
+      await endTurn(t, 1)
+      expect(gateOf(t)).toBe('tree\n')
+      expect(await gateState(t)).toBeUndefined()
+    })
+
+    it("says why a held pull request can't be reviewed", async () => {
+      const { t, deny } = await gated()
+      t.deps.git.changes.mockRejectedValue(new Error('no origin HEAD'))
+      deny()
+      t.emit('s1', 'needsYou')
+      await vi.waitFor(async () =>
+        expect((await t.orch.findings('s1')).reviewError).toBe('no origin HEAD')
+      )
+      expect(await gateState(t)).toBe('held')
+    })
+
+    it('leaves a removed session alone when the project changes', async () => {
+      const { t } = await gated({ removedAt: '2026-11-04T00:00:00.000Z' })
+      const p = (await t.orch.listProjects()).find((x) => x.id === 'p1')!
+      await t.orch.saveProject({ ...p, autoReview: undefined })
+      expect(gateOf(t)).toBeNull()
+    })
+
     it('opens for a session that follows its project when the project turns it off', async () => {
       const { t } = await gated()
       const p = (await t.orch.listProjects()).find((x) => x.id === 'p1')!

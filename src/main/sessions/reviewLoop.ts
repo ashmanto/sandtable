@@ -137,8 +137,8 @@ export function createReviewLoop(ctx: {
       await writeFile(temp, text)
       await rename(temp, file)
     }
-    if (text !== null && text !== 'open') reviewedGates.add(s.id)
-    else reviewedGates.delete(s.id)
+    if (text === null || text === 'open') reviewedGates.delete(s.id)
+    else if (s.autoReview?.held) reviewedGates.add(s.id)
     if (text !== null && s.autoReview?.held) {
       delete s.autoReview.held
       await persist()
@@ -146,7 +146,7 @@ export function createReviewLoop(ctx: {
     }
   }
   const syncGate = (s: SessionRecord): Promise<void> => {
-    if (!s.ticketKey || !s.worktrees.length) return Promise.resolve()
+    if (!s.ticketKey || !s.worktrees.length || s.removedAt) return Promise.resolve()
     const next = (gates.get(s.id) ?? Promise.resolve()).then(() => writeGate(s))
     const settled = next.catch(() => undefined)
     gates.set(s.id, settled)
@@ -424,7 +424,13 @@ export function createReviewLoop(ctx: {
         const fingerprint = await ctx.fingerprint(s).catch(() => undefined)
         if (!gated && !(await pullRequestsOf(s)).some((w) => w.prs.length)) return
         const changes = await changesOf(s.id)
-        if (!diffText(changes)) return
+        if (!diffText(changes)) {
+          if (gated) {
+            reviewErrors.set(s.id, changes.find((c) => c.error)?.error ?? 'No changes to review')
+            changed(s.projectId)
+          }
+          return
+        }
         const hash = createHash('sha256').update(JSON.stringify(changes)).digest('hex')
         const auto = autoOf(s)
         if (gated && fingerprint && fingerprint === auto.fingerprint) {
