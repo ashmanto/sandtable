@@ -1848,7 +1848,7 @@ describe('automatic review', () => {
       const { t, deny } = await gated()
       t.emit('s1', 'running')
       t.emit('s1', 'needsYou')
-      await settle()
+      await vi.waitFor(() => expect(titles(t)).toContain('Needs you: shop#147'))
       deny()
       await endTurn(t, 1)
       expect(gateOf(t)).toBe('tree\n')
