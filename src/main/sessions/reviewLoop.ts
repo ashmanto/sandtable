@@ -387,7 +387,19 @@ export function createReviewLoop(ctx: {
       if (pr.stage !== 'conflicts') {
         if (known.some((r) => r.startsWith(key))) {
           autoOf(s).added = known.filter((r) => !r.startsWith(key))
+          ctx.setFindings(
+            ctx
+              .findings()
+              .filter(
+                (f) =>
+                  f.sessionId !== s.id ||
+                  f.source !== 'conflict' ||
+                  !!f.sentAt ||
+                  !`conflict:${f.ref}`.startsWith(key)
+              )
+          )
           await persist()
+          changed(s.projectId)
         }
       } else if (!known.some((r) => r.startsWith(key))) {
         const ref = `${pr.repo}#${pr.number}:${randomUUID()}`
@@ -544,7 +556,7 @@ export function createReviewLoop(ctx: {
       if (typeof on !== 'boolean') throw new Error('Not a valid setting')
       if (!s.ticketKey) throw new Error('Only a ticket session has a review')
       if (s.removedAt) throw new Error('The worktree was removed')
-      const added = s.autoReview?.added?.filter((r) => !on || !r.startsWith('conflict:'))
+      const added = s.autoReview?.added
       s.autoReview = on ? { on, rounds: 0, ...(added && { added }) } : { ...autoOf(s), on }
       await persist()
       changed(s.projectId)

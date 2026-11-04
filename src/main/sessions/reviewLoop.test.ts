@@ -1668,20 +1668,44 @@ describe('automatic review', () => {
     expect(t.deps.tmux.pasteTmux).not.toHaveBeenCalled()
   })
 
-  it('adds a conflict again after automatic review was off while it cleared', async () => {
+  const syncOnce = async (t: ReturnType<typeof setup>): Promise<void> => {
+    const reads = t.deps.pullRequests.mock.calls.length
+    await t.orch.sync('p1')
+    await vi.waitFor(() => expect(t.deps.pullRequests).toHaveBeenCalledTimes(reads + 1))
+    await settle()
+  }
+
+  it("doesn't add a deleted conflict again after you turn automatic review off and on", async () => {
     const t = await ready()
     t.deps.pullRequests.mockResolvedValue([
       { ...pr, stage: 'conflicts' as const, checks: [], threads: [] }
     ])
     await t.orch.sync('p1')
     await vi.waitFor(async () => expect((await t.orch.findings('s1')).findings).toHaveLength(1))
-    const [first] = (await t.orch.findings('s1')).findings
-    await t.orch.removeFinding('s1', first.id)
+    await t.orch.removeFinding('s1', (await t.orch.findings('s1')).findings[0].id)
     await t.orch.setAutoReview('s1', false)
     await t.orch.setAutoReview('s1', true)
+    await syncOnce(t)
+    expect((await t.orch.findings('s1')).findings).toEqual([])
+  })
+
+  it('removes an unsent conflict finding when the conflict clears, and keeps a sent one', async () => {
+    const t = await ready()
+    const conflicting = { ...pr, stage: 'conflicts' as const, checks: [], threads: [] }
+    t.deps.pullRequests.mockResolvedValue([conflicting])
     await t.orch.sync('p1')
     await vi.waitFor(async () => expect((await t.orch.findings('s1')).findings).toHaveLength(1))
-    expect((await t.orch.findings('s1')).findings[0].ref).not.toBe(first.ref)
+    await settle()
+    t.deps.pullRequests.mockResolvedValue([{ ...conflicting, stage: 'open' }])
+    await syncOnce(t)
+    expect((await t.orch.findings('s1')).findings).toEqual([])
+    t.deps.pullRequests.mockResolvedValue([conflicting])
+    await syncOnce(t)
+    const [sent] = (await t.orch.findings('s1')).findings
+    await t.orch.sendFindings('s1', [sent.id])
+    t.deps.pullRequests.mockResolvedValue([{ ...conflicting, stage: 'open' }])
+    await syncOnce(t)
+    expect((await t.orch.findings('s1')).findings.map((f) => f.id)).toEqual([sent.id])
   })
 
   it('pastes only the High proposal after a sync added pull request findings', async () => {
