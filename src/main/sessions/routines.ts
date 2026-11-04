@@ -113,7 +113,7 @@ export function createRoutines(ctx: {
         name: (startedAt) => `${r.name}, ${shortTime(startedAt)}`,
         prompt: opts.prompt ?? r.message,
         routineId: r.id,
-        allow: r.allow,
+        allow: opts.trigger ? undefined : r.allow,
         scheduled: opts.scheduled,
         ...(opts.trigger && { trigger: opts.trigger })
       })

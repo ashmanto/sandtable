@@ -371,7 +371,7 @@ export function RoutineEditor({
                 className={cn('text-xs', ruleProblem ? 'text-danger' : 'text-fg-2')}
               >
                 {ruleProblem ??
-                  "One permission rule per line, such as Bash(npm audit:*). Only this routine's sessions use them without asking."}
+                  "One permission rule per line, such as Bash(npm audit:*). Only this routine's sessions you start or schedule use them without asking."}
               </p>
               {offer('allow')}
             </div>

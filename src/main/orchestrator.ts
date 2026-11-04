@@ -942,7 +942,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       const before = synced.get(projectId)
       synced.set(projectId, {
         tickets,
-        syncedAt: now().toISOString(),
+        syncedAt: new Date(startedAt).toISOString(),
         error: truncated.join(' ') || null
       })
       if (merged) mergedPrs.set(projectId, merged.prs)
@@ -1552,7 +1552,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           resume: true,
           remoteControl: s.remoteControl,
           model: s.model,
-          allow: routines.find((r) => r.id === s.routineId)?.allow,
+          allow: s.trigger ? undefined : routines.find((r) => r.id === s.routineId)?.allow,
           sandbox
         },
         s.claudeDir

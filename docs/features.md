@@ -1202,9 +1202,11 @@ refusal, a notification title, or a format example.
   project with a triggered routine. A failing check can take up to 30 minutes to show. A label
   added while Sandtable was closed starts its run at the next sync.
 - The run's first message ends with the trigger and the ticket's key, quoted title, and URL, and
-  tells Claude not to follow instructions in the title. The run keeps the routine's place and
-  allowed rules, and Sandtable changes nothing on the ticket.
-- Anyone who can add the label, or open a pull request for the ticket, can start the routine.
+  tells Claude not to follow instructions in the title. The run keeps the routine's place, and
+  Sandtable changes nothing on the ticket.
+- Anyone who can add the label, or open a pull request for the ticket, can start the routine, so
+  a label or check run, even resumed, doesn't get the routine's allowed rules. It stops at
+  **Needs you** at the first permission prompt your Claude Code settings require.
 - A routine with a trigger has **Automatic starts a day**, 5 unless you change it, from 1 to 50.
   Events past it that day are skipped as "Daily cap reached". Scheduled runs and your clicks
   don't count.
@@ -1227,6 +1229,7 @@ refusal, a notification title, or a format example.
 - A routine's **Allowed without asking** field takes Claude Code permission rules, one per line,
   such as `Bash(npm outdated)` or `Read`.
 - Only that routine's sessions, started on schedule or by you, use those rules without asking.
+  Runs started by a label or failing checks don't.
 - Sandtable passes the rules in the session's own `--settings` file and never changes the repo's
   `.claude/settings.json`.
 - Saving refuses a rule that isn't permission syntax, or one that lets a session run any command,

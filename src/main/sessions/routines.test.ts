@@ -1147,6 +1147,68 @@ describe('routine triggers', () => {
     await startsNothing(t)
   })
 
+  it('starts for a ticket created with the label while the last sync was fetching', async () => {
+    const t = setup({ routines: [routine()] })
+    await t.orch.reconnect()
+    t.deps.board.tickets.mockImplementationOnce(async () => {
+      t.deps.now.mockReturnValue(new Date('2026-10-24T12:00:05.000Z'))
+      return []
+    })
+    await t.orch.sync('p1')
+    await syncWith(t, [{ ...labeled(12), createdAt: '2026-10-24T12:00:02.000Z' }])
+    await startsBy(t, 1)
+  })
+
+  it('starts nothing when a routine changes to a label tickets already have', async () => {
+    const t = setup({ routines: [routine()] })
+    await t.orch.reconnect()
+    await syncWith(t, [labeled(12, 'bug')])
+    await t.orch.saveRoutine({ ...routine(), on: { label: 'bug' } })
+    await syncWith(t, [labeled(12, 'bug')])
+    await startsNothing(t)
+  })
+
+  it("doesn't count a draft or conflicting pull request as failing", async () => {
+    const t = setup({ routines: [routine()] })
+    await t.orch.reconnect()
+    await syncWith(t, [ticket({ prStage: 'open' })])
+    await syncWith(t, [ticket({ prStage: 'conflicts' })])
+    await startsNothing(t)
+  })
+
+  it("gives an event-started run none of the routine's allowed rules", async () => {
+    const t = setup({ routines: [routine({ allow: ['Bash(npm test)'] })] })
+    await t.orch.reconnect()
+    await syncWith(t, [unlabeled(12)])
+    await syncWith(t, [labeled(12)])
+    await startsBy(t, 1)
+    const [run] = await t.orch.routineHistory('r1')
+    const id = run.kind === 'session' ? run.sessionId : ''
+    const allowOf = (): string[] =>
+      JSON.parse(readFileSync(join(t.dataDir, 'settings', `${id}.json`), 'utf8')).permissions.allow
+    expect(allowOf()).not.toContain('Bash(npm test)')
+  })
+
+  it("resumes an event-started run without the routine's allowed rules", async () => {
+    const t = setup({
+      routines: [routine({ allow: ['Bash(npm test)'] })],
+      sessions: [
+        session({
+          ticketKey: undefined,
+          routineId: 'r1',
+          trigger: { kind: 'checks', ticket: 'octo/shop#12' },
+          state: 'finished',
+          worktrees: [tempDir('st-wt-')]
+        })
+      ]
+    })
+    await t.orch.reconnect()
+    await t.orch.resume('s1')
+    expect(
+      JSON.parse(readFileSync(join(t.dataDir, 'settings', 's1.json'), 'utf8')).permissions.allow
+    ).not.toContain('Bash(npm test)')
+  })
+
   it('ignores a routine with no matching trigger', async () => {
     const t = setup({ routines: [routine({ on: { checksFail: true } })] })
     await t.orch.reconnect()

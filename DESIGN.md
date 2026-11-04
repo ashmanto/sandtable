@@ -1803,7 +1803,7 @@ them through Tailwind classes and never name a raw color.
   boxes and help as New session's **Where**; **First message**, a textarea up to 240 px tall;
   **Allowed without asking**, a two-row monospace textarea up to 160 px tall with the placeholder
   "Bash(npm outdated)" and "One permission rule per line, such as Bash(npm audit:*). Only this
-  routine's sessions use them without asking." in 11 px `fg-2` under it; and
+  routine's sessions you start or schedule use them without asking." in 11 px `fg-2` under it; and
   **Run on a schedule**, a switch, off for a new routine, with "Starts while Sandtable is open and
   the Mac is awake. A time it misses is skipped." in 11 px `fg-2` under it; **Start when a ticket
   gets the label**, a text field with the placeholder "triage"; **Start when a pull request's

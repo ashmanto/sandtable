@@ -393,7 +393,7 @@ describe('RoutineEditor', () => {
     const field = screen.getByRole('textbox', { name: 'Allowed without asking' })
     expect(field).toHaveValue('Read\nBash(npm outdated)')
     expect(field).toHaveAccessibleDescription(
-      "One permission rule per line, such as Bash(npm audit:*). Only this routine's sessions use them without asking."
+      "One permission rule per line, such as Bash(npm audit:*). Only this routine's sessions you start or schedule use them without asking."
     )
     await userEvent.type(field, '{Enter}{Enter}  Bash(npm audit:*) ')
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
