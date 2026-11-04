@@ -5,6 +5,7 @@ import type { Routine, SessionRecord, Ticket } from '../../shared/types'
 import { shortTime } from '../../shared/time'
 import {
   expectSettingsUntouched,
+  jiraProject,
   opusLine,
   project,
   session,
@@ -1207,6 +1208,29 @@ describe('routine triggers', () => {
     expect(
       JSON.parse(readFileSync(join(t.dataDir, 'settings', 's1.json'), 'utf8')).permissions.allow
     ).not.toContain('Bash(npm test)')
+  })
+
+  it("matches the label in any case, whatever case the routine's label has", async () => {
+    const t = setup({ routines: [routine({ on: { label: 'TRIAGE' } })] })
+    await t.orch.reconnect()
+    await syncWith(t, [unlabeled(12)])
+    await syncWith(t, [labeled(12, 'triage')])
+    await startsBy(t, 1)
+  })
+
+  it('starts on a Jira ticket that gets the label', async () => {
+    const t = setup({ projects: [jiraProject], routines: [routine()] })
+    let labels: string[] = []
+    t.jira.tickets.mockImplementation(async () => [
+      ticket({ key: 'INF-12', labels: labels.map((name) => ({ name, color: '' })) })
+    ])
+    await t.orch.reconnect()
+    await t.orch.sync('p1')
+    labels = ['triage']
+    await t.orch.sync('p1')
+    await startsBy(t, 1)
+    const [run] = await t.orch.routineHistory('r1')
+    expect(run.trigger).toEqual({ kind: 'label', label: 'triage', ticket: 'INF-12' })
   })
 
   it('ignores a routine with no matching trigger', async () => {
