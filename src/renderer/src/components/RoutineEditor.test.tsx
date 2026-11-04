@@ -30,7 +30,7 @@ describe('RoutineEditor', () => {
     expect(screen.getByRole('heading', { name: 'New routine in Shop' })).toBeInTheDocument()
     expect(
       screen.getByText(
-        'Starts a session without a ticket with this first message, in one click or on a schedule.'
+        'Starts a session without a ticket with this first message, in one click, on a schedule, or when a ticket gets a label or its checks fail.'
       )
     ).toBeInTheDocument()
     const order = [
@@ -110,6 +110,63 @@ describe('RoutineEditor', () => {
     })
     expect(api.routines.start).not.toHaveBeenCalled()
     expect(onClose).toHaveBeenCalled()
+  })
+
+  it('saves a trigger label, failing checks, and a daily cap', async () => {
+    render(<RoutineEditor project={project} onClose={vi.fn()} />)
+    await userEvent.type(screen.getByRole('textbox', { name: 'Name' }), 'triage')
+    await userEvent.type(screen.getByRole('textbox', { name: 'First message' }), 'Triage it')
+    expect(
+      screen.queryByRole('spinbutton', { name: 'Automatic starts a day' })
+    ).not.toBeInTheDocument()
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'Start when a ticket gets the label' }),
+      'triage'
+    )
+    await userEvent.click(
+      screen.getByRole('switch', { name: "Start when a pull request's checks fail" })
+    )
+    const cap = screen.getByRole('spinbutton', { name: 'Automatic starts a day' })
+    expect(cap).toHaveValue(5)
+    await userEvent.clear(cap)
+    await userEvent.type(cap, '3')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(api.routines.save).toHaveBeenCalledWith(
+      expect.objectContaining({ on: { label: 'triage', checksFail: true }, dailyCap: 3 })
+    )
+  })
+
+  it('says what is wrong with a daily cap outside 1 to 50', async () => {
+    render(
+      <RoutineEditor
+        project={project}
+        routine={{ ...triage, on: { label: 'bug' } }}
+        onClose={vi.fn()}
+      />
+    )
+    const cap = screen.getByRole('spinbutton', { name: 'Automatic starts a day' })
+    await userEvent.clear(cap)
+    expect(cap).toHaveAccessibleDescription('Enter a daily cap from 1 to 50')
+    await userEvent.type(cap, '7')
+    expect(cap).not.toHaveAccessibleDescription('Enter a daily cap from 1 to 50')
+  })
+
+  it('shows a saved trigger and saves no trigger when cleared', async () => {
+    render(
+      <RoutineEditor
+        project={project}
+        routine={{ ...triage, on: { label: 'bug' }, dailyCap: 2 }}
+        onClose={vi.fn()}
+      />
+    )
+    const label = screen.getByRole('textbox', { name: 'Start when a ticket gets the label' })
+    expect(label).toHaveValue('bug')
+    expect(screen.getByRole('spinbutton', { name: 'Automatic starts a day' })).toHaveValue(2)
+    await userEvent.clear(label)
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    const saved = vi.mocked(api.routines.save).mock.calls[0][0]
+    expect(saved).not.toHaveProperty('on')
+    expect(saved).not.toHaveProperty('dailyCap')
   })
 
   it('starts the saved routine with Save and start', async () => {
@@ -336,7 +393,7 @@ describe('RoutineEditor', () => {
     const field = screen.getByRole('textbox', { name: 'Allowed without asking' })
     expect(field).toHaveValue('Read\nBash(npm outdated)')
     expect(field).toHaveAccessibleDescription(
-      "One permission rule per line, such as Bash(npm audit:*). Only this routine's sessions use them without asking."
+      "One permission rule per line, such as Bash(npm audit:*). Only this routine's sessions you start or schedule use them without asking."
     )
     await userEvent.type(field, '{Enter}{Enter}  Bash(npm audit:*) ')
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))

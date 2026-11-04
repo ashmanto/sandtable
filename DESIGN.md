@@ -1781,7 +1781,8 @@ them through Tailwind classes and never name a raw color.
   - The top line has the time ("Oct 27, 14:00"), then the session's state chip or **Skipped**, a
     chip with a `Clock` icon in `fg-3` and a `line-2` ring, and, for a session that isn't removed,
     an outline **Open** pushed right that opens the session view.
-  - An 11 px `fg-3` line follows: **On schedule** or **Started by you**, then, for a session,
+  - An 11 px `fg-3` line follows: **On schedule**, **Started by you**, "Label <label> on
+    <ticket>", or "Checks failed on <ticket>", then, for a session,
     "main checkout" or the branch in monospace and its usage ("1.5K tokens · $1.25 API
     estimate", with "*" after the amount when it leaves out a model with no price, or the tokens
     alone when no model has one).
@@ -1789,23 +1790,27 @@ them through Tailwind classes and never name a raw color.
     monospace, such as `Bash(npm outdated)`, in `amber`.
   - A session's start warning, as on a ticket card, in `danger`.
   - Last, Claude's last message in `fg-2`, cut to two lines, or, for a skip, why in `fg-3`:
-    "Sandtable was closed or the Mac was asleep", "Its last session was still open", or "Couldn't
-    start: <message>" for a scheduled start that failed. With no runs it says "No runs yet" in
+    "Sandtable was closed or the Mac was asleep", "Its last session was still open", "Daily cap
+    reached", or "Couldn't start: <message>" for a scheduled or triggered start that failed. With no runs it says "No runs yet" in
     11 px `fg-3`.
 
 ### Routine editor
 
 - A dialog laid out like New session: "New routine in <project>" or "Edit <name>", with "Starts a
-  session without a ticket with this first message, in one click or on a schedule." Its fields,
+  session without a ticket with this first message, in one click, on a schedule, or when a ticket
+  gets a label or its checks fail." Its fields,
   in order: **Name**; **Repo**, with more than one repo; **Where it runs**, the same two radio
   boxes and help as New session's **Where**; **First message**, a textarea up to 240 px tall;
   **Allowed without asking**, a two-row monospace textarea up to 160 px tall with the placeholder
   "Bash(npm outdated)" and "One permission rule per line, such as Bash(npm audit:*). Only this
-  routine's sessions use them without asking." in 11 px `fg-2` under it; and
+  routine's sessions you start or schedule use them without asking." in 11 px `fg-2` under it; and
   **Run on a schedule**, a switch, off for a new routine, with "Starts while Sandtable is open and
-  the Mac is awake. A time it misses is skipped." in 11 px `fg-2` under it. Headings are 11 px,
-  weight 500, in `fg-2`, apart from the switch's label, 13 px at weight 500 in `fg`. When the
-  routine's repo is no longer in the project, the editor picks the project's first repo. A copy
+  the Mac is awake. A time it misses is skipped." in 11 px `fg-2` under it; **Start when a ticket
+  gets the label**, a text field with the placeholder "triage"; **Start when a pull request's
+  checks fail**, a switch like the schedule's; and, while either is set, **Automatic starts a
+  day**, a 96 px number field, 5 on a new routine. Each has its help in 11 px `fg-2` under it.
+  Headings are 11 px, weight 500, in `fg-2`, apart from the switches' labels, 13 px at weight 500
+  in `fg`. When the routine's repo is no longer in the project, the editor picks the project's first repo. A copy
   from **Copy to project…** whose repo the project lacks starts with no repo picked when the
   project has two or more, and **Save** or **Build with Claude** then shows "Pick a repo".
 - With the switch on, seven 24 px pill toggles follow, Monday first, each showing its short day

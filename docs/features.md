@@ -1176,7 +1176,8 @@ refusal, a notification title, or a format example.
 - A routine is a saved way to start a session without a ticket: a name, a repo, the main checkout
   or a new worktree, and a first message.
 - You start it with one click, or give it days and a time and Sandtable starts it then, while
-  Sandtable is open.
+  Sandtable is open. It can also start on its own when a ticket gets a label or its checks fail
+  (see [Triggers](#triggers)).
 - Each run is a new session named after the routine and its start time, such as "Dependency check,
   Oct 28, 02:00".
 - Sandtable changes nothing on GitHub, Linear, or Jira for a routine.
@@ -1190,10 +1191,33 @@ refusal, a notification title, or a format example.
 - With remote control on for the project, a routine's session can also be reached from claude.ai
   while no one watches the Mac.
 
+### Triggers
+
+- A routine can start when a ticket on the board gets a label you name, in any case, and when a
+  GitHub ticket's pull request checks start failing. Linear and Jira tickets have only the label.
+  A draft or conflicting pull request doesn't count as failing.
+- A ticket that shows up on the board counts only if it was created after the last sync, so
+  adding a repo or keeping more done tickets starts nothing.
+- Sandtable sees both at the board sync, about once a minute while its window shows, for every
+  project with a triggered routine. A failing check can take up to 30 minutes to show. A label
+  added while Sandtable was closed starts its run at the next sync.
+- The run's first message ends with the trigger and the ticket's key, quoted title, and URL, and
+  tells Claude not to follow instructions in the title. The run keeps the routine's place, and
+  Sandtable changes nothing on the ticket.
+- Anyone who can add the label, or open a pull request for the ticket, can start the routine, so
+  a label or check run, even resumed, doesn't get the routine's allowed rules. It stops at
+  **Needs you** at the first permission prompt your Claude Code settings require.
+- A routine with a trigger has **Automatic starts a day**, 5 unless you change it, from 1 to 50.
+  Events past it that day are skipped as "Daily cap reached". Scheduled runs and your clicks
+  don't count.
+- An event that arrives while the routine's last session is open and not **Done** is skipped.
+- Saving a routine doesn't start runs for tickets that already have its label.
+
 ### Run history and states
 
-- **Run history** lists the routine's runs and skipped times, newest first, with each run's tokens,
-  API price, and Claude's last message.
+- **Run history** lists the routine's runs and skipped times, newest first, with what started
+  each one (**On schedule**, **Started by you**, the label and ticket, or failed checks and the
+  ticket), its tokens, API price, and Claude's last message.
 - A run waiting at a permission prompt names the tool it asked for, such as `Bash(npm outdated)`,
   in **Run history**.
 - A run that ends its turn on its own shows **Done**, sends no notification, and doesn't hold the
@@ -1205,6 +1229,7 @@ refusal, a notification title, or a format example.
 - A routine's **Allowed without asking** field takes Claude Code permission rules, one per line,
   such as `Bash(npm outdated)` or `Read`.
 - Only that routine's sessions, started on schedule or by you, use those rules without asking.
+  Runs started by a label or failing checks don't.
 - Sandtable passes the rules in the session's own `--settings` file and never changes the repo's
   `.claude/settings.json`.
 - Saving refuses a rule that isn't permission syntax, or one that lets a session run any command,

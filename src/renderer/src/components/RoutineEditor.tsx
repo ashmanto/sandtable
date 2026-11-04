@@ -24,7 +24,12 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { cn, errorMessage } from '@/lib/utils'
 import { findRepo } from '../../../shared/repo'
-import { rulesProblem, scheduleLabel } from '../../../shared/routines'
+import {
+  capProblem,
+  DEFAULT_DAILY_CAP,
+  rulesProblem,
+  scheduleLabel
+} from '../../../shared/routines'
 import type {
   Project,
   Routine,
@@ -38,7 +43,9 @@ import { chip } from './TicketCard'
 
 /** The values another view hands the editor for a new routine, with the source of a copy. */
 export type RoutineDraft = Pick<RoutineInput, 'repo' | 'worktree' | 'message'> &
-  Partial<Pick<RoutineInput, 'name' | 'allow' | 'schedule'>> & { copiedFrom?: RoutineSource }
+  Partial<Pick<RoutineInput, 'name' | 'allow' | 'schedule' | 'on' | 'dailyCap'>> & {
+    copiedFrom?: RoutineSource
+  }
 
 /** Opens the routine editor for a new routine, an existing one, or a draft from another view. */
 export type OpenRoutine = (project: Project, routine?: Routine, draft?: RoutineDraft) => void
@@ -142,6 +149,9 @@ export function RoutineEditor({
   const [scheduled, setScheduled] = useState(!!from?.schedule)
   const [days, setDays] = useState<number[]>(from?.schedule?.days ?? [1, 2, 3, 4, 5])
   const [time, setTime] = useState(from?.schedule?.time ?? '02:00')
+  const [label, setLabel] = useState(from?.on?.label ?? '')
+  const [checksFail, setChecksFail] = useState(!!from?.on?.checksFail)
+  const [dailyCap, setDailyCap] = useState(String(from?.dailyCap ?? DEFAULT_DAILY_CAP))
   const [busy, setBusy] = useState<'save' | 'start' | 'delete' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [mine, setMine] = useState<Field[]>([])
@@ -154,6 +164,12 @@ export function RoutineEditor({
     .map((rule) => rule.trim())
     .filter(Boolean)
   const ruleProblem = rulesProblem(rules)
+  const on = {
+    ...(label.trim() && { label: label.trim() }),
+    ...(checksFail && { checksFail: true as const })
+  }
+  const triggered = Object.keys(on).length > 0
+  const capRefused = triggered && capProblem(dailyCap.trim() ? Number(dailyCap) : NaN)
   const form: RoutineProposal = {
     name,
     repo: github,
@@ -250,7 +266,8 @@ export function RoutineEditor({
           worktree,
           message,
           ...(rules.length > 0 && { allow: rules }),
-          ...(form.schedule && { schedule: form.schedule })
+          ...(form.schedule && { schedule: form.schedule }),
+          ...(triggered && { on, dailyCap: Number(dailyCap) })
         })
         setId(saved.id)
         step = 'start'
@@ -276,8 +293,8 @@ export function RoutineEditor({
                 {routine ? `Edit ${routine.name}` : `New routine in ${project.name}`}
               </DialogTitle>
               <DialogDescription>
-                Starts a session without a ticket with this first message, in one click or on a
-                schedule.
+                Starts a session without a ticket with this first message, in one click, on a
+                schedule, or when a ticket gets a label or its checks fail.
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-1.5">
@@ -354,7 +371,7 @@ export function RoutineEditor({
                 className={cn('text-xs', ruleProblem ? 'text-danger' : 'text-fg-2')}
               >
                 {ruleProblem ??
-                  "One permission rule per line, such as Bash(npm audit:*). Only this routine's sessions use them without asking."}
+                  "One permission rule per line, such as Bash(npm audit:*). Only this routine's sessions you start or schedule use them without asking."}
               </p>
               {offer('allow')}
             </div>
@@ -420,6 +437,60 @@ export function RoutineEditor({
               </div>
               {offer('schedule')}
             </div>
+            <div className="flex flex-col gap-1.5">
+              <FieldHeading htmlFor="routine-label">
+                Start when a ticket gets the label
+              </FieldHeading>
+              <Input
+                id="routine-label"
+                aria-describedby="routine-label-help"
+                placeholder="triage"
+                spellCheck={false}
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+              />
+              <p id="routine-label-help" className="text-xs text-fg-2">
+                Starts once when a ticket gets this label, unless its last session is still open.
+              </p>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between gap-3">
+                <FieldHeading htmlFor="routine-checks" className="font-medium">
+                  Start when a pull request&apos;s checks fail
+                </FieldHeading>
+                <Switch
+                  id="routine-checks"
+                  aria-describedby="routine-checks-help"
+                  checked={checksFail}
+                  onCheckedChange={setChecksFail}
+                />
+              </div>
+              <p id="routine-checks-help" className="text-xs text-fg-2">
+                Starts once when the checks of a GitHub ticket&apos;s pull request start failing.
+              </p>
+            </div>
+            {triggered && (
+              <div className="flex flex-col gap-1.5">
+                <FieldHeading htmlFor="routine-cap">Automatic starts a day</FieldHeading>
+                <Input
+                  id="routine-cap"
+                  type="number"
+                  min={1}
+                  max={50}
+                  aria-describedby="routine-cap-help"
+                  className="w-24"
+                  value={dailyCap}
+                  onChange={(e) => setDailyCap(e.target.value)}
+                />
+                <p
+                  id="routine-cap-help"
+                  className={cn('text-xs', capRefused ? 'text-danger' : 'text-fg-2')}
+                >
+                  {capRefused ||
+                    'Label and check starts past this many in a day are skipped and listed in Run history.'}
+                </p>
+              </div>
+            )}
           </div>
           <div className="flex flex-col gap-3 px-4 pb-4">
             {error && <p className="text-xs text-danger">{error}</p>}

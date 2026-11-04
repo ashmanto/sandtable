@@ -33,12 +33,23 @@ import { Tip } from './Tip'
 
 const ring = 'outline-none focus-ring'
 
+const startedBy = (run: RoutineRun): string =>
+  run.trigger?.kind === 'label'
+    ? `Label ${run.trigger.label} on ${run.trigger.ticket}`
+    : run.trigger?.kind === 'checks'
+      ? `Checks failed on ${run.trigger.ticket}`
+      : run.scheduled
+        ? 'On schedule'
+        : 'Started by you'
+
 const skipReason = (run: Extract<RoutineRun, { kind: 'skipped' }>): string =>
-  run.reason === 'failed'
-    ? `Couldn't start: ${run.error ?? 'unknown error'}`
-    : run.reason === 'running'
-      ? 'Its last session was still open'
-      : 'Sandtable was closed or the Mac was asleep'
+  run.reason === 'capped'
+    ? 'Daily cap reached'
+    : run.reason === 'failed'
+      ? `Couldn't start: ${run.error ?? 'unknown error'}`
+      : run.reason === 'running'
+        ? 'Its last session was still open'
+        : 'Sandtable was closed or the Mac was asleep'
 
 const openPill: Partial<Record<SessionState, string>> = {
   running: 'bg-blue-soft text-blue inset-ring-blue/40 hover:bg-blue-soft',
@@ -169,6 +180,8 @@ export function Routines({
                                 message: r.message,
                                 allow: r.allow,
                                 schedule: r.schedule,
+                                on: r.on,
+                                dailyCap: r.dailyCap,
                                 copiedFrom: { project: project.name, repo: r.repo }
                               })
                             )
@@ -267,7 +280,11 @@ function RunHistory({
         <ul className="flex flex-col gap-2">
           {runs?.map((run) => (
             <li
-              key={run.kind === 'session' ? run.sessionId : `${run.at}-skipped`}
+              key={
+                run.kind === 'session'
+                  ? run.sessionId
+                  : `${run.at}-skipped-${run.trigger?.ticket ?? ''}-${run.trigger?.kind ?? ''}`
+              }
               className={cn(
                 'flex flex-col gap-1 rounded-card px-3 py-2.5 inset-ring inset-ring-border',
                 run.kind === 'session' && 'bg-card'
@@ -295,7 +312,7 @@ function RunHistory({
                 )}
               </div>
               <p className="flex flex-wrap gap-x-2 text-xs text-fg-3">
-                <span>{run.scheduled ? 'On schedule' : 'Started by you'}</span>
+                <span>{startedBy(run)}</span>
                 {run.kind === 'session' && (
                   <>
                     <span className={cn(run.place !== 'main checkout' && 'font-mono')}>

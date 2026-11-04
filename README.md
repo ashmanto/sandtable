@@ -46,8 +46,8 @@ The following list is an overview. For the full list, see [What works today](doc
 - Answer Claude's questions and permission prompts on a card in the conversation.
 - A ticket chat that drafts comments, triage that suggests areas and blockers, and a summary draft
   when a session finishes. Sandtable posts or applies nothing until you click.
-- Sessions without a ticket, and routines: saved session starts you can run by hand or on a
-  schedule.
+- Sessions without a ticket, and routines: saved session starts you can run by hand, on a
+  schedule, or when a ticket gets a label or its pull request checks fail.
 - Per-project settings for the Claude Code account, model, token cap, automatic review, sandboxed
   commands, worktree setup, and instructions for ticket sessions.
 - A **Usage** page with token use, estimated API cost, and ticket throughput by week, and live

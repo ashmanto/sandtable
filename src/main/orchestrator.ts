@@ -42,6 +42,7 @@ import type {
   RoutineChatTurn,
   RoutineInput,
   RoutineRun,
+  RunTrigger,
   SessionCommand,
   SessionRecord,
   SessionState,
@@ -938,13 +939,19 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           m.written.assignees = relane(project, fresh.assignees, m.writtenLanes)
         Object.assign(fresh, m.after)
       }
+      const before = synced.get(projectId)
       synced.set(projectId, {
         tickets,
-        syncedAt: now().toISOString(),
+        syncedAt: new Date(startedAt).toISOString(),
         error: truncated.join(' ') || null
       })
       if (merged) mergedPrs.set(projectId, merged.prs)
       persistCache()
+      onSync(
+        projectId,
+        before?.syncedAt ? { tickets: before.tickets, syncedAt: before.syncedAt } : null,
+        tickets
+      )
       autoFindings(projectId)
       if (stamp !== null) stamps.set(projectId, { stamp, at: startedAt })
     } catch (err) {
@@ -1193,7 +1200,12 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
   const syncWatched = (timed = false): Promise<unknown> =>
     Promise.all(
       projects
-        .filter((p) => p.id === openId || sessions.some((s) => s.projectId === p.id && isLive(s)))
+        .filter(
+          (p) =>
+            p.id === openId ||
+            sessions.some((s) => s.projectId === p.id && isLive(s)) ||
+            routines.some((r) => r.projectId === p.id && r.on)
+        )
         .map((p) => (timed ? timedSync(p) : joinSync(p.id)))
     )
 
@@ -1540,7 +1552,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           resume: true,
           remoteControl: s.remoteControl,
           model: s.model,
-          allow: routines.find((r) => r.id === s.routineId)?.allow,
+          allow: s.trigger ? undefined : routines.find((r) => r.id === s.routineId)?.allow,
           sandbox
         },
         s.claudeDir
@@ -1800,6 +1812,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       routineId?: string
       allow?: string[]
       scheduled?: boolean
+      trigger?: RunTrigger
       model?: Model | null
       setupId?: string
       setup?: false
@@ -1867,7 +1880,8 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         ...(opts.prompt === undefined ? { state: 'idle', unprompted: true } : { state: 'running' }),
         startWarning: fetchWarning(repo.github, made?.fetchError),
         ...(opts.routineId && { routineId: opts.routineId }),
-        ...(opts.scheduled && { scheduled: true as const })
+        ...(opts.scheduled && { scheduled: true as const }),
+        ...(opts.trigger && { trigger: opts.trigger })
       })
     } catch (err) {
       if (made && leftover) await removeTree(made.path, [repo.path]).catch(() => undefined)
@@ -1880,7 +1894,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
   }
 
   let stopped = false
-  const { runSchedules, ...routinesApi } = createRoutines({
+  const { runSchedules, onSync, ...routinesApi } = createRoutines({
     now,
     routines: () => routines,
     setRoutines: (next) => (routines = next),

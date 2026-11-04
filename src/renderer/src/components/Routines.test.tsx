@@ -215,7 +215,9 @@ describe('Routines', () => {
   })
 
   it('copies a routine to any project, its own included, as a draft from its project and repo', async () => {
-    const { onRoutine } = renderRoutines([{ ...nightly, allow: ['Bash(npm outdated)'] }])
+    const { onRoutine } = renderRoutines([
+      { ...nightly, allow: ['Bash(npm outdated)'], on: { label: 'deps' }, dailyCap: 2 }
+    ])
     await userEvent.click(screen.getByRole('button', { name: 'More for Nightly' }))
     await userEvent.click(screen.getByRole('menuitem', { name: 'Copy to project…' }))
     expect(screen.getByRole('menuitem', { name: 'Shop' })).toBeInTheDocument()
@@ -227,8 +229,54 @@ describe('Routines', () => {
       message: 'Check dependencies',
       allow: ['Bash(npm outdated)'],
       schedule: { days: [1, 2, 3, 4, 5], time: '02:00' },
+      on: { label: 'deps' },
+      dailyCap: 2,
       copiedFrom: { project: 'Shop', repo: 'octo/shop' }
     })
+  })
+
+  it('shows what started each triggered run, and why one was capped', async () => {
+    const at = (h: number): string => new Date(2026, 9, 27, h, 0).toISOString()
+    const ticketKey = 'octo/shop#12'
+    vi.mocked(api.routines.history).mockResolvedValue([
+      {
+        kind: 'session',
+        at: at(14),
+        scheduled: false,
+        trigger: { kind: 'label', label: 'triage', ticket: ticketKey },
+        sessionId: 'a1',
+        state: 'done',
+        removed: false,
+        place: 'main checkout',
+        usage: [],
+        lastMessage: null
+      },
+      {
+        kind: 'skipped',
+        at: at(13),
+        scheduled: true,
+        reason: 'capped',
+        trigger: { kind: 'checks', ticket: ticketKey }
+      },
+      {
+        kind: 'skipped',
+        at: at(13),
+        scheduled: true,
+        reason: 'capped',
+        trigger: { kind: 'checks', ticket: 'octo/shop#13' }
+      }
+    ])
+    renderRoutines()
+    await userEvent.click(screen.getByRole('button', { name: 'More for Nightly' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Run history' }))
+    const sheet = await screen.findByRole('dialog', { name: 'Nightly: run history' })
+    const rows = await within(sheet).findAllByRole('listitem')
+    expect(rows).toHaveLength(3)
+    expect(rows[0]).toHaveTextContent('Label triage on octo/shop#12')
+    expect(rows[0]).not.toHaveTextContent('Started by you')
+    expect(rows[1]).toHaveTextContent('Checks failed on octo/shop#12')
+    expect(rows[1]).toHaveTextContent('Daily cap reached')
+    expect(rows[1]).not.toHaveTextContent('On schedule')
   })
 
   it('keeps the run history mounted while it slides out', async () => {
