@@ -1050,11 +1050,24 @@ describe('automatic review', () => {
 
   it('records no round when you start a review before the round does', async () => {
     const t = await ready()
-    const open = gated(t)
+    let open = (): void => undefined
+    const gate = new Promise<void>((r) => (open = r))
+    t.deps.fingerprint.mockImplementationOnce(async () => {
+      await gate
+      return 'tree\n'
+    })
+    let release = (): void => undefined
+    t.deps.claude.print.mockImplementationOnce(
+      () => new Promise((r) => (release = () => r(reply('medium'))))
+    )
     t.emit('s1', 'needsYou')
-    await vi.waitFor(() => expect(t.deps.pullRequests).toHaveBeenCalled())
+    await vi.waitFor(() => expect(t.deps.fingerprint).toHaveBeenCalled())
     const manual = t.orch.review('s1')
     open()
+    await vi.waitFor(async () =>
+      expect((await t.orch.findings('s1')).autoReviewing).toBeUndefined()
+    )
+    release()
     await manual
     await settle()
     expect(t.orch.session('s1')).not.toHaveProperty('reviewRounds')
@@ -1822,11 +1835,11 @@ describe('automatic review', () => {
       const { t, deny } = await gated()
       deny()
       await endTurn(t, 1)
+      await vi.waitFor(async () => expect(await gateState(t)).toBe('open'))
       expect(gateOf(t)).toBe('tree\n')
       expect(t.deps.fingerprint).toHaveBeenCalledWith(join(t.dataDir, 'gate.sh'), [
         ['', t.orch.session('s1')!.worktrees[0]]
       ])
-      expect(await gateState(t)).toBe('open')
     })
 
     it("doesn't run a round or fingerprint without a gate event or a pull request", async () => {
@@ -1939,7 +1952,7 @@ describe('automatic review', () => {
       await vi.waitFor(() => expect(titles(t)).toContain('Needs you: shop#147'))
       deny()
       await endTurn(t, 1)
-      expect(gateOf(t)).toBe('tree\n')
+      await vi.waitFor(() => expect(gateOf(t)).toBe('tree\n'))
     })
 
     it("doesn't clear a clean stop at the cap, and says how to open the gate", async () => {
@@ -1984,7 +1997,7 @@ describe('automatic review', () => {
       const { t } = await gated()
       t.deps.pullRequests.mockResolvedValue([{ ...pr, checks: [], threads: [] }])
       await endTurn(t, 1)
-      expect(gateOf(t)).toBe('tree\n')
+      await vi.waitFor(() => expect(gateOf(t)).toBe('tree\n'))
       expect(await gateState(t)).toBeUndefined()
     })
 
