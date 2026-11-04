@@ -676,6 +676,7 @@ describe('automatic review', () => {
     url: 'https://github.com/octo/shop/pull/12',
     reviewDecision: null,
     stage: 'checksFailing',
+    mergeable: 'MERGEABLE',
     checks: [
       { name: 'test', state: 'failing', jobId: 501 },
       { name: 'lint', state: 'failing' },
@@ -1639,73 +1640,91 @@ describe('automatic review', () => {
     expect(t.saved().sessions[0].autoReview?.added).toEqual(['check:501', 'thread:T_1'])
   })
 
-  it('adds one conflict finding per conflict, and again after it clears and returns', async () => {
-    const t = await ready()
-    const conflicting = { ...pr, stage: 'conflicts' as const, checks: [], threads: [] }
-    t.deps.pullRequests.mockResolvedValue([conflicting])
-    await t.orch.sync('p1')
-    await vi.waitFor(async () => expect((await t.orch.findings('s1')).findings).toHaveLength(1))
-    const [first] = (await t.orch.findings('s1')).findings
-    expect(first).toMatchObject({ source: 'conflict', title: 'octo/shop#12', checked: false })
-    expect(first.text).toMatch(/rebase/)
-    await t.orch.removeFinding('s1', first.id)
-    const syncOnce = async (): Promise<void> => {
-      const reads = t.deps.pullRequests.mock.calls.length
-      await t.orch.sync('p1')
-      await vi.waitFor(() => expect(t.deps.pullRequests).toHaveBeenCalledTimes(reads + 1))
-      await settle()
-    }
-    await syncOnce()
-    expect((await t.orch.findings('s1')).findings).toEqual([])
-    t.deps.pullRequests.mockResolvedValue([{ ...conflicting, stage: 'open' }])
-    await syncOnce()
-    expect(t.orch.session('s1')?.autoReview?.added).toEqual([])
-    t.deps.pullRequests.mockResolvedValue([conflicting])
-    await syncOnce()
-    const [second] = (await t.orch.findings('s1')).findings
-    expect(second.source).toBe('conflict')
-    expect(second.ref).not.toBe(first.ref)
-    expect(t.deps.tmux.pasteTmux).not.toHaveBeenCalled()
-  })
-
   const syncOnce = async (t: ReturnType<typeof setup>): Promise<void> => {
+    await settle()
     const reads = t.deps.pullRequests.mock.calls.length
     await t.orch.sync('p1')
     await vi.waitFor(() => expect(t.deps.pullRequests).toHaveBeenCalledTimes(reads + 1))
     await settle()
   }
+  const conflicting: PullRequestState = {
+    ...pr,
+    stage: 'conflicts',
+    mergeable: 'CONFLICTING',
+    checks: [],
+    threads: []
+  }
+  const cleared: PullRequestState = { ...conflicting, stage: 'open', mergeable: 'MERGEABLE' }
+  const conflictsOf = async (t: ReturnType<typeof setup>): Promise<Finding[]> =>
+    (await t.orch.findings('s1')).findings
+
+  it('adds one conflict finding per conflict, and again after it clears and returns', async () => {
+    const t = await ready()
+    t.deps.pullRequests.mockResolvedValue([conflicting])
+    await syncOnce(t)
+    const [first] = await conflictsOf(t)
+    expect(first).toMatchObject({ source: 'conflict', title: 'octo/shop#12', checked: false })
+    expect(first.text).toMatch(/rebase/)
+    await t.orch.removeFinding('s1', first.id)
+    await syncOnce(t)
+    expect(await conflictsOf(t)).toEqual([])
+    t.deps.pullRequests.mockResolvedValue([cleared])
+    await syncOnce(t)
+    expect(t.orch.session('s1')?.autoReview?.added).toEqual([])
+    t.deps.pullRequests.mockResolvedValue([conflicting])
+    await syncOnce(t)
+    const [second] = await conflictsOf(t)
+    expect(second.source).toBe('conflict')
+    expect(second.ref).not.toBe(first.ref)
+    expect(t.deps.tmux.pasteTmux).not.toHaveBeenCalled()
+  })
 
   it("doesn't add a deleted conflict again after you turn automatic review off and on", async () => {
     const t = await ready()
-    t.deps.pullRequests.mockResolvedValue([
-      { ...pr, stage: 'conflicts' as const, checks: [], threads: [] }
-    ])
-    await t.orch.sync('p1')
-    await vi.waitFor(async () => expect((await t.orch.findings('s1')).findings).toHaveLength(1))
-    await t.orch.removeFinding('s1', (await t.orch.findings('s1')).findings[0].id)
+    t.deps.pullRequests.mockResolvedValue([conflicting])
+    await syncOnce(t)
+    await t.orch.removeFinding('s1', (await conflictsOf(t))[0].id)
     await t.orch.setAutoReview('s1', false)
     await t.orch.setAutoReview('s1', true)
     await syncOnce(t)
-    expect((await t.orch.findings('s1')).findings).toEqual([])
+    expect(await conflictsOf(t)).toEqual([])
   })
 
-  it('removes an unsent conflict finding when the conflict clears, and keeps a sent one', async () => {
+  it('keeps an unsent conflict finding when the conflict clears, and adds no second one when it returns', async () => {
     const t = await ready()
-    const conflicting = { ...pr, stage: 'conflicts' as const, checks: [], threads: [] }
-    t.deps.pullRequests.mockResolvedValue([conflicting])
-    await t.orch.sync('p1')
-    await vi.waitFor(async () => expect((await t.orch.findings('s1')).findings).toHaveLength(1))
-    await settle()
-    t.deps.pullRequests.mockResolvedValue([{ ...conflicting, stage: 'open' }])
-    await syncOnce(t)
-    expect((await t.orch.findings('s1')).findings).toEqual([])
     t.deps.pullRequests.mockResolvedValue([conflicting])
     await syncOnce(t)
-    const [sent] = (await t.orch.findings('s1')).findings
-    await t.orch.sendFindings('s1', [sent.id])
+    const [first] = await conflictsOf(t)
+    t.deps.pullRequests.mockResolvedValue([cleared])
+    await syncOnce(t)
+    expect(await conflictsOf(t)).toEqual([first])
+    t.deps.pullRequests.mockResolvedValue([conflicting])
+    await syncOnce(t)
+    expect(await conflictsOf(t)).toEqual([first])
+    await t.orch.removeFinding('s1', first.id)
+    await syncOnce(t)
+    expect(await conflictsOf(t)).toEqual([])
+  })
+
+  it("doesn't count a draft or unknown mergeable state as a cleared conflict", async () => {
+    const t = await ready()
+    t.deps.pullRequests.mockResolvedValue([conflicting])
+    await syncOnce(t)
+    await t.orch.removeFinding('s1', (await conflictsOf(t))[0].id)
     t.deps.pullRequests.mockResolvedValue([{ ...conflicting, stage: 'open' }])
     await syncOnce(t)
-    expect((await t.orch.findings('s1')).findings.map((f) => f.id)).toEqual([sent.id])
+    t.deps.pullRequests.mockResolvedValue([{ ...conflicting, stage: 'open', mergeable: 'UNKNOWN' }])
+    await syncOnce(t)
+    t.deps.pullRequests.mockResolvedValue([conflicting])
+    await syncOnce(t)
+    expect(await conflictsOf(t)).toEqual([])
+  })
+
+  it('adds a conflict finding for each conflicting pull request', async () => {
+    const t = await ready()
+    t.deps.pullRequests.mockResolvedValue([conflicting, { ...conflicting, repo: 'octo/api' }])
+    await syncOnce(t)
+    expect((await conflictsOf(t)).map((f) => f.title)).toEqual(['octo/shop#12', 'octo/api#12'])
   })
 
   it('pastes only the High proposal after a sync added pull request findings', async () => {
@@ -2005,6 +2024,7 @@ describe('pull requests', () => {
     url: 'https://github.com/octo/shop/pull/12',
     reviewDecision: null,
     stage: 'checksFailing',
+    mergeable: 'MERGEABLE',
     checks: [
       { name: 'test', state: 'failing', jobId: 501 },
       { name: 'lint', state: 'passing', jobId: 502 },

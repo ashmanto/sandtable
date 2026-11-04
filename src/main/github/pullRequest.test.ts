@@ -152,6 +152,7 @@ describe('fetchPullRequests', () => {
         url: 'https://github.com/o/r/pull/12',
         reviewDecision: 'changesRequested',
         stage: 'checksFailing',
+        mergeable: 'MERGEABLE',
         checks: [
           {
             name: 'test',

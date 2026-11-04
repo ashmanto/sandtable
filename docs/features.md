@@ -883,8 +883,8 @@ refusal, a notification title, or a format example.
 - When that pull request conflicts with its base branch, Sandtable adds a **PR conflict** finding
   that asks the session to merge or rebase on the base branch and resolve the conflicts.
 - Each is added once, so a finding you delete isn't added again, and a finding you added yourself
-  stays as it is. When a conflict clears, its unsent finding goes away, and the conflict is added
-  again if it comes back.
+  stays as it is. After GitHub reports the pull request mergeable again, a returning conflict adds
+  a new finding, unless the earlier one is still unsent.
 - These findings wait for you to check and send them, or to send them with **Send all**.
 
 ### Automatic review states and notifications

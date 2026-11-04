@@ -360,6 +360,7 @@ describe('GaugesPanel', () => {
         url: 'https://github.com/o/r/pull/286',
         reviewDecision: null,
         stage,
+        mergeable: 'MERGEABLE',
         checks: [{ name: 'ci', state: 'failing' }],
         threads: []
       }

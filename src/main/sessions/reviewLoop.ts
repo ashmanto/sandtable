@@ -384,25 +384,22 @@ export function createReviewLoop(ctx: {
     for (const pr of prs) {
       const key = `conflict:${pr.repo}#${pr.number}:`
       const known = s.autoReview?.added ?? []
-      if (pr.stage !== 'conflicts') {
+      if (pr.mergeable === 'MERGEABLE') {
         if (known.some((r) => r.startsWith(key))) {
           autoOf(s).added = known.filter((r) => !r.startsWith(key))
-          ctx.setFindings(
-            ctx
-              .findings()
-              .filter(
-                (f) =>
-                  f.sessionId !== s.id ||
-                  f.source !== 'conflict' ||
-                  !!f.sentAt ||
-                  !`conflict:${f.ref}`.startsWith(key)
-              )
-          )
           await persist()
-          changed(s.projectId)
         }
-      } else if (!known.some((r) => r.startsWith(key))) {
-        const ref = `${pr.repo}#${pr.number}:${randomUUID()}`
+      } else if (pr.stage === 'conflicts' && !known.some((r) => r.startsWith(key))) {
+        const open = ctx
+          .findings()
+          .find(
+            (f) =>
+              f.sessionId === s.id &&
+              f.source === 'conflict' &&
+              !f.sentAt &&
+              `conflict:${f.ref}`.startsWith(key)
+          )
+        const ref = open?.ref ?? `${pr.repo}#${pr.number}:${randomUUID()}`
         await add(`conflict:${ref}`, () =>
           addPrFinding(s, 'conflict', ref, false, async () => ({
             title: `${pr.repo}#${pr.number}`,
