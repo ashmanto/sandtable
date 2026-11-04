@@ -117,6 +117,7 @@ import {
   hookSettings,
   sandboxSettings,
   STATUS_SCRIPT,
+  GATE_SCRIPT,
   oneLine,
   withoutUnsafe,
   openingPrompt,
@@ -242,6 +243,7 @@ export type OrchestratorDeps = {
   githubViewer(): Promise<string>
   githubReposOf(path: string): Promise<string[]>
   pullRequests(repo: string, branch: string): Promise<PullRequestState[]>
+  fingerprint(script: string, worktrees: string[]): Promise<string>
   failedLog(repo: string, jobId: number): Promise<string>
   /** Opens a folder in Finder, or in the app; resolves to an error message, or '' when it opened. */
   openFolder(folder: string, app?: string): Promise<string>
@@ -1342,6 +1344,8 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
   const settingsDir = join(deps.dataDir, 'settings')
   const eventsDir = join(deps.dataDir, 'events')
   const statusScript = join(deps.dataDir, 'statusline.sh')
+  const gateScript = join(deps.dataDir, 'gate.sh')
+  const gateFile = (id: string): string => join(settingsDir, `${id}.gate`)
   const statusFile = (id: string): string => join(deps.dataDir, 'status', `${id}.json`)
   const imagesDir = (id: string): string => join(deps.dataDir, 'images', id)
   const notesFile = (id: string): string => join(deps.dataDir, 'notes', `${id}.md`)
@@ -1379,9 +1383,14 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     await mkdir(eventsDir, { recursive: true })
     await mkdir(settingsDir, { recursive: true })
     await mkdir(join(deps.dataDir, 'status'), { recursive: true })
-    const scriptTemp = `${statusScript}.${randomUUID()}`
-    await writeFile(scriptTemp, STATUS_SCRIPT)
-    await rename(scriptTemp, statusScript)
+    for (const [file, text] of [
+      [statusScript, STATUS_SCRIPT],
+      [gateScript, GATE_SCRIPT]
+    ]) {
+      const temp = `${file}.${randomUUID()}`
+      await writeFile(temp, text)
+      await rename(temp, file)
+    }
     await writeFile(
       settingsFile,
       JSON.stringify(
@@ -1396,7 +1405,10 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
             `Read(/${notesFile(id)})`,
             `Edit(/${notesFile(id)})`
           ],
-          opts.sandbox && sandboxSettings(opts.sandbox, deps.dataDir, agentSockets(), npmCache)
+          opts.sandbox && sandboxSettings(opts.sandbox, deps.dataDir, agentSockets(), npmCache),
+          rules.ticket !== undefined && rules.worktree
+            ? { script: gateScript, file: gateFile(id), worktrees: [cwd, ...opts.addDirs] }
+            : undefined
         )
       )
     )

@@ -362,6 +362,8 @@ async function start(): Promise<void> {
     githubStamp: (board, repos) => changeStamp(github.gql, board, repos),
     githubReposOf,
     pullRequests: (repo, branch) => fetchPullRequests(github.gql, repo, branch),
+    fingerprint: async (script, worktrees) =>
+      (await run('/bin/sh', [script, 'fingerprint', ...worktrees], undefined, 30_000)).stdout,
     failedLog: (repo, jobId) => failedLog(run, tools.paths.gh ?? 'gh', repo, jobId),
     openFolder: (folder, app) => (app ? openInEditor(app, folder) : shell.openPath(folder)),
     git: { ensureWorktree, removeWorktree, checkRemovable, changes: worktreeChanges },

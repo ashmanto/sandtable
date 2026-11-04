@@ -53,6 +53,7 @@ import {
   sandboxSettings,
   schemaArgs,
   STATUS_SCRIPT,
+  GATE_SCRIPT,
   CHECKS_RULE
 } from './sessions/claudeLaunch'
 import { compactText, prepareText } from '../shared/compact'
@@ -577,6 +578,8 @@ describe('your instructions and note', () => {
     await t.orch.resume('s1')
     const [, , cmd] = t.deps.tmux.startTmux.mock.calls[0]
     expect(rulesOf(cmd)).not.toContain('Your instructions')
+    const settings = JSON.parse(readFileSync(join(t.dataDir, 'settings', 's1.json'), 'utf8'))
+    expect(settings.hooks.PreToolUse).toHaveLength(1)
   })
 
   it('saves instructions without blank texts, and no key when nothing is left', async () => {
@@ -2124,11 +2127,18 @@ describe('resume and remove', () => {
             `Read(/${join(t.dataDir, 'images', 's1')}/**)`,
             `Read(/${join(t.dataDir, 'notes', 's1.md')})`,
             `Edit(/${join(t.dataDir, 'notes', 's1.md')})`
-          ]
+          ],
+          undefined,
+          {
+            script: join(t.dataDir, 'gate.sh'),
+            file: join(t.dataDir, 'settings', 's1.gate'),
+            worktrees: wts
+          }
         )
       )
     )
     expect(readFileSync(join(t.dataDir, 'statusline.sh'), 'utf8')).toBe(STATUS_SCRIPT)
+    expect(readFileSync(join(t.dataDir, 'gate.sh'), 'utf8')).toBe(GATE_SCRIPT)
     expect(cmd.at(-1)).toContain('Filing issues in octo/shop:')
     expect(cmd.at(-1)).toContain('Closes #147')
     expect(cmd.at(-1)).toContain('Never remove the worktree')

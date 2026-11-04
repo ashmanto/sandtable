@@ -93,6 +93,7 @@ it('marks a needsYou session finished when its tmux session ends', async () => {
     githubViewer: vi.fn(),
     githubReposOf: async () => [],
     pullRequests: async () => [],
+    fingerprint: async () => '',
     failedLog: async () => '',
     openFolder: async () => '',
     git: {

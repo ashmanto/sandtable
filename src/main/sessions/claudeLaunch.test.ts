@@ -422,6 +422,43 @@ describe('hookSettings', () => {
   })
 })
 
+describe('gate hook', () => {
+  it('adds a Bash gate entry after the cap entry only with a gate', () => {
+    const gate = { script: "/d/gate's.sh", file: '/d/s1.gate', worktrees: ['/w/a b', '/w/c'] }
+    type Hooks = { hooks: { PreToolUse: object[] } }
+    const settings = hookSettings('/e.jsonl', '/c', '/s', '/sh', [], undefined, gate) as Hooks
+    const plain = hookSettings('/e.jsonl', '/c', '/s', '/sh') as Hooks
+    expect(settings.hooks.PreToolUse).toEqual([
+      plain.hooks.PreToolUse[0],
+      {
+        matcher: 'Bash',
+        hooks: [
+          {
+            type: 'command',
+            command: `sh '/d/gate'\\''s.sh' hook '/d/s1.gate' '/e.jsonl' '/w/a b' '/w/c'`
+          }
+        ]
+      }
+    ])
+    expect(plain.hooks.PreToolUse).toHaveLength(1)
+  })
+
+  it('adds the gate rule only with a ticket, on every tracker', () => {
+    const rule =
+      "- When Sandtable denies a pull request command because it's reviewing first, end your turn and wait. Don't open the pull request another way."
+    for (const tracker of [
+      {},
+      { linear: { team: 'APP', projects: [] } },
+      { jira: { site: 'acme.atlassian.net', project: 'INF', name: 'Internal' } }
+    ]) {
+      expect(
+        sessionRules({ repo: 'octo/shop', ticket: '#46', worktree: true, ...tracker })
+      ).toContain(rule)
+      expect(sessionRules({ repo: 'octo/shop', worktree: true, ...tracker })).not.toContain(rule)
+    }
+  })
+})
+
 describe('hookSettings permissions', () => {
   it('adds allowed rules only when there are some', () => {
     expect(hookSettings('/e.jsonl', '/c', '/s', '/sh', ['Read'])).toMatchObject({
@@ -1110,11 +1147,10 @@ describe('gate script', () => {
   const fingerprint = (script: string, ...wts: string[]): string =>
     execFileSync('sh', [script, 'fingerprint', ...wts], { encoding: 'utf8' })
   const hook = (f: { dir: string; wt: string; script: string }, command: string): string =>
-    execFileSync(
-      'sh',
-      [f.script, 'hook', join(f.dir, 's1.gate'), join(f.dir, 'e.jsonl'), f.wt],
-      { input: JSON.stringify({ tool_name: 'Bash', tool_input: { command } }), encoding: 'utf8' }
-    )
+    execFileSync('sh', [f.script, 'hook', join(f.dir, 's1.gate'), join(f.dir, 'e.jsonl'), f.wt], {
+      input: JSON.stringify({ tool_name: 'Bash', tool_input: { command } }),
+      encoding: 'utf8'
+    })
   const events = (dir: string): string =>
     existsSync(join(dir, 'e.jsonl')) ? readFileSync(join(dir, 'e.jsonl'), 'utf8') : ''
 
@@ -1189,6 +1225,23 @@ describe('gate script', () => {
     expect(out).toHaveLength(3)
     expect(out[1]).toMatch(/^[0-9a-f]{40}$/)
     expect(existsSync(join(empty, '.git', 'index'))).toBe(false)
+  })
+
+  it('runs from the gate hook entry with quoted paths', () => {
+    const f = fixture()
+    const settings = hookSettings(join(f.dir, 'e.jsonl'), '/c', '/s', '/sh', [], undefined, {
+      script: f.script,
+      file: join(f.dir, 's1.gate'),
+      worktrees: [f.wt]
+    }) as { hooks: { PreToolUse: { hooks: { command: string }[] }[] } }
+    const run = (): string =>
+      execFileSync('/bin/sh', ['-c', settings.hooks.PreToolUse[1].hooks[0].command], {
+        input: JSON.stringify({ tool_input: { command: 'gh pr create' } }),
+        encoding: 'utf8'
+      })
+    expect(JSON.parse(run()).hookSpecificOutput.permissionDecision).toBe('deny')
+    writeFileSync(join(f.dir, 's1.gate'), fingerprint(f.script, f.wt))
+    expect(run()).toBe('')
   })
 
   it('denies with valid JSON when a worktree is gone', () => {
