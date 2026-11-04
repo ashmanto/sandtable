@@ -494,6 +494,26 @@ describe('Changes findings rail', () => {
     expect(screen.getByText('keep').closest('tr')).not.toHaveTextContent('Has a finding')
   })
 
+  it('says whether the pull request is held or free to open', async () => {
+    const held =
+      'Automatic review: holding the pull request until the review ends and you decide every proposal.'
+    const open = 'Automatic review: Claude can open the pull request.'
+    for (const [gate, text] of [
+      ['held', held],
+      ['open', open]
+    ] as const) {
+      withFindings([], { auto: { rounds: 1 }, gate })
+      render(<Changes session={session('T1', { state: 'needsYou' })} active />)
+      expect(await within(await railShown()).findByText(text)).toBeInTheDocument()
+      cleanup()
+    }
+    withFindings([], { auto: { rounds: 1 } })
+    render(<Changes session={session('T1', { state: 'needsYou' })} active />)
+    await within(await railShown()).findByText('Automatic review: 1 of 3 rounds done.')
+    expect(within(rail()).queryByText(held)).toBeNull()
+    expect(within(rail()).queryByText(open)).toBeNull()
+  })
+
   it('says where the automatic review stands, and nothing while it is off', async () => {
     for (const [auto, autoReviewing, text, reviewing = false] of [
       [

@@ -431,6 +431,13 @@ export function Findings({
         <div className="min-w-0 flex-1">
           <p>{reviewLine}</p>
           {found?.auto && <p>{autoStatus(found.auto, !!found.autoReviewing)}</p>}
+          {found?.gate && (
+            <p>
+              {found.gate === 'held'
+                ? 'Automatic review: holding the pull request until the review ends and you decide every proposal.'
+                : 'Automatic review: Claude can open the pull request.'}
+            </p>
+          )}
         </div>
         <Tip
           label="Claude reads the branch's diff and proposes findings. Sent findings stay as they are."
