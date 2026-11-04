@@ -783,7 +783,7 @@ refusal, a notification title, or a format example.
   a range. A removed line takes no comment.
 - A finding follows its first line's text when the lines move, and shows **Outdated** when that
   text is gone.
-- A finding's source reads **You**, **Claude review**, **PR check**, or **PR comment**.
+- A finding's source reads **You**, **Claude review**, **PR check**, **PR comment**, or **PR conflict**.
 - **Send to session** pastes the checked findings into the terminal as one message and marks them
   **Sent**. **Send all** does the same for every unsent finding, checked or not.
 - **Select all** checks every unsent finding, or clears them when all are checked.

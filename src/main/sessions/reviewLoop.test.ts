@@ -1668,6 +1668,22 @@ describe('automatic review', () => {
     expect(t.deps.tmux.pasteTmux).not.toHaveBeenCalled()
   })
 
+  it('adds a conflict again after automatic review was off while it cleared', async () => {
+    const t = await ready()
+    t.deps.pullRequests.mockResolvedValue([
+      { ...pr, stage: 'conflicts' as const, checks: [], threads: [] }
+    ])
+    await t.orch.sync('p1')
+    await vi.waitFor(async () => expect((await t.orch.findings('s1')).findings).toHaveLength(1))
+    const [first] = (await t.orch.findings('s1')).findings
+    await t.orch.removeFinding('s1', first.id)
+    await t.orch.setAutoReview('s1', false)
+    await t.orch.setAutoReview('s1', true)
+    await t.orch.sync('p1')
+    await vi.waitFor(async () => expect((await t.orch.findings('s1')).findings).toHaveLength(1))
+    expect((await t.orch.findings('s1')).findings[0].ref).not.toBe(first.ref)
+  })
+
   it('pastes only the High proposal after a sync added pull request findings', async () => {
     const t = await ready()
     withPr(t)

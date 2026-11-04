@@ -544,7 +544,7 @@ export function createReviewLoop(ctx: {
       if (typeof on !== 'boolean') throw new Error('Not a valid setting')
       if (!s.ticketKey) throw new Error('Only a ticket session has a review')
       if (s.removedAt) throw new Error('The worktree was removed')
-      const added = s.autoReview?.added
+      const added = s.autoReview?.added?.filter((r) => !on || !r.startsWith('conflict:'))
       s.autoReview = on ? { on, rounds: 0, ...(added && { added }) } : { ...autoOf(s), on }
       await persist()
       changed(s.projectId)
