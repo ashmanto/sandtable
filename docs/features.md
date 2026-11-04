@@ -880,8 +880,10 @@ refusal, a notification title, or a format example.
 
 - After each board sync, on any tracker, Sandtable adds each failing GitHub Actions check and
   unresolved review thread on a live session's open pull request as an unchecked finding.
+- When that pull request conflicts with its base branch, Sandtable adds a **PR conflict** finding
+  that asks the session to merge or rebase on the base branch and resolve the conflicts.
 - Each is added once, so a finding you delete isn't added again, and a finding you added yourself
-  stays as it is.
+  stays as it is. A conflict that clears and comes back later is added again.
 - These findings wait for you to check and send them, or to send them with **Send all**.
 
 ### Automatic review states and notifications

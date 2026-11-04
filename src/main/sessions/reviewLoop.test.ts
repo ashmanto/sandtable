@@ -1639,6 +1639,35 @@ describe('automatic review', () => {
     expect(t.saved().sessions[0].autoReview?.added).toEqual(['check:501', 'thread:T_1'])
   })
 
+  it('adds one conflict finding per conflict, and again after it clears and returns', async () => {
+    const t = await ready()
+    const conflicting = { ...pr, stage: 'conflicts' as const, checks: [], threads: [] }
+    t.deps.pullRequests.mockResolvedValue([conflicting])
+    await t.orch.sync('p1')
+    await vi.waitFor(async () => expect((await t.orch.findings('s1')).findings).toHaveLength(1))
+    const [first] = (await t.orch.findings('s1')).findings
+    expect(first).toMatchObject({ source: 'conflict', title: 'octo/shop#12', checked: false })
+    expect(first.text).toMatch(/rebase/)
+    await t.orch.removeFinding('s1', first.id)
+    const syncOnce = async (): Promise<void> => {
+      const reads = t.deps.pullRequests.mock.calls.length
+      await t.orch.sync('p1')
+      await vi.waitFor(() => expect(t.deps.pullRequests).toHaveBeenCalledTimes(reads + 1))
+      await settle()
+    }
+    await syncOnce()
+    expect((await t.orch.findings('s1')).findings).toEqual([])
+    t.deps.pullRequests.mockResolvedValue([{ ...conflicting, stage: 'open' }])
+    await syncOnce()
+    expect(t.orch.session('s1')?.autoReview?.added).toEqual([])
+    t.deps.pullRequests.mockResolvedValue([conflicting])
+    await syncOnce()
+    const [second] = (await t.orch.findings('s1')).findings
+    expect(second.source).toBe('conflict')
+    expect(second.ref).not.toBe(first.ref)
+    expect(t.deps.tmux.pasteTmux).not.toHaveBeenCalled()
+  })
+
   it('pastes only the High proposal after a sync added pull request findings', async () => {
     const t = await ready()
     withPr(t)
