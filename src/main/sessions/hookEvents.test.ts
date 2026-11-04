@@ -8,6 +8,7 @@ import {
   ANSWERED_EVENT,
   conversationIds,
   countNeedsYou,
+  hasEvent,
   hasStarted,
   IDLE_EVENT,
   readAgentRequests,
@@ -102,6 +103,20 @@ describe('hasStarted', () => {
     expect(await hasStarted(file, size)).toBe(false)
     await appendFile(file, line('SessionStart'))
     expect(await hasStarted(file, size)).toBe(true)
+  })
+})
+
+describe('hasEvent', () => {
+  it('finds a named event only past a byte offset', async () => {
+    const file = join(dir, 'g.jsonl')
+    await writeFile(file, line('SandtableGate'))
+    const { size } = await stat(file)
+    expect(await hasEvent(file, 'SandtableGate')).toBe(true)
+    expect(await hasEvent(file, 'SandtableGate', size)).toBe(false)
+    await appendFile(file, line('Stop'))
+    expect(await hasEvent(file, 'SandtableGate', size)).toBe(false)
+    await appendFile(file, line('SandtableGate'))
+    expect(await hasEvent(file, 'SandtableGate', size)).toBe(true)
   })
 })
 

@@ -1571,6 +1571,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       )
       if (sandbox) s.sandbox = { allowedDomains: sandbox }
       else delete s.sandbox
+      await reviewLoop.syncGate(s)
     } finally {
       resuming.delete(s.id)
     }
@@ -1765,6 +1766,8 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       )
     },
     entryCount: (sessionId) => liveView.entryCount(sessionId),
+    fingerprint: (s) => deps.fingerprint(gateScript, s.worktrees),
+    gateFile,
     roundStarted: (s, ticketKey) => {
       if (s.state !== 'needsYou' || s.asking || s.capped) return false
       s.state = 'reviewing'
@@ -2151,6 +2154,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           ? [...projects, withGroup(p, undefined)]
           : projects.with(i, withGroup(p, projects[i].group))
       await persist()
+      for (const s of sessions) if (s.projectId === p.id) await reviewLoop.syncGate(s)
       if (resourced) {
         synced.delete(p.id)
         mergedPrs.delete(p.id)
@@ -2575,6 +2579,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           await removeCreated()
           throw err
         }
+        await reviewLoop.syncGate(sessions.at(-1)!)
         if (setup === false) await unpend(worktrees)
         ticket.repo = main.github
         const fresh = synced.get(projectId)?.tickets.find((t) => t.key === ticketKey)

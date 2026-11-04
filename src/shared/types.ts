@@ -255,6 +255,9 @@ export type AutoReview = {
   reviewed?: string
   stopped?: 'clean' | 'rounds'
   added?: string[]
+  fingerprint?: string
+  gateFrom?: number
+  held?: true
 }
 
 /** When a routine runs: days as `Date.getDay()` and a 24-hour "HH:MM" local time. */
@@ -574,6 +577,7 @@ export type FindingsState = {
   reviewError?: string
   auto?: AutoReview
   autoReviewing?: true
+  gate?: 'held' | 'open'
 }
 
 /** An open pull request for a session's branch, with its review decision, checks, and unresolved threads. */
