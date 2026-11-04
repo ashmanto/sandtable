@@ -17,7 +17,10 @@ import {
   sessionRules,
   STATUS_SCRIPT,
   withoutUnsafe,
-  CHECKS_RULE
+  CHECKS_RULE,
+  GATE_EVENT,
+  GATE_REASON,
+  GATE_SCRIPT
 } from './claudeLaunch'
 import { instructionsBytes, MAX_INSTRUCTIONS_BYTES } from '../../shared/instructions'
 import { tempDirs } from '../test/tempDirs'
@@ -1082,5 +1085,116 @@ describe('redact', () => {
     expect(redact('npm_package_version npm_config_cache')).toBe(
       'npm_package_version npm_config_cache'
     )
+  })
+})
+
+describe('gate script', () => {
+  const tempDir = tempDirs()
+  const git = (cwd: string, ...args: string[]): string =>
+    execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
+      cwd,
+      encoding: 'utf8'
+    })
+  const fixture = (name = 'st gate '): { dir: string; wt: string; script: string } => {
+    const dir = tempDir(name)
+    const wt = join(dir, "work tree's")
+    mkdirSync(wt)
+    git(wt, 'init', '-q')
+    writeFileSync(join(wt, 'a.txt'), 'one\n')
+    git(wt, 'add', 'a.txt')
+    git(wt, 'commit', '-qm', 'first')
+    const script = join(dir, 'gate.sh')
+    writeFileSync(script, GATE_SCRIPT)
+    return { dir, wt, script }
+  }
+  const fingerprint = (script: string, ...wts: string[]): string =>
+    execFileSync('sh', [script, 'fingerprint', ...wts], { encoding: 'utf8' })
+  const hook = (f: { dir: string; wt: string; script: string }, command: string): string =>
+    execFileSync(
+      'sh',
+      [f.script, 'hook', join(f.dir, 's1.gate'), join(f.dir, 'e.jsonl'), f.wt],
+      { input: JSON.stringify({ tool_name: 'Bash', tool_input: { command } }), encoding: 'utf8' }
+    )
+  const events = (dir: string): string =>
+    existsSync(join(dir, 'e.jsonl')) ? readFileSync(join(dir, 'e.jsonl'), 'utf8') : ''
+
+  it.each([
+    'gh pr create --fill',
+    'git push && gh pr create --draft',
+    'cd x; gh pr create',
+    'echo $(gh pr create)',
+    'gh api repos/o/r/pulls -X POST -f title=t',
+    'gh api --method POST repos/o/r/pulls',
+    'gh api repos/o/r/pulls -f head=b',
+    'gh api repos/o/r/pulls \\\n  -X POST'
+  ])('denies %j while the gate is closed and records the denial', (command) => {
+    const f = fixture()
+    expect(JSON.parse(hook(f, command))).toEqual({
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'deny',
+        permissionDecisionReason: GATE_REASON
+      }
+    })
+    expect(events(f.dir)).toBe(GATE_EVENT + '\n')
+  })
+
+  it.each([
+    'gh pr view',
+    'gh pr ready 12',
+    'gh pr checks --watch',
+    'gh api repos/o/r/pulls',
+    'gh api repos/o/r/pulls/1/comments -f body=x',
+    'gh api -X GET repos/o/r/pulls -f state=open',
+    'git log'
+  ])('allows %j', (command) => {
+    const f = fixture()
+    expect(hook(f, command)).toBe('')
+    expect(events(f.dir)).toBe('')
+  })
+
+  it('allows a pull request when the gate file holds open or the fingerprint of the files', () => {
+    const f = fixture()
+    writeFileSync(join(f.dir, 's1.gate'), 'open')
+    expect(hook(f, 'gh pr create')).toBe('')
+    writeFileSync(join(f.dir, 's1.gate'), fingerprint(f.script, f.wt))
+    expect(hook(f, 'gh pr create')).toBe('')
+    writeFileSync(join(f.wt, 'a.txt'), 'two\n')
+    expect(hook(f, 'gh pr create')).not.toBe('')
+    expect(events(f.dir)).toBe(GATE_EVENT + '\n')
+  })
+
+  it('fingerprints untracked and unstaged files without touching the real index', () => {
+    const f = fixture()
+    const index = join(f.wt, '.git', 'index')
+    const before = readFileSync(index)
+    const first = fingerprint(f.script, f.wt)
+    expect(first).toMatch(/^[0-9a-f]{40}\n$/)
+    writeFileSync(join(f.wt, 'new.txt'), 'x\n')
+    const second = fingerprint(f.script, f.wt)
+    expect(second).not.toBe(first)
+    writeFileSync(join(f.wt, 'a.txt'), 'two\n')
+    expect(fingerprint(f.script, f.wt)).not.toBe(second)
+    expect(readFileSync(index)).toEqual(before)
+    expect(git(f.wt, 'status', '--porcelain')).toBe(' M a.txt\n?? new.txt\n')
+  })
+
+  it('fingerprints a repo with no commits and no index, one line per worktree', () => {
+    const f = fixture()
+    const empty = join(f.dir, 'empty')
+    mkdirSync(empty)
+    git(empty, 'init', '-q')
+    writeFileSync(join(empty, 'b.txt'), 'b\n')
+    const out = fingerprint(f.script, f.wt, empty).split('\n')
+    expect(out).toHaveLength(3)
+    expect(out[1]).toMatch(/^[0-9a-f]{40}$/)
+    expect(existsSync(join(empty, '.git', 'index'))).toBe(false)
+  })
+
+  it('denies with valid JSON when a worktree is gone', () => {
+    const f = fixture()
+    writeFileSync(join(f.dir, 's1.gate'), fingerprint(f.script, f.wt))
+    execFileSync('rm', ['-rf', f.wt])
+    expect(JSON.parse(hook(f, 'gh pr create')).hookSpecificOutput.permissionDecision).toBe('deny')
   })
 })

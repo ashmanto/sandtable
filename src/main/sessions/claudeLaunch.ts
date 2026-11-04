@@ -307,6 +307,56 @@ cost=$(get cost.total_cost_usd); add=$(get cost.total_lines_added); del=$(get co
 printf '%s │ $%.2f │ +%s −%s\\n' "$out" "\${cost:-0}" "\${add:-0}" "\${del:-0}"
 `
 
+/** The events-file line the gate script appends when it denies a pull request command. */
+export const GATE_EVENT = JSON.stringify({ hook_event_name: 'SandtableGate' })
+
+/** Why the gate script denies a pull request command, which Claude reads as the tool result. */
+export const GATE_REASON =
+  "Sandtable is reviewing this work before the pull request opens. End your turn now and wait. Don't open the pull request another way."
+
+const GATE_OUTPUT = JSON.stringify({
+  hookSpecificOutput: {
+    hookEventName: 'PreToolUse',
+    permissionDecision: 'deny',
+    permissionDecisionReason: GATE_REASON
+  }
+})
+
+/** The `sh` script that prints a tree hash per worktree (`fingerprint <worktree>...`), or as a PreToolUse hook (`hook <gate file> <events file> <worktree>...`) denies a pull request command unless the gate file holds `open` or those hashes. */
+export const GATE_SCRIPT = String.raw`export LC_ALL=C
+print() {
+  for w in "$@"; do
+    i=$(git -C "$w" rev-parse --path-format=absolute --git-path index 2>/dev/null) && t=$(mktemp) || { echo missing; continue; }
+    cp "$i" "$t" 2>/dev/null || rm -f "$t"
+    if GIT_INDEX_FILE=$t git -C "$w" add -A 2>/dev/null && h=$(GIT_INDEX_FILE=$t git -C "$w" write-tree 2>/dev/null); then echo "$h"; else echo missing; fi
+    rm -f "$t"
+  done
+}
+case $1 in
+  fingerprint) shift; print "$@"; exit 0 ;;
+  hook) gate=$2; events=$3; shift 3 ;;
+  *) exit 0 ;;
+esac
+cmd=$(plutil -extract tool_input.command raw -o - - 2>/dev/null) || exit 0
+set -f
+hit=
+for s in $(printf '%s\n' "$cmd" | awk '{ if (sub(/\\$/, "")) printf "%s ", $0; else print }' | tr ';&|()\140' '\n\n\n\n\n\n' | tr ' \t' '\001\001'); do
+  s=$(printf '%s' "$s" | tr '\001' ' ')
+  if printf '%s' "$s" | grep -Eq '(^|[[:space:]])gh[[:space:]]+pr[[:space:]]+create([[:space:]]|$)'; then hit=1; break; fi
+  printf '%s' "$s" | grep -Eq '(^|[[:space:]])gh[[:space:]]+api[[:space:]]' || continue
+  printf '%s' "$s" | grep -Eq '(^|[[:space:]/])pulls["'"'"']?([[:space:]]|$)' || continue
+  printf '%s' "$s" | grep -Eiq -- '-X[[:space:]]*GET|--method[[:space:]=]+GET' && continue
+  if printf '%s' "$s" | grep -Eiq -- '-X[[:space:]]*POST|--method[[:space:]=]+POST' ||
+    printf '%s' "$s" | grep -Eq -- '(^|[[:space:]])(-f|-F|--field|--raw-field|--input)([[:space:]]|=)'; then hit=1; break; fi
+done
+[ -n "$hit" ] || exit 0
+want=$(cat "$gate" 2>/dev/null)
+[ "$want" = open ] && exit 0
+[ -n "$want" ] && [ "$want" = "$(print "$@")" ] && exit 0
+printf '%s\n' ${shellQuote(GATE_EVENT)} >> "$events"
+printf '%s\n' ${shellQuote(GATE_OUTPUT)}
+`
+
 /** The SSH agent sockets that exist, `$SSH_AUTH_SOCK` and 1Password's, so a sandboxed git can sign commits. */
 export const agentSockets = (home = homedir(), env = process.env.SSH_AUTH_SOCK): string[] =>
   [
