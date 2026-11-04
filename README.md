@@ -41,7 +41,8 @@ The following list is an overview. For the full list, see [What works today](doc
   open review threads, collected as findings you send to the session. With **Automatic review** on
   for a project or a session, the review runs when Claude ends its turn with an open pull request,
   sends the **High** line proposals to the session, and leaves the rest for you, for up to 3
-  rounds. The session shows **Reviewing**
+  rounds. It also holds back the pull request until the rounds end and you've decided every
+  proposal, and runs a round when Claude tries to open it. The session shows **Reviewing**
   while a round runs, and the conversation records each round and how it went.
 - Answer Claude's questions and permission prompts on a card in the conversation.
 - A ticket chat that drafts comments, triage that suggests areas and blockers, and a summary draft

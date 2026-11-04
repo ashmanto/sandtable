@@ -831,7 +831,8 @@ refusal, a notification title, or a format example.
 - **Automatic review** is set per project on the **Review** step, off by default, and per ticket
   session with the side panel's switch, which starts from the project's setting.
 - With it on, when Claude ends its turn while its branch has an open pull request and its diff
-  differs from the last one reviewed, Sandtable runs **Claude review** on its own.
+  differs from the last one reviewed, or after the pull request gate held one back, Sandtable
+  runs **Claude review** on its own.
 - The automatic run uses the same tools, deny rules, and timeout as **Claude review**.
 - It keeps the **High** proposals on lines of the diff and sends them to the session as one
   message, which then shows them **Sent**. **Done when** proposals always wait for you.
@@ -858,6 +859,21 @@ refusal, a notification title, or a format example.
 - Only turning the session's switch on again starts stopped rounds over; turning the project's
   setting off and on again doesn't.
 - A round turned off and on again during its review says so.
+
+### Pull request gate
+
+- With **Automatic review** on, a ticket session can't open a pull request until the gate opens.
+  Sandtable denies `gh pr create`, drafts included, and a `gh api` POST to a `pulls` endpoint,
+  anywhere in a Bash command, from Claude or a subagent. `gh pr ready` isn't gated.
+- The denial tells Claude to end its turn and wait, and a round runs at **Needs you** without an
+  open pull request. For changed files, it starts over a round that stopped clean, never one
+  stopped after 3 rounds.
+- The gate opens when the last round reviewed the files as they are now, uncommitted and
+  untracked ones included, no proposal waits, and no **High** finding is unsent. Dismissing a
+  proposal counts as deciding it.
+- You tell Claude to open the pull request. Sandtable never types it.
+- A failed or timed-out round, or the 3-round cap, keeps the gate closed. It's open when
+  **Automatic review** is off for the session.
 
 ### Automatic pull request findings
 
