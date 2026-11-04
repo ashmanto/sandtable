@@ -347,18 +347,19 @@ case $1 in
   hook) gate=$2; events=$3; shift 3 ;;
   *) exit 0 ;;
 esac
-cmd=$(plutil -extract tool_input.command raw -o - - 2>/dev/null) || exit 0
+in=$(cat)
+cmd=$(printf '%s' "$in" | plutil -extract tool_input.command raw -o - - 2>/dev/null) || cmd=$in
 case $cmd in *gh*) ;; *) exit 0 ;; esac
 set -f
 hit=
 for s in $(printf '%s\n' "$cmd" | awk '{ if (sub(/\\$/, "")) printf "%s ", $0; else print }' | tr ';&|()<>\140' '\n\n\n\n\n\n\n\n' | tr ' \t' '\001\001'); do
-  s=$(printf '%s' "$s" | tr '\001' ' ')
+  s=$(printf '%s' "$s" | tr '\001' ' ' | tr -d '\\"'"'")
   if printf '%s' "$s" | grep -Eq '(^|[[:space:]/"'"'"'])gh[[:space:]]+pr[[:space:]]+(create|new)([[:space:]"'"'"']|$)'; then hit=1; break; fi
   printf '%s' "$s" | grep -Eq '(^|[[:space:]/"'"'"'])gh[[:space:]]+api[[:space:]]' || continue
   printf '%s' "$s" | grep -Eq '(^|[[:space:]/])pulls["'"'"']?([[:space:]]|$)' || continue
   printf '%s' "$s" | grep -Eiq -- '-X[[:space:]]*GET|--method[[:space:]=]+GET' && continue
   if printf '%s' "$s" | grep -Eiq -- '-X[[:space:]]*POST|--method[[:space:]=]+POST' ||
-    printf '%s' "$s" | grep -Eq -- '(^|[[:space:]])(-f|-F|--field|--raw-field|--input)([[:space:]]|=)'; then hit=1; break; fi
+    printf '%s' "$s" | grep -Eq -- '(^|[[:space:]])(-[fF]|--field|--raw-field|--input)'; then hit=1; break; fi
 done
 [ -n "$hit" ] || exit 0
 want=$(cat "$gate" 2>/dev/null)

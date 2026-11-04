@@ -27,6 +27,10 @@ import { hasEvent } from './hookEvents'
 
 const MAX_ANCHOR_FILE_BYTES = 5_000_000
 
+/** Why a held pull request can't be released when the worktrees' files can't be fingerprinted. */
+export const GATE_UNCHECKED =
+  "Sandtable couldn't check the worktree's files, so it can't open the pull request gate. Turn off Automatic review for this session to let Claude open it."
+
 const sameLines = (a: Finding, b: Finding): boolean =>
   a.worktree === b.worktree &&
   a.path === b.path &&
@@ -119,6 +123,7 @@ export function createReviewLoop(ctx: {
           (f.proposed || (f.source === 'review' && f.severity === 'high' && !f.sentAt))
       ).length
   const gates = new Map<string, Promise<void>>()
+  const scanned = new Map<string, number>()
   const reviewedGates = new Set<string>()
   const gateText = async (s: SessionRecord): Promise<string | null> => {
     if (!autoOn(s)) return 'open'
@@ -412,7 +417,9 @@ export function createReviewLoop(ctx: {
         await assertSendable(s)
         if (await drafted(s)) return
         const size = (await stat(s.eventsFile).catch(() => null))?.size ?? 0
-        const gated = await hasEvent(s.eventsFile, 'SandtableGate', s.autoReview?.gateFrom ?? 0)
+        const from = Math.max(s.autoReview?.gateFrom ?? 0, scanned.get(s.id) ?? 0)
+        const gated = await hasEvent(s.eventsFile, 'SandtableGate', from)
+        if (!gated) scanned.set(s.id, size)
         if (gated && !s.autoReview?.held) {
           autoOf(s).held = true
           await persist()
@@ -421,8 +428,13 @@ export function createReviewLoop(ctx: {
         const stopped = s.autoReview?.stopped
         const capped = (s.autoReview?.rounds ?? 0) >= AUTO_REVIEW_ROUNDS
         if (stopped === 'rounds' || (stopped === 'clean' && (!gated || capped))) return
-        const fingerprint = await ctx.fingerprint(s).catch(() => undefined)
         if (!gated && !(await pullRequestsOf(s)).some((w) => w.prs.length)) return
+        const fingerprint = await ctx.fingerprint(s).catch(() => undefined)
+        if (gated && !fingerprint) {
+          reviewErrors.set(s.id, GATE_UNCHECKED)
+          changed(s.projectId)
+          return
+        }
         const changes = await changesOf(s.id)
         if (!diffText(changes)) {
           if (gated) {

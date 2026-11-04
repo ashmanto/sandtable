@@ -874,6 +874,7 @@ refusal, a notification title, or a format example.
 - You tell Claude to open the pull request. Sandtable never types it.
 - A failed or timed-out round, or the 3-round cap, keeps the gate closed. At the cap, the
   **Changes** panel says to turn off **Automatic review** for the session, which opens the gate.
+  It says the same when Sandtable can't check the worktree's files, and runs no round then.
 
 ### Automatic pull request findings
 

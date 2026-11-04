@@ -1172,7 +1172,10 @@ describe('gate script', () => {
     'gh pr new --fill',
     "bash -c 'gh pr create'",
     '/opt/homebrew/bin/gh pr create',
-    'gh pr create>/dev/null'
+    'gh pr create>/dev/null',
+    '\\gh pr create',
+    '"gh" pr create',
+    'gh api repos/o/r/pulls -fhead=b'
   ])('denies %j while the gate is closed and records the denial', (command) => {
     const f = fixture()
     expect(JSON.parse(hook(f, command))).toEqual({
@@ -1197,6 +1200,16 @@ describe('gate script', () => {
     const f = fixture()
     expect(hook(f, command)).toBe('')
     expect(events(f.dir)).toBe('')
+  })
+
+  it("denies a pull request command it can't parse", () => {
+    const f = fixture()
+    const out = execFileSync(
+      'sh',
+      [f.script, 'hook', join(f.dir, 's1.gate'), join(f.dir, 'e.jsonl'), f.gd, f.wt],
+      { input: '{"tool_input": {"command": "gh pr create', encoding: 'utf8' }
+    )
+    expect(JSON.parse(out).hookSpecificOutput.permissionDecision).toBe('deny')
   })
 
   it('allows a pull request when the gate file holds open or the fingerprint of the files', () => {

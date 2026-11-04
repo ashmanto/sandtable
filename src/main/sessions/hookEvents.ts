@@ -151,12 +151,22 @@ export const countNeedsYou = async (eventsFile: string): Promise<number> =>
   (await replay(eventsFile)).needsYou
 
 /** Whether an events file has a `name` event after byte `from`. */
-export const hasEvent = async (eventsFile: string, name: string, from = 0): Promise<boolean> =>
-  (await readFile(eventsFile).catch(() => Buffer.alloc(0)))
-    .subarray(from)
-    .toString('utf8')
-    .split('\n')
-    .some((l) => (parseJson(l) as HookInput | null)?.hook_event_name === name)
+export async function hasEvent(eventsFile: string, name: string, from = 0): Promise<boolean> {
+  const file = await open(eventsFile, 'r').catch(() => null)
+  if (!file) return false
+  try {
+    const { size } = await file.stat()
+    if (size <= from) return false
+    const bytes = Buffer.alloc(size - from)
+    await file.read(bytes, 0, bytes.length, from)
+    return bytes
+      .toString('utf8')
+      .split('\n')
+      .some((l) => (parseJson(l) as HookInput | null)?.hook_event_name === name)
+  } finally {
+    await file.close()
+  }
+}
 
 /** Whether Claude Code fired SessionStart into an events file after byte `from`, which it doesn't before you trust the folder. */
 export const hasStarted = (eventsFile: string, from = 0): Promise<boolean> =>

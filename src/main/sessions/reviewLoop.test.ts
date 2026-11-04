@@ -33,6 +33,7 @@ import {
 import { diffText, reviewArgs, reviewPrompt } from './review'
 import { sessionDraft } from '../../shared/drafts'
 import { GATE_EVENT } from './claudeLaunch'
+import { GATE_UNCHECKED } from './reviewLoop'
 
 vi.mock('../env/tools', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../env/tools')>()),
@@ -1740,12 +1741,13 @@ describe('automatic review', () => {
       expect(await gateState(t)).toBe('open')
     })
 
-    it("doesn't run a round without a gate event or a pull request", async () => {
+    it("doesn't run a round or fingerprint without a gate event or a pull request", async () => {
       const { t } = await gated()
       t.emit('s1', 'running')
       t.emit('s1', 'needsYou')
       await settle()
       expect(t.deps.claude.print).not.toHaveBeenCalled()
+      expect(t.deps.fingerprint).not.toHaveBeenCalled()
       expect(gateOf(t)).toBeNull()
     })
 
@@ -1830,12 +1832,26 @@ describe('automatic review', () => {
       expect(gateOf(t)).toBeNull()
     })
 
-    it('never opens on a fingerprint that failed', async () => {
+    it("says why it can't check the files, and runs no round, when the fingerprint fails", async () => {
       const { t, deny } = await gated()
       t.deps.fingerprint.mockResolvedValue('')
       deny()
-      await endTurn(t, 1)
+      t.emit('s1', 'needsYou')
+      await vi.waitFor(async () =>
+        expect((await t.orch.findings('s1')).reviewError).toBe(GATE_UNCHECKED)
+      )
+      expect(t.deps.claude.print).not.toHaveBeenCalled()
       expect(gateOf(t)).toBeNull()
+    })
+
+    it('still sees a gate event after a quiet turn end', async () => {
+      const { t, deny } = await gated()
+      t.emit('s1', 'running')
+      t.emit('s1', 'needsYou')
+      await settle()
+      deny()
+      await endTurn(t, 1)
+      expect(gateOf(t)).toBe('tree\n')
     })
 
     it("doesn't clear a clean stop at the cap, and says how to open the gate", async () => {
