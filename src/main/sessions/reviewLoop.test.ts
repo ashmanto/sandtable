@@ -1,4 +1,11 @@
-import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
@@ -25,6 +32,8 @@ import {
 } from '../test/orchestrator'
 import { diffText, reviewArgs, reviewPrompt } from './review'
 import { sessionDraft } from '../../shared/drafts'
+import { GATE_EVENT } from './claudeLaunch'
+import { GATE_UNCHECKED } from './reviewLoop'
 
 vi.mock('../env/tools', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../env/tools')>()),
@@ -1204,9 +1213,17 @@ describe('automatic review', () => {
       ['high', false, true],
       ['medium', true, false]
     ])
-    expect(await auto(t)).toEqual({ rounds: 1, reviewed: expect.any(String) })
+    expect(await auto(t)).toEqual({
+      rounds: 1,
+      reviewed: expect.any(String),
+      fingerprint: 'tree\n'
+    })
     await t.orch.flush()
-    expect(t.saved().sessions[0].autoReview).toEqual({ rounds: 1, reviewed: expect.any(String) })
+    expect(t.saved().sessions[0].autoReview).toEqual({
+      rounds: 1,
+      reviewed: expect.any(String),
+      fingerprint: 'tree\n'
+    })
   })
 
   it('notifies how many proposals wait and opens the Changes tab on click', async () => {
@@ -1691,6 +1708,222 @@ describe('automatic review', () => {
       await settle()
       expect(t.deps.pullRequests).not.toHaveBeenCalled()
     }
+  })
+
+  describe('pull request gate', () => {
+    const gated = async (
+      own: Partial<SessionRecord> = {}
+    ): Promise<{ t: ReturnType<typeof setup>; deny: () => void }> => {
+      const eventsFile = join(tempDir('st-gate-'), 'e.jsonl')
+      writeFileSync(eventsFile, '')
+      const t = await ready({ autoReview: true }, undefined, { eventsFile, ...own })
+      t.deps.pullRequests.mockResolvedValue([])
+      t.deps.claude.print.mockResolvedValue(reply())
+      return { t, deny: () => appendFileSync(eventsFile, GATE_EVENT + '\n') }
+    }
+    const gateOf = (t: ReturnType<typeof setup>): string | null => {
+      const file = join(t.dataDir, 'settings', 's1.gate')
+      return existsSync(file) ? readFileSync(file, 'utf8') : null
+    }
+    const gateState = async (t: ReturnType<typeof setup>): Promise<FindingsState['gate']> =>
+      (await t.orch.findings('s1')).gate
+    const proposalIds = async (t: ReturnType<typeof setup>): Promise<string[]> =>
+      (await t.orch.findings('s1')).findings.filter((f) => f.proposed).map((f) => f.id)
+
+    it('opens after a clean round', async () => {
+      const { t, deny } = await gated()
+      deny()
+      await endTurn(t, 1)
+      expect(gateOf(t)).toBe('tree\n')
+      expect(t.deps.fingerprint).toHaveBeenCalledWith(join(t.dataDir, 'gate.sh'), [
+        ['', t.orch.session('s1')!.worktrees[0]]
+      ])
+      expect(await gateState(t)).toBe('open')
+    })
+
+    it("doesn't run a round or fingerprint without a gate event or a pull request", async () => {
+      const { t } = await gated()
+      t.emit('s1', 'running')
+      t.emit('s1', 'needsYou')
+      await settle()
+      expect(t.deps.claude.print).not.toHaveBeenCalled()
+      expect(t.deps.fingerprint).not.toHaveBeenCalled()
+      expect(gateOf(t)).toBeNull()
+    })
+
+    it('stays closed and held while a proposal waits, and opens after you dismiss it', async () => {
+      const { t, deny } = await gated()
+      t.deps.claude.print.mockResolvedValue(reply('medium'))
+      deny()
+      await endTurn(t, 1)
+      expect(gateOf(t)).toBeNull()
+      expect(await gateState(t)).toBe('held')
+      await t.orch.removeFinding('s1', (await proposalIds(t))[0])
+      expect(gateOf(t)).toBe('tree\n')
+      expect(await gateState(t)).toBe('open')
+    })
+
+    it('opens after you keep the last proposal', async () => {
+      const { t, deny } = await gated()
+      t.deps.claude.print.mockResolvedValue(reply('low'))
+      deny()
+      await endTurn(t, 1)
+      await t.orch.updateFinding('s1', (await proposalIds(t))[0], { kept: true })
+      expect(gateOf(t)).toBe('tree\n')
+    })
+
+    it("stays closed while a High finding is unsent, and opens once it's sent", async () => {
+      const { t, deny } = await gated()
+      t.deps.claude.print.mockResolvedValue(reply('high'))
+      t.deps.tmux.pasteTmux.mockRejectedValueOnce(new Error('tmux paste-buffer failed'))
+      deny()
+      await endTurn(t, 1)
+      expect(gateOf(t)).toBeNull()
+      const high = (await t.orch.findings('s1')).findings[0]
+      expect(high.sentAt).toBeUndefined()
+      await t.orch.sendFindings('s1', [high.id])
+      expect(gateOf(t)).toBe('tree\n')
+    })
+
+    it('closes when the files change after it opened', async () => {
+      const { t, deny } = await gated()
+      deny()
+      await endTurn(t, 1)
+      t.deps.fingerprint.mockResolvedValue('tree2\n')
+      t.emit('s1', 'running')
+      t.emit('s1', 'needsYou')
+      await vi.waitFor(() => expect(gateOf(t)).toBeNull())
+    })
+
+    it('runs another round for changed files on a gate event, clearing a clean stop', async () => {
+      const { t, deny } = await gated()
+      deny()
+      await endTurn(t, 1)
+      expect((await auto(t))?.stopped).toBe('clean')
+      t.deps.fingerprint.mockResolvedValue('tree2\n')
+      deny()
+      await endTurn(t, 2)
+      expect(t.deps.claude.print).toHaveBeenCalledTimes(2)
+      expect(gateOf(t)).toBe('tree2\n')
+    })
+
+    it("doesn't run a round on a gate event for files it already reviewed", async () => {
+      const { t, deny } = await gated()
+      deny()
+      await endTurn(t, 1)
+      deny()
+      t.emit('s1', 'running')
+      t.emit('s1', 'needsYou')
+      await settle()
+      expect(t.deps.claude.print).toHaveBeenCalledTimes(1)
+      expect(gateOf(t)).toBe('tree\n')
+    })
+
+    it('never clears a rounds stop, so the gate stays closed at the cap', async () => {
+      const { t, deny } = await gated({
+        autoReview: { on: true, rounds: 3, stopped: 'rounds', fingerprint: 'old\n' }
+      })
+      deny()
+      t.emit('s1', 'running')
+      t.emit('s1', 'needsYou')
+      await settle()
+      await vi.waitFor(async () => expect(await gateState(t)).toBe('capped'))
+      expect(t.deps.claude.print).not.toHaveBeenCalled()
+      expect(gateOf(t)).toBeNull()
+    })
+
+    it("says why it can't check the files, and runs no round, when the fingerprint fails", async () => {
+      const { t, deny } = await gated()
+      t.deps.fingerprint.mockResolvedValue('')
+      deny()
+      t.emit('s1', 'needsYou')
+      await vi.waitFor(async () =>
+        expect((await t.orch.findings('s1')).reviewError).toBe(GATE_UNCHECKED)
+      )
+      expect(t.deps.claude.print).not.toHaveBeenCalled()
+      expect(gateOf(t)).toBeNull()
+    })
+
+    it('still sees a gate event after a quiet turn end', async () => {
+      const { t, deny } = await gated()
+      t.emit('s1', 'running')
+      t.emit('s1', 'needsYou')
+      await vi.waitFor(() => expect(titles(t)).toContain('Needs you: shop#147'))
+      deny()
+      await endTurn(t, 1)
+      expect(gateOf(t)).toBe('tree\n')
+    })
+
+    it("doesn't clear a clean stop at the cap, and says how to open the gate", async () => {
+      const { t, deny } = await gated({
+        autoReview: { on: true, rounds: 3, stopped: 'clean', fingerprint: 'old\n' }
+      })
+      deny()
+      t.emit('s1', 'running')
+      t.emit('s1', 'needsYou')
+      await vi.waitFor(async () => expect(await gateState(t)).toBe('capped'))
+      expect(t.deps.claude.print).not.toHaveBeenCalled()
+      expect(gateOf(t)).toBeNull()
+    })
+
+    it('stays closed after a failed round', async () => {
+      const { t, deny } = await gated()
+      t.deps.claude.print.mockResolvedValue({ stdout: '', stderr: 'boom', code: 1 })
+      deny()
+      t.emit('s1', 'needsYou')
+      await vi.waitFor(() => expect(t.orch.session('s1')?.reviewRounds?.[0].error).toBeDefined())
+      await settle()
+      expect(gateOf(t)).toBeNull()
+    })
+
+    it('opens when the switch turns off, even during a round, and closes when it turns on', async () => {
+      const { t, deny } = await gated()
+      const release = held(t)
+      deny()
+      t.emit('s1', 'needsYou')
+      await vi.waitFor(() => expect(t.deps.claude.print).toHaveBeenCalled())
+      await t.orch.setAutoReview('s1', false)
+      expect(gateOf(t)).toBe('open')
+      release()
+      await vi.waitFor(() => expect(t.orch.session('s1')?.reviewRounds?.[0].endedAt).toBeDefined())
+      await settle()
+      expect(gateOf(t)).toBe('open')
+      await t.orch.setAutoReview('s1', true)
+      expect(gateOf(t)).toBeNull()
+    })
+
+    it("doesn't say Claude can open the pull request when nothing was held", async () => {
+      const { t } = await gated()
+      t.deps.pullRequests.mockResolvedValue([{ ...pr, checks: [], threads: [] }])
+      await endTurn(t, 1)
+      expect(gateOf(t)).toBe('tree\n')
+      expect(await gateState(t)).toBeUndefined()
+    })
+
+    it("says why a held pull request can't be reviewed", async () => {
+      const { t, deny } = await gated()
+      t.deps.git.changes.mockRejectedValue(new Error('no origin HEAD'))
+      deny()
+      t.emit('s1', 'needsYou')
+      await vi.waitFor(async () =>
+        expect((await t.orch.findings('s1')).reviewError).toBe('no origin HEAD')
+      )
+      expect(await gateState(t)).toBe('held')
+    })
+
+    it('leaves a removed session alone when the project changes', async () => {
+      const { t } = await gated({ removedAt: '2026-11-04T00:00:00.000Z' })
+      const p = (await t.orch.listProjects()).find((x) => x.id === 'p1')!
+      await t.orch.saveProject({ ...p, autoReview: undefined })
+      expect(gateOf(t)).toBeNull()
+    })
+
+    it('opens for a session that follows its project when the project turns it off', async () => {
+      const { t } = await gated()
+      const p = (await t.orch.listProjects()).find((x) => x.id === 'p1')!
+      await t.orch.saveProject({ ...p, autoReview: undefined })
+      expect(gateOf(t)).toBe('open')
+    })
   })
 })
 

@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { lstat, readFile } from 'node:fs/promises'
-import { isAbsolute, join, resolve } from 'node:path'
+import { lstat, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 import type {
   AutoReview,
   Finding,
@@ -23,8 +23,13 @@ import { diffText, MAX_ISSUE_BYTES, parseReview, reviewArgs, reviewPrompt } from
 import { typeIntoTmux } from './tmux'
 import { promptTyped } from './prompt'
 import { messageOf } from '../../shared/errors'
+import { hasEvent } from './hookEvents'
 
 const MAX_ANCHOR_FILE_BYTES = 5_000_000
+
+/** Why a held pull request can't be released when the worktrees' files can't be fingerprinted. */
+export const GATE_UNCHECKED =
+  "Sandtable couldn't check the worktree's files, so it can't open the pull request gate. Turn off Automatic review for this session to let Claude open it."
 
 const sameLines = (a: Finding, b: Finding): boolean =>
   a.worktree === b.worktree &&
@@ -54,6 +59,7 @@ type ReviewLoop = Pick<
   inRound(sessionId: string): boolean
   leaveRound(sessionId: string): void
   pending(sessionId: string): boolean
+  syncGate(s: SessionRecord): Promise<void>
 }
 
 /** Builds the review loop over the orchestrator's sessions and stored findings. */
@@ -78,6 +84,8 @@ export function createReviewLoop(ctx: {
   entryCount: (sessionId: string) => Promise<number>
   roundStarted: (s: SessionRecord, ticketKey: string) => boolean
   roundEnded: (s: SessionRecord, quiet: boolean) => void
+  fingerprint: (s: SessionRecord) => Promise<string>
+  gateFile: (id: string) => string
 }): ReviewLoop {
   const { deps, now, persist, changed, sessionById, projectById, assertCurrent } = ctx
   const { assertSendable, changesOf, labelOf, printRun, sending } = ctx
@@ -105,6 +113,50 @@ export function createReviewLoop(ctx: {
       (pane) => !promptTyped(pane),
       () => false
     ))
+
+  const waitingFor = (s: SessionRecord): number =>
+    ctx
+      .findings()
+      .filter(
+        (f) =>
+          f.sessionId === s.id &&
+          (f.proposed || (f.source === 'review' && f.severity === 'high' && !f.sentAt))
+      ).length
+  const gates = new Map<string, Promise<void>>()
+  const scanned = new Map<string, number>()
+  const reviewedGates = new Set<string>()
+  const gateText = async (s: SessionRecord): Promise<string | null> => {
+    if (!autoOn(s)) return 'open'
+    const reviewed = s.autoReview?.fingerprint
+    if (!reviewed || waitingFor(s) || s.reviewRounds?.at(-1)?.error) return null
+    const now = await ctx.fingerprint(s).catch(() => null)
+    return now === reviewed && autoOn(s) ? now : null
+  }
+  const writeGate = async (s: SessionRecord): Promise<void> => {
+    const text = await gateText(s)
+    const file = ctx.gateFile(s.id)
+    if (text === null) await rm(file, { force: true })
+    else {
+      const temp = `${file}.${randomUUID()}`
+      await mkdir(dirname(file), { recursive: true })
+      await writeFile(temp, text)
+      await rename(temp, file)
+    }
+    if (text === null || text === 'open') reviewedGates.delete(s.id)
+    else if (s.autoReview?.held) reviewedGates.add(s.id)
+    if (text !== null && s.autoReview?.held) {
+      delete s.autoReview.held
+      await persist()
+      changed(s.projectId)
+    }
+  }
+  const syncGate = (s: SessionRecord): Promise<void> => {
+    if (!s.ticketKey || !s.worktrees.length || s.removedAt) return Promise.resolve()
+    const next = (gates.get(s.id) ?? Promise.resolve()).then(() => writeGate(s))
+    const settled = next.catch(() => undefined)
+    gates.set(s.id, settled)
+    return settled
+  }
 
   const findingById = (sessionId: string, id: string): Finding => {
     const f = ctx.findings().find((x) => x.sessionId === sessionId && x.id === id)
@@ -253,6 +305,7 @@ export function createReviewLoop(ctx: {
       if (chosen.some((f) => f.sentAt)) {
         await persist()
         changed(s.projectId)
+        await syncGate(s)
       }
     }
   }
@@ -348,10 +401,11 @@ export function createReviewLoop(ctx: {
     inRound: (sessionId) => inRound.has(sessionId),
     leaveRound: (sessionId) => void inRound.delete(sessionId),
     pending: (sessionId) => autoRunning.has(sessionId),
+    syncGate,
 
     async autoRound(s) {
       const { ticketKey } = s
-      if (!autoOn(s) || !ticketKey || s.autoReview?.stopped || autoRunning.has(s.id)) return
+      if (!autoOn(s) || !ticketKey || autoRunning.has(s.id)) return
       if (s.state !== 'needsYou' || s.capped || reviewing.has(s.id)) return
       autoRunning.add(s.id)
       let round: ReviewRound | undefined
@@ -362,14 +416,47 @@ export function createReviewLoop(ctx: {
       try {
         await assertSendable(s)
         if (await drafted(s)) return
-        if (!(await pullRequestsOf(s)).some((w) => w.prs.length)) return
+        const size = (await stat(s.eventsFile).catch(() => null))?.size ?? 0
+        const from = Math.max(s.autoReview?.gateFrom ?? 0, scanned.get(s.id) ?? 0)
+        const gated = await hasEvent(s.eventsFile, 'SandtableGate', from)
+        if (!gated) scanned.set(s.id, size)
+        if (gated && !s.autoReview?.held) {
+          autoOf(s).held = true
+          await persist()
+          changed(s.projectId)
+        }
+        const stopped = s.autoReview?.stopped
+        const capped = (s.autoReview?.rounds ?? 0) >= AUTO_REVIEW_ROUNDS
+        if (stopped === 'rounds' || (stopped === 'clean' && (!gated || capped))) return
+        if (!gated && !(await pullRequestsOf(s)).some((w) => w.prs.length)) return
+        const fingerprint = await ctx.fingerprint(s).catch(() => undefined)
+        if (gated && !fingerprint) {
+          reviewErrors.set(s.id, GATE_UNCHECKED)
+          changed(s.projectId)
+          return
+        }
         const changes = await changesOf(s.id)
-        if (!diffText(changes)) return
+        if (!diffText(changes)) {
+          if (gated) {
+            reviewErrors.set(s.id, changes.find((c) => c.error)?.error ?? 'No changes to review')
+            changed(s.projectId)
+          }
+          return
+        }
         const hash = createHash('sha256').update(JSON.stringify(changes)).digest('hex')
         const auto = autoOf(s)
-        if (auto.reviewed === hash || reviewing.has(s.id)) return
+        if (gated && fingerprint && fingerprint === auto.fingerprint) {
+          auto.gateFrom = size
+          await persist()
+          return
+        }
+        if ((!gated && auto.reviewed === hash) || reviewing.has(s.id)) return
         const at = await ctx.entryCount(s.id).catch(() => undefined)
         if (reviewing.has(s.id)) return
+        if (gated) {
+          auto.gateFrom = size
+          if (auto.stopped === 'clean') delete auto.stopped
+        }
         round = {
           ...(at !== undefined && { at }),
           round: auto.rounds + 1,
@@ -392,7 +479,7 @@ export function createReviewLoop(ctx: {
         }
         auto.rounds += 1
         auto.reviewed = hash
-        const mine = (): Finding[] => ctx.findings().filter((f) => f.sessionId === s.id)
+        if (fingerprint) auto.fingerprint = fingerprint
         const high = proposals.filter((f) => f.severity === 'high' && f.path)
         for (const f of high) delete f.proposed
         if (!high.length) auto.stopped = 'clean'
@@ -402,9 +489,7 @@ export function createReviewLoop(ctx: {
         const ids = high.map((f) => f.id)
         if (ids.length && (await quiet(s))) await sendTo(s, ids, true).catch(() => undefined)
         round.sent = high.filter((f) => f.sentAt).length
-        const waiting = mine().filter(
-          (f) => f.proposed || (f.source === 'review' && f.severity === 'high' && !f.sentAt)
-        ).length
+        const waiting = waitingFor(s)
         round.waiting = waiting
         if (waiting)
           ctx.notifyWaiting(
@@ -424,6 +509,7 @@ export function createReviewLoop(ctx: {
           await persist().catch(() => undefined)
           changed(s.projectId)
         }
+        await syncGate(s)
       }
     },
 
@@ -446,6 +532,7 @@ export function createReviewLoop(ctx: {
       s.autoReview = on ? { on, rounds: 0, ...(added && { added }) } : { ...autoOf(s), on }
       await persist()
       changed(s.projectId)
+      await syncGate(s)
     },
 
     async findings(sessionId) {
@@ -458,7 +545,15 @@ export function createReviewLoop(ctx: {
         ...(s.reviews && { reviews: s.reviews }),
         ...(reviewError !== undefined && { reviewError }),
         ...(auto && { auto: s.autoReview ?? { rounds: 0 } }),
-        ...(autoRunning.has(sessionId) && reviewing.has(sessionId) && { autoReviewing: true })
+        ...(autoRunning.has(sessionId) && reviewing.has(sessionId) && { autoReviewing: true }),
+        ...(s.autoReview?.held
+          ? {
+              gate:
+                s.autoReview.stopped === 'rounds' || s.autoReview.rounds >= AUTO_REVIEW_ROUNDS
+                  ? ('capped' as const)
+                  : ('held' as const)
+            }
+          : reviewedGates.has(sessionId) && { gate: 'open' as const })
       }
     },
 
@@ -507,6 +602,7 @@ export function createReviewLoop(ctx: {
       if (patch.kept) delete f.proposed
       await persist()
       changed(s.projectId)
+      await syncGate(s)
     },
 
     async removeFinding(sessionId, id) {
@@ -516,6 +612,7 @@ export function createReviewLoop(ctx: {
       ctx.setFindings(ctx.findings().filter((x) => x !== f))
       await persist()
       changed(s.projectId)
+      await syncGate(s)
     },
 
     async review(sessionId) {

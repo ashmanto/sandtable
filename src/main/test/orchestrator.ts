@@ -251,6 +251,7 @@ export function setup(
     githubStamp: vi.fn<OrchestratorDeps['githubStamp']>(async () => 'same'),
     githubReposOf: vi.fn(async (path: string) => folders[path] ?? []),
     pullRequests: vi.fn<OrchestratorDeps['pullRequests']>(async () => []),
+    fingerprint: vi.fn<OrchestratorDeps['fingerprint']>(async () => 'tree\n'),
     failedLog: vi.fn<OrchestratorDeps['failedLog']>(async () => 'Error: expected 1'),
     openFolder: vi.fn<OrchestratorDeps['openFolder']>(async () => ''),
     git: {

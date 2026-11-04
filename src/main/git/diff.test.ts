@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { MAX_CHARS } from '../../shared/findings'
 import type { FileDiff } from '../../shared/types'
 import { MAX_FILES, MAX_LINES, parser, worktreeChanges } from './diff'
+import { ownGitDir } from './worktree'
 
 const parseDiff = (patch: string): FileDiff[] => {
   const p = parser()
@@ -177,6 +178,12 @@ describe('worktreeChanges', () => {
 
   afterEach(async () => {
     await fs.rm(root, { recursive: true, force: true })
+  })
+
+  it("finds a linked worktree's git folder in the project's repo, and nothing for another", async () => {
+    expect(await ownGitDir(wt, [repo])).toBe(path.join(repo, '.git', 'worktrees', 'wt'))
+    expect(await ownGitDir(wt, [])).toBeUndefined()
+    expect(await ownGitDir(repo, [repo])).toBeUndefined()
   })
 
   it("reads a CRLF file's lines without their carriage return", async () => {

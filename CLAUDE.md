@@ -70,6 +70,8 @@ Start reading from `src/main/orchestrator.ts`, `src/shared/api.ts`, and
   allowed rules, the Read rule for a session's sent images, the Read and Edit rules for its
   compact notes, the sandbox when a project turns it on, and the read-only runs' deny rules go in through `claude --settings`, and its session, chat, routine chat, summary, triage, review,
   readiness, and overlap rules through `--append-system-prompt`.
+- A live session's hooks deny a tool call only when the session reached its token cap, or when a
+  ticket session with **Automatic review** on tries to open a pull request before the gate opens.
 - A worktree with uncommitted or unpushed changes is never removed, and `git worktree remove`
   never gets `--force`.
 - External programs run with `execFile` or `spawn` and an argument array, never a shell string.

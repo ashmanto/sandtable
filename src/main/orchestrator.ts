@@ -63,7 +63,7 @@ import { MODELS, reassign, withGroup } from '../shared/types'
 import { appName, isApp } from '../shared/editors'
 import { isSandboxDomain, sandboxDomains } from '../shared/sandbox'
 import { branchName } from './git/branchName'
-import { worktreePath } from './git/worktree'
+import { ownGitDir, worktreePath } from './git/worktree'
 import type { AreasClient } from './github/areas'
 import { boardError, type BoardClient } from './github/board'
 import type { RepoIssuesClient } from './github/repoIssues'
@@ -117,6 +117,7 @@ import {
   hookSettings,
   sandboxSettings,
   STATUS_SCRIPT,
+  GATE_SCRIPT,
   oneLine,
   withoutUnsafe,
   openingPrompt,
@@ -242,6 +243,7 @@ export type OrchestratorDeps = {
   githubViewer(): Promise<string>
   githubReposOf(path: string): Promise<string[]>
   pullRequests(repo: string, branch: string): Promise<PullRequestState[]>
+  fingerprint(script: string, trees: [string, string][]): Promise<string>
   failedLog(repo: string, jobId: number): Promise<string>
   /** Opens a folder in Finder, or in the app; resolves to an error message, or '' when it opened. */
   openFolder(folder: string, app?: string): Promise<string>
@@ -1342,6 +1344,10 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
   const settingsDir = join(deps.dataDir, 'settings')
   const eventsDir = join(deps.dataDir, 'events')
   const statusScript = join(deps.dataDir, 'statusline.sh')
+  const gateScript = join(deps.dataDir, 'gate.sh')
+  const gateFile = (id: string): string => join(settingsDir, `${id}.gate`)
+  const treesOf = (worktrees: string[], repoPaths: string[]): Promise<[string, string][]> =>
+    Promise.all(worktrees.map(async (w) => [(await ownGitDir(w, repoPaths)) ?? '', w]))
   const statusFile = (id: string): string => join(deps.dataDir, 'status', `${id}.json`)
   const imagesDir = (id: string): string => join(deps.dataDir, 'images', id)
   const notesFile = (id: string): string => join(deps.dataDir, 'notes', `${id}.md`)
@@ -1371,6 +1377,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     opts: Omit<Parameters<typeof claudeArgs>[0], 'settingsFile' | 'rules'> & {
       allow?: string[]
       sandbox?: string[]
+      repoPaths?: string[]
     },
     dir: string = deps.claudeDir
   ): Promise<string> => {
@@ -1379,9 +1386,14 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     await mkdir(eventsDir, { recursive: true })
     await mkdir(settingsDir, { recursive: true })
     await mkdir(join(deps.dataDir, 'status'), { recursive: true })
-    const scriptTemp = `${statusScript}.${randomUUID()}`
-    await writeFile(scriptTemp, STATUS_SCRIPT)
-    await rename(scriptTemp, statusScript)
+    for (const [file, text] of [
+      [statusScript, STATUS_SCRIPT],
+      [gateScript, GATE_SCRIPT]
+    ]) {
+      const temp = `${file}.${randomUUID()}`
+      await writeFile(temp, text)
+      await rename(temp, file)
+    }
     await writeFile(
       settingsFile,
       JSON.stringify(
@@ -1396,7 +1408,14 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
             `Read(/${notesFile(id)})`,
             `Edit(/${notesFile(id)})`
           ],
-          opts.sandbox && sandboxSettings(opts.sandbox, deps.dataDir, agentSockets(), npmCache)
+          opts.sandbox && sandboxSettings(opts.sandbox, deps.dataDir, agentSockets(), npmCache),
+          rules.ticket !== undefined && rules.worktree
+            ? {
+                script: gateScript,
+                file: gateFile(id),
+                trees: await treesOf([cwd, ...opts.addDirs], opts.repoPaths ?? [])
+              }
+            : undefined
         )
       )
     )
@@ -1433,7 +1452,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       tmux,
       cwd,
       rules,
-      { ...opts, remoteControl, model, sandbox },
+      { ...opts, remoteControl, model, sandbox, repoPaths: project.repos.map((r) => r.path) },
       project.claudeDir
     )
     launchedAt.set(id, now().getTime())
@@ -1553,12 +1572,14 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           remoteControl: s.remoteControl,
           model: s.model,
           allow: s.trigger ? undefined : routines.find((r) => r.id === s.routineId)?.allow,
-          sandbox
+          sandbox,
+          repoPaths: repoPathsOf(s)
         },
         s.claudeDir
       )
       if (sandbox) s.sandbox = { allowedDomains: sandbox }
       else delete s.sandbox
+      await reviewLoop.syncGate(s)
     } finally {
       resuming.delete(s.id)
     }
@@ -1753,6 +1774,9 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       )
     },
     entryCount: (sessionId) => liveView.entryCount(sessionId),
+    fingerprint: async (s) =>
+      deps.fingerprint(gateScript, await treesOf(s.worktrees, repoPathsOf(s))),
+    gateFile,
     roundStarted: (s, ticketKey) => {
       if (s.state !== 'needsYou' || s.asking || s.capped) return false
       s.state = 'reviewing'
@@ -2139,6 +2163,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           ? [...projects, withGroup(p, undefined)]
           : projects.with(i, withGroup(p, projects[i].group))
       await persist()
+      for (const s of sessions) if (s.projectId === p.id) await reviewLoop.syncGate(s)
       if (resourced) {
         synced.delete(p.id)
         mergedPrs.delete(p.id)
@@ -2563,6 +2588,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           await removeCreated()
           throw err
         }
+        await reviewLoop.syncGate(sessions.at(-1)!)
         if (setup === false) await unpend(worktrees)
         ticket.repo = main.github
         const fresh = synced.get(projectId)?.tickets.find((t) => t.key === ticketKey)

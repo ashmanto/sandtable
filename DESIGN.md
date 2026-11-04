@@ -1411,7 +1411,11 @@ them through Tailwind classes and never name a raw color.
       waiting for Claude to end its turn with an open pull request.", "Automatic review: round
       <n> of 3." while the automatic review's own review runs, "Automatic review: <n> of 3 rounds done.", "Automatic review
       stopped: the last review had no High proposals.", "Automatic review stopped after 3
-      rounds.", or "Automatic review is off for this session."
+      rounds.", or "Automatic review is off for this session." A third line says "Automatic review:
+      holding the pull request until the review ends and you decide every proposal." from when
+      Sandtable holds back a pull request until the gate opens, "Automatic review: holding the pull
+      request after 3 rounds. Turn off Automatic review for this session to let Claude open it." at
+      the cap, and "Automatic review: Claude can open the pull request." after it opens.
     - The body scrolls, with sections under 11 px weight 500 `fg-2` headings. **Pull request**
       comes first: "Loading the pull request" in 11 px `fg-3`, "No open pull request for
       <branch>.", or "Couldn't read the pull request: <message>" in 11 px `danger`. Each open pull
