@@ -676,6 +676,7 @@ describe('automatic review', () => {
     url: 'https://github.com/octo/shop/pull/12',
     reviewDecision: null,
     stage: 'checksFailing',
+    mergeable: 'MERGEABLE',
     checks: [
       { name: 'test', state: 'failing', jobId: 501 },
       { name: 'lint', state: 'failing' },
@@ -1049,11 +1050,24 @@ describe('automatic review', () => {
 
   it('records no round when you start a review before the round does', async () => {
     const t = await ready()
-    const open = gated(t)
+    let open = (): void => undefined
+    const gate = new Promise<void>((r) => (open = r))
+    t.deps.fingerprint.mockImplementationOnce(async () => {
+      await gate
+      return 'tree\n'
+    })
+    let release = (): void => undefined
+    t.deps.claude.print.mockImplementationOnce(
+      () => new Promise((r) => (release = () => r(reply('medium'))))
+    )
     t.emit('s1', 'needsYou')
-    await vi.waitFor(() => expect(t.deps.pullRequests).toHaveBeenCalled())
+    await vi.waitFor(() => expect(t.deps.fingerprint).toHaveBeenCalled())
     const manual = t.orch.review('s1')
     open()
+    await vi.waitFor(async () =>
+      expect((await t.orch.findings('s1')).autoReviewing).toBeUndefined()
+    )
+    release()
     await manual
     await settle()
     expect(t.orch.session('s1')).not.toHaveProperty('reviewRounds')
@@ -1639,6 +1653,93 @@ describe('automatic review', () => {
     expect(t.saved().sessions[0].autoReview?.added).toEqual(['check:501', 'thread:T_1'])
   })
 
+  const syncOnce = async (t: ReturnType<typeof setup>): Promise<void> => {
+    await settle()
+    const reads = t.deps.pullRequests.mock.calls.length
+    await t.orch.sync('p1')
+    await vi.waitFor(() => expect(t.deps.pullRequests).toHaveBeenCalledTimes(reads + 1))
+    await settle()
+  }
+  const conflicting: PullRequestState = {
+    ...pr,
+    stage: 'conflicts',
+    mergeable: 'CONFLICTING',
+    checks: [],
+    threads: []
+  }
+  const cleared: PullRequestState = { ...conflicting, stage: 'open', mergeable: 'MERGEABLE' }
+  const conflictsOf = async (t: ReturnType<typeof setup>): Promise<Finding[]> =>
+    (await t.orch.findings('s1')).findings
+
+  it('adds one conflict finding per conflict, and again after it clears and returns', async () => {
+    const t = await ready()
+    t.deps.pullRequests.mockResolvedValue([conflicting])
+    await syncOnce(t)
+    const [first] = await conflictsOf(t)
+    expect(first).toMatchObject({ source: 'conflict', title: 'octo/shop#12', checked: false })
+    expect(first.text).toMatch(/rebase/)
+    await t.orch.removeFinding('s1', first.id)
+    await syncOnce(t)
+    expect(await conflictsOf(t)).toEqual([])
+    t.deps.pullRequests.mockResolvedValue([cleared])
+    await syncOnce(t)
+    expect(t.orch.session('s1')?.autoReview?.added).toEqual([])
+    t.deps.pullRequests.mockResolvedValue([conflicting])
+    await syncOnce(t)
+    const [second] = await conflictsOf(t)
+    expect(second.source).toBe('conflict')
+    expect(second.ref).not.toBe(first.ref)
+    expect(t.deps.tmux.pasteTmux).not.toHaveBeenCalled()
+  })
+
+  it("doesn't add a deleted conflict again after you turn automatic review off and on", async () => {
+    const t = await ready()
+    t.deps.pullRequests.mockResolvedValue([conflicting])
+    await syncOnce(t)
+    await t.orch.removeFinding('s1', (await conflictsOf(t))[0].id)
+    await t.orch.setAutoReview('s1', false)
+    await t.orch.setAutoReview('s1', true)
+    await syncOnce(t)
+    expect(await conflictsOf(t)).toEqual([])
+  })
+
+  it('keeps an unsent conflict finding when the conflict clears, and adds no second one when it returns', async () => {
+    const t = await ready()
+    t.deps.pullRequests.mockResolvedValue([conflicting])
+    await syncOnce(t)
+    const [first] = await conflictsOf(t)
+    t.deps.pullRequests.mockResolvedValue([cleared])
+    await syncOnce(t)
+    expect(await conflictsOf(t)).toEqual([first])
+    t.deps.pullRequests.mockResolvedValue([conflicting])
+    await syncOnce(t)
+    expect(await conflictsOf(t)).toEqual([first])
+    await t.orch.removeFinding('s1', first.id)
+    await syncOnce(t)
+    expect(await conflictsOf(t)).toEqual([])
+  })
+
+  it("doesn't count a draft or unknown mergeable state as a cleared conflict", async () => {
+    const t = await ready()
+    t.deps.pullRequests.mockResolvedValue([conflicting])
+    await syncOnce(t)
+    await t.orch.removeFinding('s1', (await conflictsOf(t))[0].id)
+    t.deps.pullRequests.mockResolvedValue([{ ...conflicting, stage: 'open' }])
+    await syncOnce(t)
+    t.deps.pullRequests.mockResolvedValue([{ ...conflicting, stage: 'open', mergeable: 'UNKNOWN' }])
+    await syncOnce(t)
+    t.deps.pullRequests.mockResolvedValue([conflicting])
+    await syncOnce(t)
+    expect(await conflictsOf(t)).toEqual([])
+  })
+
+  it('adds a conflict finding for each conflicting pull request', async () => {
+    const t = await ready()
+    t.deps.pullRequests.mockResolvedValue([conflicting, { ...conflicting, repo: 'octo/api' }])
+    await syncOnce(t)
+    expect((await conflictsOf(t)).map((f) => f.title)).toEqual(['octo/shop#12', 'octo/api#12'])
+  })
+
   it('pastes only the High proposal after a sync added pull request findings', async () => {
     const t = await ready()
     withPr(t)
@@ -1734,11 +1835,11 @@ describe('automatic review', () => {
       const { t, deny } = await gated()
       deny()
       await endTurn(t, 1)
+      await vi.waitFor(async () => expect(await gateState(t)).toBe('open'))
       expect(gateOf(t)).toBe('tree\n')
       expect(t.deps.fingerprint).toHaveBeenCalledWith(join(t.dataDir, 'gate.sh'), [
         ['', t.orch.session('s1')!.worktrees[0]]
       ])
-      expect(await gateState(t)).toBe('open')
     })
 
     it("doesn't run a round or fingerprint without a gate event or a pull request", async () => {
@@ -1851,7 +1952,7 @@ describe('automatic review', () => {
       await vi.waitFor(() => expect(titles(t)).toContain('Needs you: shop#147'))
       deny()
       await endTurn(t, 1)
-      expect(gateOf(t)).toBe('tree\n')
+      await vi.waitFor(() => expect(gateOf(t)).toBe('tree\n'))
     })
 
     it("doesn't clear a clean stop at the cap, and says how to open the gate", async () => {
@@ -1896,7 +1997,7 @@ describe('automatic review', () => {
       const { t } = await gated()
       t.deps.pullRequests.mockResolvedValue([{ ...pr, checks: [], threads: [] }])
       await endTurn(t, 1)
-      expect(gateOf(t)).toBe('tree\n')
+      await vi.waitFor(() => expect(gateOf(t)).toBe('tree\n'))
       expect(await gateState(t)).toBeUndefined()
     })
 
@@ -1936,6 +2037,7 @@ describe('pull requests', () => {
     url: 'https://github.com/octo/shop/pull/12',
     reviewDecision: null,
     stage: 'checksFailing',
+    mergeable: 'MERGEABLE',
     checks: [
       { name: 'test', state: 'failing', jobId: 501 },
       { name: 'lint', state: 'passing', jobId: 502 },

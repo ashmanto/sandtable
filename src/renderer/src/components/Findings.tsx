@@ -27,7 +27,8 @@ const SOURCE: Record<Finding['source'], string> = {
   you: 'You',
   review: 'Claude review',
   check: 'PR check',
-  thread: 'PR comment'
+  thread: 'PR comment',
+  conflict: 'PR conflict'
 }
 const SEVERITY = {
   high: ['High', 'text-danger'],

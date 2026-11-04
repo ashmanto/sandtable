@@ -1458,10 +1458,10 @@ them through Tailwind classes and never name a raw color.
       "<source> <path>:<lines>, <severity>, Sent". Clicking it turns the chevron 90° and shows the
       finding's text, a check's log, and a ghost xs **Delete** under it, indented to the source.
     - A finding's first line, in 11 px `fg-3`, says where it came from (**You**, **Claude
-      review**, **PR check**, or **PR comment**, with " · <author>" for a thread), then its place in monospace
+      review**, **PR check**, **PR comment**, or **PR conflict**, with " · <author>" for a thread), then its place in monospace
       `fg-2`: "<file>:N–M" for a line finding, which jumps to the line in the diff when the file
       is in it (underlined on hover, with the full path on hover), or the check's or thread's
-      title otherwise. The jump scrolls the line and the file's row into view and moves the focus
+      title, or a conflict's "<repo>#<n>", otherwise. The jump scrolls the line and the file's row into view and moves the focus
       to the line's **+**. Then a review's severity, **High** in `danger`, **Medium** in `amber`,
       or **Low** in `fg-3`, and the `neutral-soft` chips **Outdated**, when its first line's text
       is no longer in the diff, and **New** when the latest of two or more reviews proposed it. Under it, the text, which wraps, in `fg-3` once

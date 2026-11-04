@@ -77,37 +77,41 @@ export async function fetchPullRequests(
   const data = await gql(QUERY, { ...splitRepo(repo), branch })
   return (data.repository?.pullRequests.nodes ?? [])
     .filter((p: any) => p.headRepository?.nameWithOwner === repo)
-    .map((p: any): PullRequestState => ({
-      repo,
-      number: p.number,
-      title: p.title,
-      url: p.url,
-      reviewDecision: DECISIONS[p.reviewDecision as keyof typeof DECISIONS] ?? null,
-      stage: prStage({
-        rollup: p.commits.nodes[0]?.commit.statusCheckRollup?.state ?? null,
-        reviewDecision: p.reviewDecision,
-        mergeable: knownMergeable(p.url, p.mergeable),
-        isDraft: p.isDraft
-      }),
-      checks: (p.commits.nodes[0]?.commit.statusCheckRollup?.contexts.nodes ?? []).map(checkOf),
-      threads: p.reviewThreads.nodes
-        .filter((t: any) => !t.isResolved)
-        .map((t: any) => {
-          const c = t.comments.nodes[0]
-          const line = t.diffSide === 'LEFT' ? null : t.line
-          const startLine = t.diffSide === 'LEFT' ? null : t.startLine
-          return {
-            id: t.id,
-            path: t.path,
-            line,
-            startLine,
-            anchor: line === null ? null : anchorOf(c?.diffHunk, startLine ?? line, line),
-            author: c?.author?.login ?? 'ghost',
-            body: withoutUnsafe(c?.body ?? ''),
-            url: c?.url ?? ''
-          }
-        })
-    }))
+    .map((p: any): PullRequestState => {
+      const mergeable = knownMergeable(p.url, p.mergeable)
+      return {
+        repo,
+        number: p.number,
+        title: p.title,
+        url: p.url,
+        reviewDecision: DECISIONS[p.reviewDecision as keyof typeof DECISIONS] ?? null,
+        stage: prStage({
+          rollup: p.commits.nodes[0]?.commit.statusCheckRollup?.state ?? null,
+          reviewDecision: p.reviewDecision,
+          mergeable,
+          isDraft: p.isDraft
+        }),
+        mergeable,
+        checks: (p.commits.nodes[0]?.commit.statusCheckRollup?.contexts.nodes ?? []).map(checkOf),
+        threads: p.reviewThreads.nodes
+          .filter((t: any) => !t.isResolved)
+          .map((t: any) => {
+            const c = t.comments.nodes[0]
+            const line = t.diffSide === 'LEFT' ? null : t.line
+            const startLine = t.diffSide === 'LEFT' ? null : t.startLine
+            return {
+              id: t.id,
+              path: t.path,
+              line,
+              startLine,
+              anchor: line === null ? null : anchorOf(c?.diffHunk, startLine ?? line, line),
+              author: c?.author?.login ?? 'ghost',
+              body: withoutUnsafe(c?.body ?? ''),
+              url: c?.url ?? ''
+            }
+          })
+      }
+    })
 }
 
 /** The last 200 lines, and at most 50 KB, of a GitHub Actions job's failed steps' log, read through `gh`. */

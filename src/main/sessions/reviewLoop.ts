@@ -192,7 +192,7 @@ export function createReviewLoop(ctx: {
   }
   const addPrFinding = async (
     s: SessionRecord,
-    source: 'check' | 'thread',
+    source: 'check' | 'thread' | 'conflict',
     ref: string,
     checked: boolean,
     read: () => Promise<Omit<Finding, 'id' | 'sessionId' | 'source' | 'ref' | 'checked'>>
@@ -382,6 +382,31 @@ export function createReviewLoop(ctx: {
       await persist()
     }
     for (const pr of prs) {
+      const key = `conflict:${pr.repo}#${pr.number}:`
+      const known = s.autoReview?.added ?? []
+      if (pr.mergeable === 'MERGEABLE') {
+        if (known.some((r) => r.startsWith(key))) {
+          autoOf(s).added = known.filter((r) => !r.startsWith(key))
+          await persist()
+        }
+      } else if (pr.stage === 'conflicts' && !known.some((r) => r.startsWith(key))) {
+        const open = ctx
+          .findings()
+          .find(
+            (f) =>
+              f.sessionId === s.id &&
+              f.source === 'conflict' &&
+              !f.sentAt &&
+              `conflict:${f.ref}`.startsWith(key)
+          )
+        const ref = open?.ref ?? `${pr.repo}#${pr.number}:${randomUUID()}`
+        await add(`conflict:${ref}`, () =>
+          addPrFinding(s, 'conflict', ref, false, async () => ({
+            title: `${pr.repo}#${pr.number}`,
+            text: 'This pull request conflicts with its base branch. Merge or rebase on the base branch, resolve the conflicts, and push.'
+          }))
+        ).catch(() => undefined)
+      }
       for (const c of pr.checks)
         if (c.state === 'failing' && c.jobId !== undefined) {
           const jobId = c.jobId

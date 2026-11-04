@@ -707,6 +707,7 @@ describe('Changes findings rail', () => {
         url: 'u',
         reviewDecision: null,
         stage: 'open',
+        mergeable: 'MERGEABLE',
         checks: [],
         threads: [
           {
@@ -966,6 +967,7 @@ describe('Changes findings rail', () => {
         url: 'u',
         reviewDecision: null,
         stage: 'open',
+        mergeable: 'MERGEABLE',
         checks: [{ name: 'lint', state: 'failing', jobId: 11 }],
         threads: [
           {
@@ -1031,6 +1033,7 @@ describe('Changes findings rail', () => {
       url: 'https://github.com/o/app/pull/7',
       reviewDecision: 'changesRequested',
       stage: 'changesRequested',
+      mergeable: 'MERGEABLE',
       checks: [
         { name: 'lint', state: 'failing', jobId: 11 },
         { name: 'test', state: 'passing' },

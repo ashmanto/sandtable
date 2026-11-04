@@ -105,6 +105,14 @@ describe('findingsMessage', () => {
     )
   })
 
+  it('heads a conflict finding with its pull request', () => {
+    expect(
+      findingsMessage([finding({ source: 'conflict', title: 'octo/shop#12', text: 'Rebase.' })])
+    ).toBe(
+      ['Review findings to address:', '', '1. octo/shop#12 (conflict)', '   Rebase.'].join('\n')
+    )
+  })
+
   it('fences review text and opens with a caution when an automated reviewer wrote it', () => {
     expect(
       findingsMessage(

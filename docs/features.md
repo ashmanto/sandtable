@@ -783,7 +783,7 @@ refusal, a notification title, or a format example.
   a range. A removed line takes no comment.
 - A finding follows its first line's text when the lines move, and shows **Outdated** when that
   text is gone.
-- A finding's source reads **You**, **Claude review**, **PR check**, or **PR comment**.
+- A finding's source reads **You**, **Claude review**, **PR check**, **PR comment**, or **PR conflict**.
 - **Send to session** pastes the checked findings into the terminal as one message and marks them
   **Sent**. **Send all** does the same for every unsent finding, checked or not.
 - **Select all** checks every unsent finding, or clears them when all are checked.
@@ -880,8 +880,11 @@ refusal, a notification title, or a format example.
 
 - After each board sync, on any tracker, Sandtable adds each failing GitHub Actions check and
   unresolved review thread on a live session's open pull request as an unchecked finding.
+- When that pull request conflicts with its base branch, Sandtable adds a **PR conflict** finding
+  that asks the session to merge or rebase on the base branch and resolve the conflicts.
 - Each is added once, so a finding you delete isn't added again, and a finding you added yourself
-  stays as it is.
+  stays as it is. After GitHub reports the pull request mergeable again, a returning conflict adds
+  a new finding, unless the earlier one is still unsent.
 - These findings wait for you to check and send them, or to send them with **Send all**.
 
 ### Automatic review states and notifications

@@ -248,7 +248,7 @@ type ReviewCount = { count: number; at: string }
 /** The most review rounds an automatic review runs. */
 export const AUTO_REVIEW_ROUNDS = 3
 
-/** A session's automatic review: its override of the project setting, the rounds run, the hash of the diff last reviewed, why it stopped, and the pull request checks and threads already added. */
+/** A session's automatic review: its override of the project setting, the rounds run, the hash of the diff last reviewed, why it stopped, and the pull request checks, threads, and conflicts already added. */
 export type AutoReview = {
   on?: boolean
   rounds: number
@@ -539,11 +539,11 @@ export type MergedTicket = {
 /** Usage by week across all projects, counting a message once, each project's own, and the merged tickets. */
 export type UsageByWeek = { all: WeekUsage[]; projects: ProjectUsage[]; merged: MergedTicket[] }
 
-/** A thing to fix in a session's work: your line comment, an AI review's, a failing check, or a PR thread. */
+/** A thing to fix in a session's work: your line comment, an AI review's, a failing check, a PR thread, or a PR conflict. */
 export type Finding = {
   id: string
   sessionId: string
-  source: 'you' | 'review' | 'check' | 'thread'
+  source: 'you' | 'review' | 'check' | 'thread' | 'conflict'
   text: string
   worktree?: string
   path?: string
@@ -588,6 +588,7 @@ export type PullRequestState = {
   url: string
   reviewDecision: 'approved' | 'changesRequested' | 'reviewRequired' | null
   stage: PrStage
+  mergeable: string
   checks: { name: string; state: 'passing' | 'failing' | 'pending'; jobId?: number; url?: string }[]
   threads: {
     id: string

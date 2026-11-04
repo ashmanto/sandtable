@@ -33,7 +33,8 @@ const SOURCE = {
   you: () => '',
   review: (f: Finding) => (f.severity ? `review, ${f.severity}` : 'review'),
   check: () => 'check',
-  thread: (f: Finding) => `PR thread by @${f.author ?? 'ghost'}`
+  thread: (f: Finding) => `PR thread by @${f.author ?? 'ghost'}`,
+  conflict: () => 'conflict'
 }
 
 const heading = (f: Finding, several: boolean): string => {
