@@ -288,6 +288,7 @@ export function setup(
           if (owner !== undefined) owners.set(name, owner)
         }
       ),
+      globalPath: vi.fn<OrchestratorDeps['tmux']['globalPath']>(async () => undefined),
       hasTmux: vi.fn(async (name: string) => live.has(name)),
       listTmux: vi.fn(async () =>
         [...live].map((name) => ({ name, owner: owners.get(name) ?? dataDir }))

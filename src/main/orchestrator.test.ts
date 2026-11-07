@@ -7483,6 +7483,21 @@ describe('sandtable CLI sockets', () => {
     expect(cmd[cmd.indexOf('--append-system-prompt') + 1]).not.toContain('`sandtable start|status')
   })
 
+  it('closes the socket when the launch fails', async () => {
+    const t = await started()
+    t.deps.tmux.startTmux.mockRejectedValueOnce(new Error('tmux failed'))
+    await expect(t.orch.start('p1', 'octo/shop#147')).rejects.toThrow('tmux failed')
+    const [[id]] = t.cli.open.mock.calls
+    expect(t.cli.close).toHaveBeenCalledWith(id)
+  })
+
+  it("builds the session's PATH on the tmux server's PATH", async () => {
+    const t = await started()
+    t.deps.tmux.globalPath.mockResolvedValue('/tmux/bin:/usr/bin')
+    await t.orch.start('p1', 'octo/shop#147')
+    expect(t.deps.tmux.startTmux.mock.calls[0][3]?.PATH).toBe('/cli:/tmux/bin:/usr/bin')
+  })
+
   it('a finished session closes its socket', async () => {
     const t = await started()
     await t.orch.start('p1', 'octo/shop#147')
@@ -7582,6 +7597,31 @@ describe('sandtable start', () => {
       code: 1,
       text: 'Ticket already has a live session in Shop'
     })
+  })
+
+  it('status prints Starting while a start for the ticket runs', async () => {
+    const { t, run } = await ready()
+    let release = (): void => undefined
+    t.deps.tmux.startTmux.mockImplementationOnce(() => new Promise<void>((r) => (release = r)))
+    const starting = run('c1', 'start', '#147')
+    await vi.waitFor(() => expect(t.deps.tmux.startTmux).toHaveBeenCalled())
+    expect(await run('c1', 'status', '#147')).toEqual({ code: 0, text: 'Starting' })
+    release()
+    await starting
+  })
+
+  it('a failed resume leaves no startedBy, and a Resume from the UI clears it', async () => {
+    const w = session({ id: 'w', state: 'finished', worktrees: [tempDir('st-wt-')] })
+    const { t, run } = await ready({ sessions: [caller, w] })
+    t.deps.tmux.startTmux.mockRejectedValueOnce(new Error('tmux failed'))
+    expect((await run('c1', 'start', '#147')).code).toBe(1)
+    expect(t.orch.session('w')?.startedBy).toBeUndefined()
+    expect((await run('c1', 'start', '#147')).code).toBe(0)
+    expect(t.orch.session('w')?.startedBy).toBe('c1')
+    t.emit('w', 'finished')
+    t.live.delete(w.tmuxName)
+    await t.orch.resume('w')
+    expect(t.orch.session('w')?.startedBy).toBeUndefined()
   })
 
   it('start resumes a finished session and marks who started it', async () => {

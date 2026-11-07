@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from 'vite
 import type { SessionRecord } from '../shared/types'
 import { createOrchestrator } from './orchestrator'
 import {
+  globalPath,
   hasTmux,
   killTmux,
   enterTmux,
@@ -105,6 +106,7 @@ it('marks a needsYou session finished when its tmux session ends', async () => {
     setup: { problem: vi.fn(), copy: vi.fn(), run: vi.fn(), suggest: vi.fn() },
     tmux: {
       startTmux,
+      globalPath,
       hasTmux,
       listTmux,
       killTmux,

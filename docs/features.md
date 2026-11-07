@@ -484,18 +484,20 @@ refusal, a notification title, or a format example.
   "A session can't use sandtable on its own ticket". A `#12` that matches issues in more than one
   repo is refused with "matches" and both keys; use the full `owner/name#12` key.
 - `status` prints the ticket's state word, the same one the board's card shows, such as
-  `No session` or `Needs you (asking)`. `info` prints the
-  branch and worktree paths. `summary` prints the saved summary draft of a finished session, or
+  `No session` or `Needs you (asking)`, or `Starting` while a start runs its checks. `info` prints
+  the branch and worktree paths. `summary` prints the saved summary draft of a finished session, or
   else its last assistant message.
 - `start` on a new session runs the **Start** checks and refuses with their reason: blockers, a
   failed readiness check, or an overlap with other work, apart from the calling session and the
-  sessions it started. A ticket that needs triage is refused with "needs an area label first".
+  live sessions it started. A ticket that needs triage is refused with "needs an area label first".
 - If the ticket's newest session is finished, `start` resumes it without the checks, as
   **Resume** does. `start` never applies triage and never overrides a finding.
-- A session can have at most 5 live sessions that it started, and a resume counts against that cap.
-  A sixth `start` is refused until one finishes.
+- A session can have at most 5 live sessions that it started, not counting those whose ticket is
+  in Done, and a resume counts against that cap. A sixth `start` is refused until one finishes.
 - `wait` returns when the ticket needs you with nothing pending, goes idle, finishes, hits a limit
-  or an API error, or is done. After 540 seconds, or the seconds you pass with `--timeout`, it exits with 3.
+  or an API error, or is done, and keeps waiting while a start runs its checks. After 540 seconds,
+  or the seconds you pass with `--timeout` up to an hour, it exits with 3. It stops when you end
+  the command.
 - Exit codes are 0 for success, 1 for a refusal or failure (the reason goes to stderr), 2 for a usage
   error, and 3 for a `wait` timeout.
 - The session's rules tell it to take another session's committed work with git, from the branch

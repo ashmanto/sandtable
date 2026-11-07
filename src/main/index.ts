@@ -65,6 +65,7 @@ import {
 } from './sessions/hookEvents'
 import {
   hasTmux,
+  globalPath,
   killTmux,
   enterTmux,
   escapeTmux,
@@ -374,6 +375,7 @@ async function start(): Promise<void> {
     setup: { problem: ignoredProblem, copy: copyPaths, run: runSetup, suggest: suggestSetup },
     tmux: {
       startTmux,
+      globalPath,
       hasTmux,
       listTmux,
       killTmux,

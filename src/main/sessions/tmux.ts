@@ -121,6 +121,13 @@ export async function hasTmux(name: string): Promise<boolean> {
   throw new Error(`tmux didn't say whether ${name} is running: ${stderr.trim() || `exit ${code}`}`)
 }
 
+/** The tmux server's global `PATH`, or undefined when no server runs or it has none. */
+export async function globalPath(): Promise<string | undefined> {
+  const { code, stdout } = await tmux(['show-environment', '-g', 'PATH'])
+  const line = stdout.trim()
+  return code === 0 && line.startsWith('PATH=') ? line.slice(5) : undefined
+}
+
 /** Ends the session with exactly this name; does nothing when it's already gone. */
 export async function killTmux(name: string): Promise<void> {
   await tmux(['kill-session', '-t', `=${name}`])

@@ -276,6 +276,7 @@ export type OrchestratorDeps = {
       env?: Record<string, string>,
       owner?: string
     ): Promise<void>
+    globalPath(): Promise<string | undefined>
     hasTmux(name: string): Promise<boolean>
     listTmux(): Promise<{ name: string; owner: string }[]>
     killTmux(name: string): Promise<void>
@@ -1391,6 +1392,24 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     const settingsFile = join(settingsDir, `${id}.json`)
     const cliSocket =
       rules.ticket !== undefined ? await cliServer?.open(id).catch(() => undefined) : undefined
+    try {
+      return await launchWith(id, tmux, cwd, rules, opts, dir, eventsFile, settingsFile, cliSocket)
+    } catch (err) {
+      if (cliSocket) await cliServer?.close(id)
+      throw err
+    }
+  }
+  const launchWith = async (
+    id: string,
+    tmux: string,
+    cwd: string,
+    rules: Parameters<typeof sessionRules>[0],
+    opts: Parameters<typeof launch>[4],
+    dir: string,
+    eventsFile: string,
+    settingsFile: string,
+    cliSocket: string | undefined
+  ): Promise<string> => {
     await mkdir(eventsDir, { recursive: true })
     await mkdir(settingsDir, { recursive: true })
     await mkdir(join(deps.dataDir, 'status'), { recursive: true })
@@ -1451,7 +1470,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
             ...(!inherit && { CLAUDE_CONFIG_DIR: dir }),
             ...(cliSocket && {
               SANDTABLE_SOCKET: cliSocket,
-              PATH: `${dirname(cliSocket)}:${process.env.PATH ?? ''}`
+              PATH: `${dirname(cliSocket)}:${(await deps.tmux.globalPath().catch(() => undefined)) ?? process.env.PATH ?? ''}`
             })
           },
       deps.dataDir
@@ -1774,6 +1793,10 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     transcriptOf,
     chat: ticketChat.chat,
     pending: (id) => reviewLoop.pending(id),
+    busy: (projectId, ticketKey) =>
+      [...starting.values(), ...checking.values()].some(
+        ([key, p]) => key === ticketKey && p === projectId
+      ),
     onChange: (cb) => subscribe(changeListeners, cb),
     checkStart: (projectId, ticketKey) => api.checkStart(projectId, ticketKey),
     checkReady: (projectId, ticketKey) => api.checkReady(projectId, ticketKey),
@@ -2792,8 +2815,11 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       if (s.ticketKey) assertNoLiveSession(s.projectId, s.ticketKey)
       else if (isLive(s)) throw new Error('Session is already running')
       resuming.add(s.id)
-      if (startedBy) s.startedBy = startedBy
       await relaunch(s, dir)
+      if (s.startedBy === startedBy) return
+      if (startedBy) s.startedBy = startedBy
+      else delete s.startedBy
+      await persist()
     },
 
     async setRemoteControl(sessionId: string, on: boolean): Promise<void> {

@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -38,7 +38,7 @@ describe('sandtable CLI server', () => {
     const { dir, server } = make(handle)
     const socket = await server.open('s1')
     const ran = await run(dir, socket, ['status', '#12'])
-    expect(handle).toHaveBeenCalledWith('s1', 'status', '#12', undefined)
+    expect(handle).toHaveBeenCalledWith('s1', 'status', '#12', undefined, expect.any(AbortSignal))
     expect(ran).toMatchObject({ code: 0, stdout: 'Working\n' })
   })
 
@@ -53,7 +53,7 @@ describe('sandtable CLI server', () => {
     const handle = vi.fn<CliHandler>(async () => ({ code: 3, text: 'Still running' }))
     const { dir, server } = make(handle)
     const ran = await run(dir, await server.open('s1'), ['wait', '#12', '--timeout', '5'])
-    expect(handle).toHaveBeenCalledWith('s1', 'wait', '#12', 5)
+    expect(handle).toHaveBeenCalledWith('s1', 'wait', '#12', 5, expect.any(AbortSignal))
     expect(ran.code).toBe(3)
     expect(ran.stderr).toContain('Still running')
   })
@@ -79,6 +79,32 @@ describe('sandtable CLI server', () => {
       expect(ran.stderr).toContain('Usage')
     }
     expect(handle).not.toHaveBeenCalled()
+  })
+
+  it('signals the handler when the caller hangs up', async () => {
+    let signal: AbortSignal | undefined
+    const { dir, server } = make(
+      (_c, _cmd, _t, _s, sig) =>
+        new Promise(() => {
+          signal = sig
+        })
+    )
+    const socket = await server.open('s1')
+    const child = spawn('sh', [join(dir, 'sandtable'), 'wait', '#12'], {
+      env: { ...process.env, SANDTABLE_SOCKET: socket },
+      detached: true,
+      stdio: 'ignore'
+    })
+    await vi.waitFor(() => expect(signal).toBeDefined())
+    process.kill(-child.pid!)
+    await vi.waitFor(() => expect(signal!.aborted).toBe(true))
+  })
+
+  it("refuses to bind over another session's socket that shares its name", async () => {
+    const { server } = make(async () => ({ code: 0, text: '' }))
+    const first = await server.open('0123456789ab-one')
+    await expect(server.open('0123456789ab-two')).rejects.toThrow()
+    expect(existsSync(first)).toBe(true)
   })
 
   it('reopens over a stale socket file', async () => {

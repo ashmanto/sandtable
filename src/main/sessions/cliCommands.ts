@@ -22,6 +22,7 @@ import type {
 import type { CliHandler } from './cli'
 
 const WAIT_DEFAULT_SEC = 540
+const WAIT_MAX_SEC = 3600
 const WAIT_ENDS: SessionState[] = ['finished', 'limitReached', 'apiError', 'idle']
 const START_CAP = 5
 
@@ -60,6 +61,7 @@ export function createCliCommands(ctx: {
   transcriptOf: (s: SessionRecord) => Promise<ConversationEntry[] | null>
   chat: (projectId: string, ticketKey: string) => Promise<ChatState>
   pending: (sessionId: string) => boolean
+  busy: (projectId: string, ticketKey: string) => boolean
   onChange: (cb: (projectId: string) => void) => () => void
   checkStart: (projectId: string, ticketKey: string) => Promise<StartCheck>
   checkReady: (projectId: string, ticketKey: string) => Promise<string[]>
@@ -98,7 +100,9 @@ export function createCliCommands(ctx: {
       if (gaps.length)
         throw new Error([`The readiness check found gaps in ${label}:`, ...gaps].join('\n'))
     }
-    const mine = ctx.sessions().flatMap((x) => (x.startedBy === caller.id && x.ticketKey) || [])
+    const mine = ctx
+      .sessions()
+      .flatMap((x) => (x.startedBy === caller.id && isLive(x) && x.ticketKey) || [])
     const overlaps = await ctx.overlap(projectId, found.key, [
       ...new Set([caller.ticketKey!, ...mine])
     ])
@@ -119,10 +123,11 @@ export function createCliCommands(ctx: {
       previousExtras(repos, before, mainRepo),
       mainRepo
     )
-    return `Started ${label} on ${currentSession(ours(), found.key)?.branch}`
+    const branch = currentSession(ours(), found.key)?.branch
+    return branch ? `Started ${label} on ${branch}` : `Started ${label}`
   }
 
-  const run: CliHandler = async (callerId, command, arg, timeoutSec) => {
+  const run: CliHandler = async (callerId, command, arg, timeoutSec, signal) => {
     const caller = ctx.sessions().find((s) => s.id === callerId)
     if (!caller?.ticketKey) return refuse('Not a Sandtable ticket session')
     const found = resolveTicket(ctx.synced.get(caller.projectId)?.tickets ?? [], arg)
@@ -130,7 +135,13 @@ export function createCliCommands(ctx: {
     if (found.key === caller.ticketKey)
       return refuse("A session can't use sandtable on its own ticket")
     if (command === 'start') {
-      const live = ctx.sessions().filter((x) => x.startedBy === callerId && isLive(x)).length
+      const tickets = ctx.synced.get(caller.projectId)?.tickets ?? []
+      const map = ctx.statusMapOf(ctx.projectById(caller.projectId))
+      const open = (x: SessionRecord): boolean =>
+        columnFor(tickets.find((t) => t.key === x.ticketKey)?.status ?? null, map) !== 'done'
+      const live = ctx
+        .sessions()
+        .filter((x) => x.startedBy === callerId && isLive(x) && open(x)).length
       const pending = inFlight.get(callerId) ?? 0
       if (live + pending >= START_CAP)
         return refuse(
@@ -152,19 +163,23 @@ export function createCliCommands(ctx: {
         found.key
       )
     const s = current()
+    const startingNow = (now: SessionRecord | undefined): boolean =>
+      !(now && isLive(now)) && ctx.busy(caller.projectId, found.key)
     if (command === 'wait') {
       const map = ctx.statusMapOf(ctx.projectById(caller.projectId))
       const look = (): { text: string; ready: boolean } => {
         const now = current()
         const t =
           ctx.synced.get(caller.projectId)?.tickets.find((x) => x.key === found.key) ?? found
-        const text = stateWord(now, t, map)
+        const starting = startingNow(now)
+        const text = starting ? 'Starting' : stateWord(now, t, map)
         const ready =
-          !now ||
-          !isLive(now) ||
-          columnFor(t.status, map) === 'done' ||
-          WAIT_ENDS.includes(now.state) ||
-          (now.state === 'needsYou' && !ctx.pending(now.id))
+          !starting &&
+          (!now ||
+            !isLive(now) ||
+            columnFor(t.status, map) === 'done' ||
+            WAIT_ENDS.includes(now.state) ||
+            (now.state === 'needsYou' && !ctx.pending(now.id)))
         return { text, ready }
       }
       const first = look()
@@ -173,11 +188,14 @@ export function createCliCommands(ctx: {
         const finish = (reply: { code: 0 | 3; text: string }): void => {
           clearTimeout(timer)
           off()
+          signal?.removeEventListener('abort', hangUp)
           resolve(reply)
         }
+        const hangUp = (): void => finish({ code: 3, text: look().text })
+        signal?.addEventListener('abort', hangUp)
         const timer = setTimeout(
-          () => finish({ code: 3, text: look().text }),
-          (timeoutSec || WAIT_DEFAULT_SEC) * 1000
+          hangUp,
+          Math.min(timeoutSec || WAIT_DEFAULT_SEC, WAIT_MAX_SEC) * 1000
         )
         const off = ctx.onChange((projectId) => {
           if (projectId !== caller.projectId) return
@@ -188,7 +206,7 @@ export function createCliCommands(ctx: {
     }
     if (command === 'status') {
       const map = ctx.statusMapOf(ctx.projectById(caller.projectId))
-      return { code: 0, text: stateWord(s, found, map) }
+      return { code: 0, text: startingNow(s) ? 'Starting' : stateWord(s, found, map) }
     }
     if (!s) return refuse(`${label} has no session`)
     if (command === 'info') {

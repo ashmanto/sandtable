@@ -58,7 +58,8 @@ export type CliHandler = (
   callerId: string,
   command: CliCommand,
   ticket: string,
-  timeoutSec?: number
+  timeoutSec?: number,
+  signal?: AbortSignal
 ) => Promise<CliReply>
 
 const COMMANDS: readonly string[] = ['start', 'status', 'wait', 'summary', 'info']
@@ -75,7 +76,11 @@ export function createCliServer(
 } {
   const servers = new Map<string, { socket: string; server: Server }>()
 
-  const answer = async (sessionId: string, req: IncomingMessage): Promise<CliReply> => {
+  const answer = async (
+    sessionId: string,
+    req: IncomingMessage,
+    signal: AbortSignal
+  ): Promise<CliReply> => {
     const url = new URL(req.url ?? '/', 'http://sandtable')
     const command = url.pathname.slice(1)
     const ticket = url.searchParams.get('ticket')
@@ -86,13 +91,16 @@ export function createCliServer(
       sessionId,
       command as CliCommand,
       ticket,
-      timeout > 0 ? timeout : undefined
+      timeout > 0 ? timeout : undefined,
+      signal
     ).catch((err: unknown) => ({ code: 1, text: err instanceof Error ? err.message : String(err) }))
   }
 
   const serve = (sessionId: string): Server =>
     createServer((req, res) => {
-      void answer(sessionId, req).then((reply) => {
+      const hungUp = new AbortController()
+      res.on('close', () => hungUp.abort())
+      void answer(sessionId, req, hungUp.signal).then((reply) => {
         res.writeHead(STATUS[reply.code], { 'content-type': 'text/plain; charset=utf-8' })
         res.end(reply.text.endsWith('\n') ? reply.text : `${reply.text}\n`)
       })
@@ -124,6 +132,8 @@ export function createCliServer(
       await writeFile(temp, CLI_SCRIPT, { mode: 0o755 })
       await rename(temp, script)
       const socket = join(dir, `${sessionId.slice(0, 12)}.sock`)
+      if ([...servers.values()].some((s) => s.socket === socket))
+        throw new Error(`Another session uses ${socket}`)
       await unlink(socket).catch(() => undefined)
       const server = serve(sessionId)
       await new Promise<void>((resolve, reject) => {

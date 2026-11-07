@@ -17,6 +17,7 @@ const make = (
     transcript?: ConversationEntry[] | null
     chat?: ChatState['chat']
     pending?: () => boolean
+    busy?: () => boolean
     listeners?: Set<(projectId: string) => void>
     starts?: Partial<StartFakes>
   } = {}
@@ -29,6 +30,7 @@ const make = (
     transcriptOf: async () => extra.transcript ?? null,
     chat: async () => ({ chat: extra.chat ?? null, answering: false }),
     pending: extra.pending ?? (() => false),
+    busy: extra.busy ?? (() => false),
     onChange: (cb) => {
       const set = extra.listeners ?? new Set()
       set.add(cb)
@@ -197,6 +199,22 @@ describe('start', () => {
     expect((await ok('c1', 'start', '#12')).code).toBe(0)
   })
 
+  it('leaves sessions whose ticket is in Done out of the cap', async () => {
+    const done = started(5).map((s, i) => ({ ...s, ticketKey: `octo/shop#${60 + i}` }))
+    const tickets = [
+      target,
+      ...done.map((s, i) => ticket({ key: s.ticketKey!, number: 60 + i, status: 'Done' }))
+    ]
+    expect((await make([caller, ...done], tickets)('c1', 'start', '#12')).code).toBe(0)
+  })
+
+  it('says Started without a branch when no session is found after start', async () => {
+    expect(await make([caller], [target])('c1', 'start', '#12')).toEqual({
+      code: 0,
+      text: 'Started #12'
+    })
+  })
+
   it('counts starts still in flight toward the cap', async () => {
     let release = (): void => undefined
     const f = fakes()
@@ -268,7 +286,11 @@ describe('start', () => {
       { key: 'octo/shop#30', number: 30, title: 'Other', reason: 'Both change tmux.ts.' }
     ])
     const run = make(
-      [caller, ...started(1), ...started(1, { id: 'y', state: 'finished' })],
+      [
+        caller,
+        ...started(1),
+        ...started(1, { id: 'y', ticketKey: 'octo/shop#70', state: 'finished' })
+      ],
       [target],
       { starts: f }
     )
@@ -374,6 +396,47 @@ describe('wait', () => {
     busy = false
     listeners.forEach((cb) => cb('p1'))
     await vi.waitFor(() => expect(out).toEqual({ code: 0, text: 'Needs you' }))
+  })
+
+  it('keeps waiting while a start for the ticket is still running its checks', async () => {
+    let busy = true
+    const all = [caller]
+    const listeners = new Set<(projectId: string) => void>()
+    const run = make(all, [target], { busy: () => busy, listeners })
+    let out: unknown
+    void run('c1', 'wait', '#12').then((r) => (out = r))
+    await vi.waitFor(() => expect(listeners.size).toBe(1))
+    expect(await make(all, [target], { busy: () => busy })('c1', 'status', '#12')).toEqual({
+      code: 0,
+      text: 'Starting'
+    })
+    busy = false
+    all.push(live({ state: 'needsYou' }))
+    listeners.forEach((cb) => cb('p1'))
+    await vi.waitFor(() => expect(out).toEqual({ code: 0, text: 'Needs you' }))
+  })
+
+  it('caps the timeout at an hour', async () => {
+    vi.useFakeTimers()
+    const listeners = new Set<(projectId: string) => void>()
+    const run = make([caller, live({ state: 'running' })], [target], { listeners })
+    let out: unknown
+    void run('c1', 'wait', '#12', 10_000_000).then((r) => (out = r))
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(out).toBeUndefined()
+    await vi.advanceTimersByTimeAsync(3600 * 1000)
+    expect(out).toEqual({ code: 3, text: 'Running' })
+  })
+
+  it('stops waiting when the caller hangs up', async () => {
+    const listeners = new Set<(projectId: string) => void>()
+    const run = make([caller, live({ state: 'running' })], [target], { listeners })
+    const ac = new AbortController()
+    const out = run('c1', 'wait', '#12', undefined, ac.signal)
+    await vi.waitFor(() => expect(listeners.size).toBe(1))
+    ac.abort()
+    expect((await out).code).toBe(3)
+    expect(listeners.size).toBe(0)
   })
 
   it('returns when the user clears Needs you to Idle', async () => {
