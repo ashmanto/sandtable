@@ -72,6 +72,7 @@ import { createTerminals } from './terminal'
 import { stopChildren } from './env/tools'
 import { createDrafts } from './drafts'
 import { sessionDraft } from '../shared/drafts'
+import type { CliHandler } from './sessions/cli'
 
 vi.mock('./env/tools', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./env/tools')>()),
@@ -7499,5 +7500,87 @@ describe('sandtable CLI sockets', () => {
     const t = await started()
     t.orch.stop()
     expect(t.cli.closeAll).toHaveBeenCalled()
+  })
+})
+
+describe('sandtable start', () => {
+  const area = { name: 'area: sessions', color: '' }
+  const callerTicket = ticket({
+    key: 'octo/shop#1',
+    number: 1,
+    status: 'In Progress',
+    labels: [area]
+  })
+  const caller = session({
+    id: 'c1',
+    ticketKey: 'octo/shop#1',
+    tmuxName: 'st-p1-octo-shop-1',
+    branch: '1-x',
+    worktrees: ['/repos/shop-wt.noindex/1-x']
+  })
+  const ready = async (
+    opts: Parameters<typeof setup>[0] = {}
+  ): Promise<{ t: ReturnType<typeof setup>; run: CliHandler }> => {
+    const t = setup({
+      cli: true,
+      projects: [{ ...project, readyCheck: false }],
+      sessions: [caller],
+      tickets: [callerTicket, ticket({ labels: [area] })],
+      ...opts
+    })
+    for (const s of opts.sessions ?? [caller]) if (s.state !== 'finished') t.live.add(s.tmuxName)
+    await t.orch.reconnect()
+    await t.orch.sync('p1')
+    return { t, run: t.deps.cli!.mock.calls[0][0] }
+  }
+
+  it('start records startedBy on the new session', async () => {
+    const { t, run } = await ready()
+    expect(await run('c1', 'start', '#147')).toEqual({
+      code: 0,
+      text: 'Started #147 on 147-dark-mode-toggle'
+    })
+    const s = t.saved().sessions.find((x) => x.ticketKey === 'octo/shop#147')
+    expect(s?.startedBy).toBe('c1')
+  })
+
+  it("start leaves the caller's ticket out of the overlap check", async () => {
+    const { t, run } = await ready()
+    expect((await run('c1', 'start', '#147')).code).toBe(0)
+    expect(t.deps.claude.print).not.toHaveBeenCalled()
+  })
+
+  it('start refuses a ticket that needs triage and writes no labels', async () => {
+    const { t, run } = await ready({ tickets: [callerTicket, ticket()] })
+    const applyTriage = vi.spyOn(t.orch, 'applyTriage')
+    expect(await run('c1', 'start', '#147')).toEqual({
+      code: 1,
+      text: '#147 needs an area label first. Ask the user to start it in Sandtable, which offers triage.'
+    })
+    expect(applyTriage).not.toHaveBeenCalled()
+    expect(t.deps.areas.apply).not.toHaveBeenCalled()
+    expect(t.deps.claude.print).not.toHaveBeenCalled()
+    expect(t.deps.tmux.startTmux).not.toHaveBeenCalled()
+  })
+
+  it("start reports a live session's refusal as code 1", async () => {
+    const { run } = await ready({
+      sessions: [caller, session({ id: 'w', ticketKey: 'octo/shop#147' })]
+    })
+    expect(await run('c1', 'start', '#147')).toEqual({
+      code: 1,
+      text: 'Ticket already has a live session in Shop'
+    })
+  })
+
+  it('start resumes a finished session and marks who started it', async () => {
+    const w = session({ id: 'w', state: 'finished', worktrees: [tempDir('st-wt-')] })
+    const { t, run } = await ready({ sessions: [caller, w] })
+    expect(await run('c1', 'start', '#147')).toEqual({
+      code: 0,
+      text: 'Resumed #147 on 147-dark-mode-toggle'
+    })
+    expect(t.deps.tmux.startTmux).toHaveBeenCalled()
+    expect(t.saved().sessions.find((x) => x.id === 'w')?.startedBy).toBe('c1')
   })
 })

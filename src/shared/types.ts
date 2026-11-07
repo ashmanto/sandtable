@@ -219,6 +219,8 @@ export type SessionRecord = {
   claudeDir?: string
   model?: Model
   routineId?: string
+  /** The session whose `sandtable start` started or last resumed this one. */
+  startedBy?: string
   scheduled?: true
   trigger?: RunTrigger
   tokenCap?: number

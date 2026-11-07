@@ -1,11 +1,14 @@
 import { columnFor } from '../../shared/columns'
+import { messageOf } from '../../shared/errors'
 import { isTrackerKey, ticketLabel } from '../../shared/repo'
-import { currentSession, isLive, STATE_LABELS } from '../../shared/sessions'
+import { currentSession, isLive, sessionRepos, STATE_LABELS } from '../../shared/sessions'
 import type {
   ChatState,
   ConversationEntry,
+  Overlap,
   Project,
   SessionRecord,
+  StartCheck,
   StatusMap,
   Ticket
 } from '../../shared/types'
@@ -13,6 +16,7 @@ import type { CliHandler } from './cli'
 
 const WAIT_DEFAULT_SEC = 540
 const WAIT_ENDS: string[] = ['finished', 'limitReached', 'apiError']
+const START_CAP = 5
 
 const refuse = (text: string): { code: 1; text: string } => ({ code: 1, text })
 
@@ -55,7 +59,68 @@ export function createCliCommands(ctx: {
   chat: (projectId: string, ticketKey: string) => Promise<ChatState>
   pending: (sessionId: string) => boolean
   onChange: (cb: (projectId: string) => void) => () => void
+  checkStart: (projectId: string, ticketKey: string) => Promise<StartCheck>
+  checkReady: (projectId: string, ticketKey: string) => Promise<string[]>
+  overlap: (projectId: string, ticketKey: string, exclude: string[]) => Promise<Overlap[]>
+  start: (
+    callerId: string,
+    projectId: string,
+    ticketKey: string,
+    extraRepos: string[],
+    mainRepo?: string
+  ) => Promise<void>
+  resume: (callerId: string, sessionId: string) => Promise<void>
 }): { run: CliHandler } {
+  const inFlight = new Map<string, number>()
+  const startFor = async (caller: SessionRecord, found: Ticket): Promise<string> => {
+    const { projectId } = caller
+    const label = ticketLabel(found)
+    const ours = (): SessionRecord[] => ctx.sessions().filter((x) => x.projectId === projectId)
+    const all = ours()
+    const newest = currentSession(
+      all.filter((x) => !x.removedAt),
+      found.key
+    )
+    if (newest && !isLive(newest)) {
+      await ctx.resume(caller.id, newest.id)
+      return `Resumed ${label} on ${newest.branch}`
+    }
+    const check = await ctx.checkStart(projectId, found.key)
+    if (check.triage)
+      throw new Error(
+        `${label} needs an area label first. Ask the user to start it in Sandtable, which offers triage.`
+      )
+    if (check.problems.length) throw new Error(check.problems.join('\n'))
+    if (check.ready) {
+      const gaps = await ctx.checkReady(projectId, found.key)
+      if (gaps.length)
+        throw new Error([`The readiness check found gaps in ${label}:`, ...gaps].join('\n'))
+    }
+    const mine = ctx.sessions().flatMap((x) => (x.startedBy === caller.id && x.ticketKey) || [])
+    const overlaps = await ctx.overlap(projectId, found.key, [
+      ...new Set([caller.ticketKey!, ...mine])
+    ])
+    if (overlaps.length)
+      throw new Error(
+        [
+          `${label} overlaps work in progress:`,
+          ...overlaps.map((o) => `${ticketLabel(o)} ${o.title}: ${o.reason}`)
+        ].join('\n')
+      )
+    const repos = ctx.projectById(projectId).repos
+    const mainRepo = found.repo || sessionRepos(repos, caller)[0]?.github
+    const before = currentSession(all, found.key)
+    const extras = before ? sessionRepos(repos, before).map((r) => r.github) : []
+    await ctx.start(
+      caller.id,
+      projectId,
+      found.key,
+      extras.filter((r) => r !== mainRepo),
+      mainRepo
+    )
+    return `Started ${label} on ${currentSession(ours(), found.key)?.branch}`
+  }
+
   const run: CliHandler = async (callerId, command, arg, timeoutSec) => {
     const caller = ctx.sessions().find((s) => s.id === callerId)
     if (!caller?.ticketKey) return refuse('Not a Sandtable ticket session')
@@ -63,7 +128,22 @@ export function createCliCommands(ctx: {
     if (typeof found === 'string') return refuse(found)
     if (found.key === caller.ticketKey)
       return refuse("A session can't use sandtable on its own ticket")
-    if (command === 'start') return refuse('Not ready')
+    if (command === 'start') {
+      const live = ctx.sessions().filter((x) => x.startedBy === callerId && isLive(x)).length
+      const pending = inFlight.get(callerId) ?? 0
+      if (live + pending >= START_CAP)
+        return refuse(
+          `This session already started ${START_CAP} live sessions. Wait for one to finish.`
+        )
+      inFlight.set(callerId, pending + 1)
+      try {
+        return { code: 0, text: await startFor(caller, found) }
+      } catch (err) {
+        return refuse(messageOf(err))
+      } finally {
+        inFlight.set(callerId, (inFlight.get(callerId) ?? 1) - 1)
+      }
+    }
     const label = ticketLabel(found)
     const current = (): SessionRecord | undefined =>
       currentSession(

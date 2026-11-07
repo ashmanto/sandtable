@@ -1700,10 +1700,10 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     if (!ticket) throw new Error('Unknown ticket')
     return ticket
   }
-  const candidatesFor = (projectId: string, ticket: Ticket): Ticket[] => {
+  const candidatesFor = (projectId: string, ticket: Ticket, exclude: string[] = []): Ticket[] => {
     const tickets = synced.get(projectId)?.tickets ?? []
     const map = statusMapOf(projectById(projectId))
-    return overlapCandidates(ticket, tickets, [
+    const busy = overlapCandidates(ticket, tickets, [
       ...[...starting.values(), ...checking.values()].flatMap(([key, p]) =>
         p === projectId ? [key] : []
       ),
@@ -1712,6 +1712,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       ),
       ...tickets.flatMap((t) => (columnFor(t.status, map) === 'inProgress' ? [t.key] : []))
     ])
+    return busy.filter((t) => !exclude.includes(t.key))
   }
 
   const transcriptOf = async (s: SessionRecord): Promise<ConversationEntry[] | null> => {
@@ -1772,7 +1773,12 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     transcriptOf,
     chat: ticketChat.chat,
     pending: (id) => reviewLoop.pending(id),
-    onChange: (cb) => subscribe(changeListeners, cb)
+    onChange: (cb) => subscribe(changeListeners, cb),
+    checkStart: (projectId, ticketKey) => api.checkStart(projectId, ticketKey),
+    checkReady: (projectId, ticketKey) => api.checkReady(projectId, ticketKey),
+    overlap: (projectId, ticketKey, exclude) => api.overlapFor(projectId, ticketKey, exclude),
+    start: (callerId, ...args) => api.startFor(callerId, ...args),
+    resume: (callerId, sessionId) => api.resumeFor(callerId, sessionId)
   })
   const routineChat = createRoutineChat({
     deps,
@@ -2080,7 +2086,14 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     void syncWatched()
   }
 
-  return {
+  const api: Orchestrator & {
+    startFor: (
+      startedBy: string | undefined,
+      ...args: Parameters<Orchestrator['start']>
+    ) => Promise<void>
+    resumeFor: (startedBy: string | undefined, sessionId: string) => Promise<void>
+    overlapFor: (projectId: string, ticketKey: string, exclude: string[]) => Promise<Overlap[]>
+  } = {
     /** Loads the store, reattaches recorded sessions, and starts watching events, syncing, and polling tmux. */
     reconnect(tmuxAvailable = true): Promise<void> {
       return (loaded = load(tmuxAvailable))
@@ -2427,11 +2440,14 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       }
     },
 
-    async checkOverlap(projectId: string, ticketKey: string): Promise<Overlap[]> {
+    checkOverlap: (projectId: string, ticketKey: string): Promise<Overlap[]> =>
+      api.overlapFor(projectId, ticketKey, []),
+
+    async overlapFor(projectId: string, ticketKey: string, exclude: string[]): Promise<Overlap[]> {
       assertNoLiveSession(projectId, ticketKey)
       const project = projectById(projectId)
       const ticket = syncedTicket(projectId, ticketKey)
-      const candidates = candidatesFor(projectId, ticket)
+      const candidates = candidatesFor(projectId, ticket, exclude)
       if (!candidates.length) return []
       const repo = ticketRepo(project, ticket.repo)
       await checkFolders([repo])
@@ -2495,7 +2511,10 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       if (failed) throw new Error(`${APPLIED_BUT} couldn't refresh the board: ${failed}`)
     },
 
-    async start(
+    start: (...args) => api.startFor(undefined, ...args),
+
+    async startFor(
+      startedBy: string | undefined,
       projectId: string,
       ticketKey: string,
       extraRepos: string[] = [],
@@ -2618,7 +2637,8 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
             startedAt: now().toISOString(),
             state: 'running',
             startWarning: warning || undefined,
-            ...(note?.trim() && { note: fitBytes(note.trim(), MAX_NOTE_BYTES) })
+            ...(note?.trim() && { note: fitBytes(note.trim(), MAX_NOTE_BYTES) }),
+            ...(startedBy && { startedBy })
           })
         } catch (err) {
           await removeCreated()
@@ -2760,7 +2780,9 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       )
     },
 
-    async resume(sessionId: string): Promise<void> {
+    resume: (sessionId: string): Promise<void> => api.resumeFor(undefined, sessionId),
+
+    async resumeFor(startedBy: string | undefined, sessionId: string): Promise<void> {
       const s = sessionById(sessionId)
       assertFreeTmux(s.tmuxName, s.id)
       if (beingRemoved(s.worktrees)) throw new Error(REMOVING)
@@ -2769,6 +2791,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       if (s.ticketKey) assertNoLiveSession(s.projectId, s.ticketKey)
       else if (isLive(s)) throw new Error('Session is already running')
       resuming.add(s.id)
+      if (startedBy) s.startedBy = startedBy
       await relaunch(s, dir)
     },
 
@@ -2982,4 +3005,5 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       return removeWorktree(sessionId)
     }
   }
+  return api
 }

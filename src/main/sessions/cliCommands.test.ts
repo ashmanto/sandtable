@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { ChatState, ConversationEntry, SessionRecord, Ticket } from '../../shared/types'
 import { statusMapOf } from '../../shared/columns'
 import { project, session, setup, ticket } from '../test/orchestrator'
@@ -18,6 +18,7 @@ const make = (
     chat?: ChatState['chat']
     pending?: () => boolean
     listeners?: Set<(projectId: string) => void>
+    starts?: Partial<StartFakes>
   } = {}
 ): CliHandler =>
   createCliCommands({
@@ -32,8 +33,28 @@ const make = (
       const set = extra.listeners ?? new Set()
       set.add(cb)
       return () => set.delete(cb)
-    }
+    },
+    ...fakes(),
+    ...extra.starts
   }).run
+
+type StartCtx = Pick<
+  Parameters<typeof createCliCommands>[0],
+  'checkStart' | 'checkReady' | 'overlap' | 'start' | 'resume'
+>
+type StartFakes = { [K in keyof StartCtx]: Mock<StartCtx[K]> }
+const fakes = (): StartFakes => ({
+  checkStart: vi.fn<StartCtx['checkStart']>(async () => ({
+    triage: false,
+    problems: [],
+    overlap: [],
+    ready: false
+  })),
+  checkReady: vi.fn<StartCtx['checkReady']>(async () => []),
+  overlap: vi.fn<StartCtx['overlap']>(async () => []),
+  start: vi.fn<StartCtx['start']>(async () => undefined),
+  resume: vi.fn<StartCtx['resume']>(async () => undefined)
+})
 
 describe('resolveTicket', () => {
   it('matches #12, owner/name#12, and app-12 case-insensitively', () => {
@@ -153,11 +174,152 @@ describe('sandtable commands', () => {
       text: '#12 has no message yet'
     })
   })
+})
 
-  it('answers start as not ready', async () => {
-    expect(await make([caller], [target])('c1', 'start', '#12')).toEqual({
+describe('start', () => {
+  const started = (n: number, over: Partial<SessionRecord> = {}): SessionRecord[] =>
+    Array.from({ length: n }, (_, i) =>
+      session({ id: `x${i}`, ticketKey: `octo/shop#${50 + i}`, startedBy: 'c1', ...over })
+    )
+
+  it('start refuses past 5 live started sessions', async () => {
+    const f = fakes()
+    const run = make([caller, ...started(5)], [target], { starts: f })
+    expect(await run('c1', 'start', '#12')).toEqual({
       code: 1,
-      text: 'Not ready'
+      text: 'This session already started 5 live sessions. Wait for one to finish.'
+    })
+    expect(f.start).not.toHaveBeenCalled()
+    const ok = make(
+      [caller, ...started(4), ...started(1, { id: 'y', state: 'finished' })],
+      [target]
+    )
+    expect((await ok('c1', 'start', '#12')).code).toBe(0)
+  })
+
+  it('counts starts still in flight toward the cap', async () => {
+    let release = (): void => undefined
+    const f = fakes()
+    f.start.mockImplementation(() => new Promise<void>((r) => (release = r)))
+    const tickets = [target, ticket({ key: 'octo/shop#13', number: 13 })]
+    const run = make([caller, ...started(4)], tickets, { starts: f })
+    const first = run('c1', 'start', '#12')
+    await vi.waitFor(() => expect(f.start).toHaveBeenCalled())
+    expect((await run('c1', 'start', '#13')).code).toBe(1)
+    release()
+    await first
+  })
+
+  it('start resumes a finished session without running the checks', async () => {
+    const f = fakes()
+    const w = session({ id: 'w', ticketKey: target.key, state: 'finished', branch: '12-t' })
+    expect(await make([caller, w], [target], { starts: f })('c1', 'start', '#12')).toEqual({
+      code: 0,
+      text: 'Resumed #12 on 12-t'
+    })
+    expect(f.resume).toHaveBeenCalledWith('c1', 'w')
+    expect(f.checkStart).not.toHaveBeenCalled()
+  })
+
+  it('start refuses a ticket that needs triage, and on blockers', async () => {
+    const f = fakes()
+    const run = make([caller], [target], { starts: f })
+    f.checkStart.mockResolvedValueOnce({ triage: true, problems: [], overlap: [], ready: true })
+    expect(await run('c1', 'start', '#12')).toEqual({
+      code: 1,
+      text: '#12 needs an area label first. Ask the user to start it in Sandtable, which offers triage.'
+    })
+    f.checkStart.mockResolvedValueOnce({
+      triage: false,
+      problems: ['Blocked by #3: A', 'Blocked by #4: B'],
+      overlap: [],
+      ready: true
+    })
+    expect(await run('c1', 'start', '#12')).toEqual({
+      code: 1,
+      text: 'Blocked by #3: A\nBlocked by #4: B'
+    })
+    expect(f.checkReady).not.toHaveBeenCalled()
+    expect(f.start).not.toHaveBeenCalled()
+  })
+
+  it('start refuses on readiness gaps and lists them', async () => {
+    const f = fakes()
+    f.checkStart.mockResolvedValue({ triage: false, problems: [], overlap: [], ready: true })
+    f.checkReady.mockResolvedValue(['Which screen?', 'No acceptance test.'])
+    expect(await make([caller], [target], { starts: f })('c1', 'start', '#12')).toEqual({
+      code: 1,
+      text: 'The readiness check found gaps in #12:\nWhich screen?\nNo acceptance test.'
+    })
+    expect(f.overlap).not.toHaveBeenCalled()
+    expect(f.start).not.toHaveBeenCalled()
+  })
+
+  it('start skips readiness when the check says it is not needed', async () => {
+    const f = fakes()
+    await make([caller], [target], { starts: f })('c1', 'start', '#12')
+    expect(f.checkReady).not.toHaveBeenCalled()
+    expect(f.start).toHaveBeenCalled()
+  })
+
+  it('start refuses on overlaps, leaving out the caller and the tickets it started', async () => {
+    const f = fakes()
+    f.overlap.mockResolvedValue([
+      { key: 'octo/shop#30', number: 30, title: 'Other', reason: 'Both change tmux.ts.' }
+    ])
+    const run = make(
+      [caller, ...started(1), ...started(1, { id: 'y', state: 'finished' })],
+      [target],
+      { starts: f }
+    )
+    expect(await run('c1', 'start', '#12')).toEqual({
+      code: 1,
+      text: '#12 overlaps work in progress:\n#30 Other: Both change tmux.ts.'
+    })
+    expect(f.overlap).toHaveBeenCalledWith('p1', target.key, ['octo/shop#1', 'octo/shop#50'])
+    expect(f.start).not.toHaveBeenCalled()
+  })
+
+  it("start uses the caller's main repo for a ticket with no repo", async () => {
+    const f = fakes()
+    const noRepo = { ...target, repo: '' }
+    const c = { ...caller, worktrees: ['/repos/shop-web-wt.noindex/1-x'] }
+    await make([c], [noRepo], { starts: f })('c1', 'start', '#12')
+    expect(f.start).toHaveBeenCalledWith('c1', 'p1', target.key, [], 'octo/shop-web')
+  })
+
+  it("start reuses the extra repos of the ticket's last session", async () => {
+    const f = fakes()
+    const gone = session({
+      id: 'w',
+      ticketKey: target.key,
+      state: 'finished',
+      removedAt: '2026-10-25T00:00:00.000Z',
+      branch: 'old',
+      worktrees: ['/repos/shop-wt.noindex/12-t', '/repos/shop-web-wt.noindex/12-t']
+    })
+    const all = [caller, gone]
+    f.start.mockImplementation(async () => {
+      all.push(
+        session({
+          id: 'n',
+          ticketKey: target.key,
+          branch: '12-t',
+          startedAt: '2026-10-26T00:00:00.000Z'
+        })
+      )
+    })
+    const run = make(all, [target], { starts: f })
+    expect(await run('c1', 'start', '#12')).toEqual({ code: 0, text: 'Started #12 on 12-t' })
+    expect(f.start).toHaveBeenCalledWith('c1', 'p1', target.key, ['octo/shop-web'], 'octo/shop')
+  })
+
+  it("start reports start's refusal as code 1", async () => {
+    const f = fakes()
+    f.start.mockRejectedValue(new Error('Ticket already has a live session'))
+    expect(await make([caller], [target], { starts: f })('c1', 'start', '#12')).toEqual({
+      code: 1,
+      text: 'Ticket already has a live session'
     })
   })
 })
