@@ -1029,6 +1029,50 @@ describe('saved start failures', () => {
     expect(changes).toContain('p1')
   })
 
+  it('clears a folder failure on the next sync once the folder points at the repo again', async () => {
+    const { t, folders } = await failed()
+    folders['/repos/shop'] = ['octo/shop']
+    await t.orch.sync('p1')
+    await vi.waitFor(() => expect(t.saved().startFailures).toEqual([]))
+  })
+
+  it('drops a folder failure when its repo leaves the project', async () => {
+    const { t } = await failed()
+    await t.orch.saveProject({
+      ...project,
+      repos: project.repos.filter((r) => r.github !== 'octo/shop')
+    })
+    expect(t.saved().startFailures).toEqual([])
+  })
+
+  it("doesn't record a refusal of what you picked", async () => {
+    const t = setup()
+    await t.orch.reconnect()
+    await t.orch.sync('p1')
+    await expect(t.orch.start('p1', KEY, ['octo/shop'])).rejects.toThrow(
+      'Extra repo is the main repo'
+    )
+    await expect(t.orch.start('p1', KEY, ['octo/other'])).rejects.toThrow(
+      'Repo not in this project'
+    )
+    expect((await t.orch.getBoard('p1')).couldntStart).toEqual({})
+  })
+
+  it('keeps failures of tickets missing from a sync that reported a problem', async () => {
+    const folders = moved()
+    const t = setup({ projects: [repoProject], folders, tickets: [ticket({ status: 'Open' })] })
+    await t.orch.reconnect()
+    await t.orch.sync('p1')
+    await expect(t.orch.start('p1', KEY)).rejects.toThrow(folderError('octo/shop'))
+    t.deps.repoIssues.tickets.mockImplementation(async (repo, _since, _numbers, truncated) => {
+      truncated?.(`${repo} is capped.`)
+      return []
+    })
+    await t.orch.sync('p1')
+    await t.orch.flush()
+    expect(t.saved().startFailures).toHaveLength(1)
+  })
+
   it("drops a removed project's failures", async () => {
     const { t } = await failed()
     await t.orch.removeProject('p1')

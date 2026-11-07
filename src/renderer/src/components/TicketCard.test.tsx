@@ -722,6 +722,21 @@ describe('TicketCard worktree setup', () => {
       expect(screen.getByText(text)).toBeInTheDocument()
     })
 
+    it("lets the main process clear a failure its board reload brought before the start's error", async () => {
+      let reject: (err: Error) => void = () => undefined
+      vi.mocked(api.tickets.start).mockReturnValueOnce(new Promise((_, r) => (reject = r)))
+      renderCard()
+      await userEvent.click(screen.getByRole('button', { name: 'Start' }))
+      await userEvent.click(
+        within(await screen.findByRole('dialog')).getByRole('button', { name: 'Start' })
+      )
+      await vi.waitFor(() => expect(api.tickets.start).toHaveBeenCalled())
+      saved('tmux broke')
+      await act(async () => reject(new Error('tmux broke')))
+      act(() => setStartFailures(project.id, []))
+      expect(screen.queryByText(/Couldn't start/)).toBeNull()
+    })
+
     it('shows a saved failure from the board after a restart', () => {
       renderCard()
       saved(folderError('octo/shop'), { repo: 'octo/shop' })

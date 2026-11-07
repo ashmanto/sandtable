@@ -960,6 +960,11 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           void persist().catch(() => undefined)
         }
       }
+      void clearFixedFolders(project).then((cleared) => {
+        if (!cleared) return
+        void persist().catch(() => undefined)
+        changed(projectId)
+      })
       if (merged) mergedPrs.set(projectId, merged.prs)
       persistCache()
       onSync(
@@ -1346,6 +1351,24 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     await deps.tmux.killTmux(s.tmuxName)
     if (await deps.tmux.hasTmux(s.tmuxName)) throw new Error("Couldn't end the session")
     setState(s, 'finished')
+  }
+
+  const clearFixedFolders = async (p: Project): Promise<boolean> => {
+    const failed = [
+      ...new Set(startFailures.flatMap((f) => (f.projectId === p.id && f.repo ? [f.repo] : [])))
+    ]
+    const fixed: string[] = []
+    for (const repo of failed) {
+      const r = findRepo(p.repos, repo)
+      const remotes = r ? await deps.githubReposOf(r.path).catch(() => []) : []
+      if (!r || remotes.some((g) => sameRepo(g, repo))) fixed.push(repo)
+    }
+    const left = startFailures.filter(
+      (f) => f.projectId !== p.id || !f.repo || !fixed.includes(f.repo)
+    )
+    const cleared = left.length < startFailures.length
+    startFailures = left
+    return cleared
   }
 
   const checkFolders = async (repos: ProjectRepo[]): Promise<void> => {
@@ -2176,23 +2199,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         i < 0
           ? [...projects, withGroup(p, undefined)]
           : projects.with(i, withGroup(p, projects[i].group))
-      const failed = [
-        ...new Set(startFailures.flatMap((f) => (f.projectId === p.id && f.repo ? [f.repo] : [])))
-      ]
-      const fixed: string[] = []
-      for (const repo of failed) {
-        try {
-          await checkFolders([repoOf(p, repo)])
-          fixed.push(repo)
-        } catch {
-          continue
-        }
-      }
-      const left = startFailures.filter(
-        (f) => f.projectId !== p.id || !f.repo || !fixed.includes(f.repo)
-      )
-      const cleared = left.length < startFailures.length
-      startFailures = left
+      const cleared = await clearFixedFolders(p)
       await persist()
       if (cleared) changed(p.id)
       for (const s of sessions) if (s.projectId === p.id) await reviewLoop.syncGate(s)
@@ -2522,16 +2529,18 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       assertFreeTmux(tmuxName(projectId, ticketKey))
       starting.set(ticketId(projectId, ticketKey), [ticketKey, projectId])
       const target = `${projectId}\n${ticketKey}`
+      let picked = false
       let launched = false
-      startFailures = startFailures.filter(
-        (f) => f.projectId !== projectId || f.ticketKey !== ticketKey
-      )
       try {
         if (!ticket.repo && !mainRepo) throw new Error('Choose the repo for this ticket')
         const main = repoOf(project, mainRepo || ticket.repo)
         const extras = extraRepos.map((r) => repoOf(project, r))
         if (extras.includes(main)) throw new Error('Extra repo is the main repo')
         const repos = [...new Set([main, ...extras])]
+        picked = true
+        startFailures = startFailures.filter(
+          (f) => f.projectId !== projectId || f.ticketKey !== ticketKey
+        )
         const mine = sessions.filter((s) => s.projectId === projectId)
         const branch =
           currentSession(mine, ticketKey)?.branch ??
@@ -2655,7 +2664,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         ).catch(() => undefined)
       } catch (err) {
         const reason = messageOf(err)
-        if (launched) throw err
+        if (launched || !picked) throw err
         if (!reason.startsWith(SETUP_CANCELLED)) {
           const lines = reason.startsWith(SETUP_FAILED) ? setupApi.setupProgress(target)?.lines : []
           startFailures.push({

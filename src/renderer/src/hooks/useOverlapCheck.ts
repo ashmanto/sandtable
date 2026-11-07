@@ -117,7 +117,11 @@ export async function startTicket(
     return true
   } catch (err) {
     const reason = errorMessage(err)
-    if (!reason.startsWith(SETUP_FAILED) && !reason.startsWith(SETUP_CANCELLED))
+    if (
+      !reason.startsWith(SETUP_FAILED) &&
+      !reason.startsWith(SETUP_CANCELLED) &&
+      !failures.has(key)
+    )
       failures.set(key, { reason, repo: folderErrorRepo(reason), local: true })
     return false
   } finally {

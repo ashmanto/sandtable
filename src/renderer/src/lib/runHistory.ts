@@ -10,6 +10,11 @@ export function openRunHistory(projectId: string, routineId: string): void {
   changed()
 }
 
+/** Forgets an unanswered Run history ask unless it's for `shown`, the project whose board shows. */
+export function dropRunHistoryAsk(shown: string | null): void {
+  if (asked && asked.projectId !== shown) asked = null
+}
+
 /** Opens each Run history asked of this project's loaded routines, now and on later asks, and drops an ask for a routine it no longer has. */
 export function onRunHistoryAsk(
   projectId: string,
