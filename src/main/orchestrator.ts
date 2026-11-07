@@ -1389,7 +1389,8 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
   ): Promise<string> => {
     const eventsFile = join(eventsDir, `${id}.jsonl`)
     const settingsFile = join(settingsDir, `${id}.json`)
-    const cliSocket = rules.ticket !== undefined ? await cliServer?.open(id) : undefined
+    const cliSocket =
+      rules.ticket !== undefined ? await cliServer?.open(id).catch(() => undefined) : undefined
     await mkdir(eventsDir, { recursive: true })
     await mkdir(settingsDir, { recursive: true })
     await mkdir(join(deps.dataDir, 'status'), { recursive: true })

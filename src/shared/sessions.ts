@@ -1,4 +1,5 @@
 import { columnFor } from './columns'
+import { sameRepo } from './repo'
 import type { Project, ProjectRepo, SessionRecord, SessionState, StatusMap } from './types'
 
 /** A card or ticket state: a session state, a done ticket whose session is open, or a failed folder check. */
@@ -43,6 +44,18 @@ export const sessionRepos = (repos: ProjectRepo[], s: SessionRecord): ProjectRep
   (s.checkout ? [s.checkout] : s.worktrees).flatMap(
     (dir) => repos.find((r) => r.path === dir || dir.startsWith(`${r.path}-wt.noindex/`)) ?? []
   )
+
+/** The extra repos a new session on a ticket starts with: the previous session's, minus its old main and the new `mainRepo`. */
+export const previousExtras = (
+  repos: ProjectRepo[],
+  previous: SessionRecord | undefined,
+  mainRepo: string | undefined
+): string[] =>
+  previous && !previous.checkout
+    ? sessionRepos(repos, { ...previous, worktrees: previous.worktrees.slice(1) })
+        .map((r) => r.github)
+        .filter((g) => !mainRepo || !sameRepo(g, mainRepo))
+    : []
 
 /** The repo folder's name for a worktree in `<repo>-wt.noindex/`. */
 export const repoName = (worktree: string): string =>

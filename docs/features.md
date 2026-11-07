@@ -478,9 +478,11 @@ refusal, a notification title, or a format example.
 
 - A ticket session gets a `sandtable` command on its `PATH`, with `start`, `status`, `wait`,
   `summary`, and `info`, each taking a ticket such as `#12`, `owner/name#12`, or `APP-12`.
-  Routines and sessions without a ticket get none of it.
+  Routines and sessions without a ticket get none of it. The command runs without a permission
+  prompt.
 - The command reaches only tickets in the session's own project, and refuses its own ticket with
-  "A session can't use sandtable on its own ticket".
+  "A session can't use sandtable on its own ticket". A `#12` that matches issues in more than one
+  repo is refused with "matches" and both keys; use the full `owner/name#12` key.
 - `status` prints the ticket's state word, the same one the board's card shows, such as
   `No session` or `Needs you (asking)`. `info` prints the
   branch and worktree paths. `summary` prints the saved summary draft of a finished session, or
@@ -490,10 +492,10 @@ refusal, a notification title, or a format example.
   sessions it started. A ticket that needs triage is refused with "needs an area label first".
 - If the ticket's newest session is finished, `start` resumes it without the checks, as
   **Resume** does. `start` never applies triage and never overrides a finding.
-- A session can have at most 5 live sessions that it started. A sixth `start` is refused until one
-  finishes.
-- `wait` returns when the ticket needs you with nothing pending, finishes, hits a limit or an API
-  error, or is done. After 540 seconds, or the seconds you pass with `--timeout`, it exits with 3.
+- A session can have at most 5 live sessions that it started, and a resume counts against that cap.
+  A sixth `start` is refused until one finishes.
+- `wait` returns when the ticket needs you with nothing pending, goes idle, finishes, hits a limit
+  or an API error, or is done. After 540 seconds, or the seconds you pass with `--timeout`, it exits with 3.
 - Exit codes are 0 for success, 1 for a refusal or failure (the reason goes to stderr), 2 for a usage
   error, and 3 for a `wait` timeout.
 - The session's rules tell it to take another session's committed work with git, from the branch
@@ -1175,8 +1177,9 @@ refusal, a notification title, or a format example.
 - They can't read `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.kube`, `~/.docker/config.json`, `~/.netrc`,
   `~/.config/gcloud`, `~/.azure`, or the Sandtable data folder.
 - They reach only `github.com`, `api.github.com`, `registry.npmjs.org`, the project's Linear or Jira
-  host, the domains you add under **Allowed domains**, and the macOS trust service that `gh` needs
-  to check TLS certificates, which the allowed domains don't cover.
+  host, the domains you add under **Allowed domains**, the session's own `sandtable` socket, and
+  the macOS trust service that `gh` needs to check TLS certificates, which the allowed domains
+  don't cover.
 - A command that fails in the sandbox isn't retried outside it.
 - `gh`, HTTPS push, `npm` with its own cache in `~/Library/Caches/Sandtable/npm`, and commits signed
   through an SSH agent such as 1Password's work.

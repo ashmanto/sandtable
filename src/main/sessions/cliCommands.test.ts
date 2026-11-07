@@ -78,14 +78,14 @@ describe('stateWord', () => {
   const map = statusMapOf(project)
   const done = ticket({ status: 'Done' })
   it('names each case', () => {
-    expect(stateWord(undefined, ticket(), map, false)).toBe('No session')
-    expect(stateWord(undefined, done, map, false)).toBe('Done')
-    expect(stateWord(session({ state: 'finished' }), done, map, false)).toBe('Done')
-    expect(stateWord(session(), done, map, false)).toBe('Done, session open')
-    expect(stateWord(session({ state: 'needsYou' }), ticket(), map, true)).toBe(
+    expect(stateWord(undefined, ticket(), map)).toBe('No session')
+    expect(stateWord(undefined, done, map)).toBe('Done')
+    expect(stateWord(session({ state: 'finished' }), done, map)).toBe('Done')
+    expect(stateWord(session(), done, map)).toBe('Done, session open')
+    expect(stateWord(session({ state: 'needsYou', asking: true }), ticket(), map)).toBe(
       'Needs you (asking)'
     )
-    expect(stateWord(session({ state: 'idle' }), ticket(), map, false)).toBe('Idle')
+    expect(stateWord(session({ state: 'idle' }), ticket(), map)).toBe('Idle')
   })
 })
 
@@ -314,6 +314,27 @@ describe('start', () => {
     expect(f.start).toHaveBeenCalledWith('c1', 'p1', target.key, ['octo/shop-web'], 'octo/shop')
   })
 
+  it('start gives no extras for a checkout session and drops the old main', async () => {
+    const f = fakes()
+    const mk = (over: Partial<SessionRecord>): SessionRecord =>
+      session({
+        id: 'w',
+        ticketKey: target.key,
+        state: 'finished',
+        removedAt: '2026-10-25T00:00:00.000Z',
+        ...over
+      })
+    const oldMain = mk({
+      worktrees: ['/repos/shop-web-wt.noindex/12-t', '/repos/shop-wt.noindex/12-t']
+    })
+    await make([caller, oldMain], [target], { starts: f })('c1', 'start', '#12')
+    expect(f.start).toHaveBeenLastCalledWith('c1', 'p1', target.key, [], 'octo/shop')
+    f.start.mockClear()
+    const checkout = mk({ worktrees: [], checkout: '/repos/shop-web' })
+    await make([caller, checkout], [target], { starts: f })('c1', 'start', '#12')
+    expect(f.start).toHaveBeenLastCalledWith('c1', 'p1', target.key, [], 'octo/shop')
+  })
+
   it("start reports start's refusal as code 1", async () => {
     const f = fakes()
     f.start.mockRejectedValue(new Error('Ticket already has a live session'))
@@ -353,6 +374,17 @@ describe('wait', () => {
     busy = false
     listeners.forEach((cb) => cb('p1'))
     await vi.waitFor(() => expect(out).toEqual({ code: 0, text: 'Needs you' }))
+  })
+
+  it('returns when the user clears Needs you to Idle', async () => {
+    const w = live({ state: 'running' })
+    const listeners = new Set<(projectId: string) => void>()
+    const run = make([caller, w], [target], { listeners })
+    const out = run('c1', 'wait', '#12')
+    await vi.waitFor(() => expect(listeners.size).toBe(1))
+    w.state = 'idle'
+    listeners.forEach((cb) => cb('p1'))
+    expect(await out).toEqual({ code: 0, text: 'Idle' })
   })
 
   it('returns when the session finishes', async () => {

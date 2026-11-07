@@ -1316,6 +1316,9 @@ describe('sessionRules CLI', () => {
     expect(sessionRules({ ...base, cli: true })).toContain(
       '`sandtable start|status|wait|summary|info <ticket>`'
     )
+    expect(sessionRules({ ...base, cli: true })).toContain(
+      "uncommitted work isn't reachable through git, so ask the user to have it committed"
+    )
     expect(sessionRules(base)).not.toContain('sandtable start')
   })
 })

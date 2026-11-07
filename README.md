@@ -36,7 +36,7 @@ The following list is an overview. For the full list, see [What works today](doc
   **Limit reached**, with its reset time, and **API error** show when a turn fails on a plan limit
   or an API error.
 - A `sandtable` command in each ticket session, so Claude can start, check, and wait for other
-  tickets in the same project, through the same **Start** checks, and take their work with git.
+  tickets in the same project, starts new ones through the same **Start** checks, and take their work with git.
 - A ticket view with the ticket's details, the live conversation with a composer, a terminal, and
   the session's changes.
 - A review loop: an AI review of the diff against its ticket's **Done when**, failing checks, and

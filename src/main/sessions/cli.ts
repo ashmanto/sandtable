@@ -21,6 +21,7 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$ticket" ] || usage
 case "$timeout" in *[!0-9]*) usage ;; esac
+[ -z "$timeout" ] || [ "$timeout" -gt 0 ] || usage
 [ -n "$SANDTABLE_SOCKET" ] || { echo "sandtable: SANDTABLE_SOCKET isn't set" >&2; exit 1; }
 max=900
 [ "$cmd" = wait ] && max=$(( \${timeout:-540} + 60 ))
@@ -117,7 +118,7 @@ export function createCliServer(
       await closing.get(sessionId)
       const existing = servers.get(sessionId)
       if (existing) return existing.socket
-      await mkdir(dir, { recursive: true })
+      await mkdir(dir, { recursive: true, mode: 0o700 })
       const script = join(dir, 'sandtable')
       const temp = `${script}.${randomUUID()}`
       await writeFile(temp, CLI_SCRIPT, { mode: 0o755 })

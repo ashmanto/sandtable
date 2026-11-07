@@ -69,6 +69,18 @@ describe('sandtable CLI server', () => {
     expect(handle).not.toHaveBeenCalled()
   })
 
+  it('exits 2 on a timeout that is not a positive integer', async () => {
+    const handle = vi.fn<CliHandler>(async () => ({ code: 0, text: '' }))
+    const { dir, server } = make(handle)
+    const socket = await server.open('s1')
+    for (const bad of ['0', '00', '-5', '1.5', 'x']) {
+      const ran = await run(dir, socket, ['wait', '#12', '--timeout', bad])
+      expect(ran.code).toBe(2)
+      expect(ran.stderr).toContain('Usage')
+    }
+    expect(handle).not.toHaveBeenCalled()
+  })
+
   it('reopens over a stale socket file', async () => {
     const { dir, server } = make(async () => ({ code: 0, text: 'ok' }))
     const socket = await server.open('s1')

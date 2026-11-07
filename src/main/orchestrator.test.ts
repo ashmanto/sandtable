@@ -7472,6 +7472,17 @@ describe('sandtable CLI sockets', () => {
     expect(settingsOf(t, id).permissions.allow).not.toContain('Bash(sandtable:*)')
   })
 
+  it('starts without the CLI when the socket cannot open', async () => {
+    const t = await started()
+    t.cli.open.mockRejectedValue(new Error('EACCES'))
+    await t.orch.start('p1', 'octo/shop#147')
+    const [s] = (await t.orch.getBoard('p1')).sessions
+    const [, , cmd, env] = t.deps.tmux.startTmux.mock.calls[0]
+    expect(env?.SANDTABLE_SOCKET).toBeUndefined()
+    expect(settingsOf(t, s.id).permissions.allow).not.toContain('Bash(sandtable:*)')
+    expect(cmd[cmd.indexOf('--append-system-prompt') + 1]).not.toContain('`sandtable start|status')
+  })
+
   it('a finished session closes its socket', async () => {
     const t = await started()
     await t.orch.start('p1', 'octo/shop#147')

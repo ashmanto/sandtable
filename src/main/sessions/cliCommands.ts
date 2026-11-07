@@ -1,13 +1,20 @@
 import { columnFor } from '../../shared/columns'
 import { messageOf } from '../../shared/errors'
 import { isTrackerKey, ticketLabel } from '../../shared/repo'
-import { currentSession, isLive, sessionRepos, STATE_LABELS } from '../../shared/sessions'
+import {
+  currentSession,
+  isLive,
+  previousExtras,
+  sessionRepos,
+  STATE_LABELS
+} from '../../shared/sessions'
 import type {
   ChatState,
   ConversationEntry,
   Overlap,
   Project,
   SessionRecord,
+  SessionState,
   StartCheck,
   StatusMap,
   Ticket
@@ -15,7 +22,7 @@ import type {
 import type { CliHandler } from './cli'
 
 const WAIT_DEFAULT_SEC = 540
-const WAIT_ENDS: string[] = ['finished', 'limitReached', 'apiError']
+const WAIT_ENDS: SessionState[] = ['finished', 'limitReached', 'apiError', 'idle']
 const START_CAP = 5
 
 const refuse = (text: string): { code: 1; text: string } => ({ code: 1, text })
@@ -34,16 +41,11 @@ export function resolveTicket(tickets: Ticket[], arg: string): Ticket | string {
 }
 
 /** The word `status` prints for a ticket and its newest session. */
-export function stateWord(
-  s: SessionRecord | undefined,
-  ticket: Ticket,
-  map: StatusMap,
-  asking: boolean
-): string {
+export function stateWord(s: SessionRecord | undefined, ticket: Ticket, map: StatusMap): string {
   const done = columnFor(ticket.status, map) === 'done'
   if (!s) return done ? 'Done' : 'No session'
   if (isLive(s)) {
-    if (asking || s.asking) return 'Needs you (asking)'
+    if (s.asking) return 'Needs you (asking)'
     return done ? STATE_LABELS.doneOpen : STATE_LABELS[s.state]
   }
   return done ? 'Done' : STATE_LABELS[s.state]
@@ -110,12 +112,11 @@ export function createCliCommands(ctx: {
     const repos = ctx.projectById(projectId).repos
     const mainRepo = found.repo || sessionRepos(repos, caller)[0]?.github
     const before = currentSession(all, found.key)
-    const extras = before ? sessionRepos(repos, before).map((r) => r.github) : []
     await ctx.start(
       caller.id,
       projectId,
       found.key,
-      extras.filter((r) => r !== mainRepo),
+      previousExtras(repos, before, mainRepo),
       mainRepo
     )
     return `Started ${label} on ${currentSession(ours(), found.key)?.branch}`
@@ -157,7 +158,7 @@ export function createCliCommands(ctx: {
         const now = current()
         const t =
           ctx.synced.get(caller.projectId)?.tickets.find((x) => x.key === found.key) ?? found
-        const text = stateWord(now, t, map, false)
+        const text = stateWord(now, t, map)
         const ready =
           !now ||
           !isLive(now) ||
@@ -187,7 +188,7 @@ export function createCliCommands(ctx: {
     }
     if (command === 'status') {
       const map = ctx.statusMapOf(ctx.projectById(caller.projectId))
-      return { code: 0, text: stateWord(s, found, map, false) }
+      return { code: 0, text: stateWord(s, found, map) }
     }
     if (!s) return refuse(`${label} has no session`)
     if (command === 'info') {
