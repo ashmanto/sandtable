@@ -77,8 +77,8 @@ Start reading from `src/main/orchestrator.ts`, `src/shared/api.ts`, and
 - External programs run with `execFile` or `spawn` and an argument array, never a shell string.
   The exceptions are the hook and status-line commands Claude Code runs, the `command -v` tool
   probe, the login-shell `PATH` read, and the worktree setup command.
-- A session's `sandtable` CLI reaches only tickets in its own project, starts only through the
-  **Start** checks, never applies triage, and never types into a session.
+- A session's `sandtable` CLI reaches only tickets in its own project, starts a new session only through
+  the **Start** checks, resumes a finished one as **Resume** does, never applies triage, and never types into a session.
 - Every session state is shown as a word, or as an icon whose tooltip and accessible name are the
   word, never only a color.
 
