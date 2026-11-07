@@ -158,6 +158,7 @@ import { createRoutines } from './sessions/routines'
 import { createUsageTracking } from './sessions/usageTracking'
 import { createJiraSignIn } from './sessions/jiraSignIn'
 import { createLeftovers } from './sessions/leftovers'
+import { createCliCommands } from './sessions/cliCommands'
 import { createTicketChat } from './sessions/ticketChat'
 import { tmuxName, typeIntoTmux } from './sessions/tmux'
 import { accountEnv, stopChildren } from './env/tools'
@@ -580,7 +581,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
   const activities = new Map<string, Activity>()
   const activityFiles = new Map<string, string>()
   const stoppers: (() => void)[] = []
-  const cliServer = deps.cli?.(async () => ({ code: 1, text: 'Not ready' }))
+  const cliServer = deps.cli?.((...args) => cliCommands.run(...args))
   if (cliServer) stoppers.push(() => void cliServer.closeAll())
   const write = serial()
   const writeCache = serial()
@@ -1762,6 +1763,14 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     recordRun,
     printRun,
     runsInFlight
+  })
+  const cliCommands = createCliCommands({
+    sessions: () => sessions,
+    synced,
+    projectById,
+    statusMapOf,
+    transcriptOf,
+    chat: ticketChat.chat
   })
   const routineChat = createRoutineChat({
     deps,
