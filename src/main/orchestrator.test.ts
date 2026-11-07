@@ -1036,6 +1036,20 @@ describe('saved start failures', () => {
     await vi.waitFor(() => expect(t.saved().startFailures).toEqual([]))
   })
 
+  it('keeps a failure recorded while a sync checks that folder', async () => {
+    const { t, folders } = await failed()
+    let pass: (remotes: string[]) => void = () => undefined
+    t.deps.githubReposOf.mockImplementationOnce(() => new Promise((resolve) => (pass = resolve)))
+    await t.orch.sync('p1')
+    await vi.waitFor(() => expect(t.deps.githubReposOf).toHaveBeenCalledTimes(2))
+    await expect(t.orch.start('p1', KEY)).rejects.toThrow(folderError('octo/shop'))
+    folders['/repos/shop'] = ['octo/shop']
+    pass(['octo/shop'])
+    await t.orch.flush()
+    await settle()
+    expect(t.saved().startFailures).toMatchObject([{ ticketKey: KEY, repo: 'octo/shop' }])
+  })
+
   it('drops a folder failure when its repo leaves the project', async () => {
     const { t } = await failed()
     await t.orch.saveProject({

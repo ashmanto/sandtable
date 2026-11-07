@@ -350,6 +350,9 @@ describe('worktree setup', () => {
         error: `${SETUP_FAILED}: npm install exited with code 1\nb\nc\nd\ne\nnpm ERR! boom`
       }
     ])
+    expect((await t.orch.getBoard('p1')).couldntStart.p1).toMatchObject([
+      { kind: 'routine', error: expect.stringContaining('\nnpm ERR! boom') }
+    ])
     const [[path]] = t.deps.git.removeWorktree.mock.calls
     expect(path).toMatch(/^\/repos\/shop-wt\.noindex\/session-[0-9a-f]{8}$/)
     expect(t.deps.tmux.startTmux).not.toHaveBeenCalled()

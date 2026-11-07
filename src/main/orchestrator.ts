@@ -1354,18 +1354,14 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
   }
 
   const clearFixedFolders = async (p: Project): Promise<boolean> => {
-    const failed = [
-      ...new Set(startFailures.flatMap((f) => (f.projectId === p.id && f.repo ? [f.repo] : [])))
-    ]
+    const checked = startFailures.filter((f) => f.projectId === p.id && f.repo)
     const fixed: string[] = []
-    for (const repo of failed) {
+    for (const repo of new Set(checked.map((f) => f.repo!))) {
       const r = findRepo(p.repos, repo)
       const remotes = r ? await deps.githubReposOf(r.path).catch(() => []) : []
       if (!r || remotes.some((g) => sameRepo(g, repo))) fixed.push(repo)
     }
-    const left = startFailures.filter(
-      (f) => f.projectId !== p.id || !f.repo || !fixed.includes(f.repo)
-    )
+    const left = startFailures.filter((f) => !checked.includes(f) || !fixed.includes(f.repo!))
     const cleared = left.length < startFailures.length
     startFailures = left
     return cleared
