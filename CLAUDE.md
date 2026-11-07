@@ -68,8 +68,9 @@ Start reading from `src/main/orchestrator.ts`, `src/shared/api.ts`, and
   the card shows and the terminal shows it untouched.
 - Sandtable never changes a repo's `.claude/settings.json`. Its hooks, status line, a routine's
   allowed rules, the Read rule for a session's sent images, the Read and Edit rules for its
-  compact notes, the sandbox when a project turns it on, and the read-only runs' deny rules go in through `claude --settings`, and its session, chat, routine chat, summary, triage, review,
-  readiness, and overlap rules through `--append-system-prompt`.
+  compact notes, the `sandtable` allow rule, the sandbox when a project turns it on, and the
+  read-only runs' deny rules go in through `claude --settings`, and its session, chat, routine
+  chat, summary, triage, review, readiness, and overlap rules through `--append-system-prompt`.
 - A live session's hooks deny a tool call only when the session reached its token cap, or when a
   ticket session with **Automatic review** on tries to open a pull request before the gate opens.
 - A worktree with uncommitted or unpushed changes is never removed, and `git worktree remove`
@@ -77,6 +78,9 @@ Start reading from `src/main/orchestrator.ts`, `src/shared/api.ts`, and
 - External programs run with `execFile` or `spawn` and an argument array, never a shell string.
   The exceptions are the hook and status-line commands Claude Code runs, the `command -v` tool
   probe, the login-shell `PATH` read, and the worktree setup command.
+- A session's `sandtable` CLI reaches only tickets in its own project, starts a new session only
+  through the **Start** checks, resumes a finished one as **Resume** does, never applies triage,
+  and never types into a session.
 - Every session state is shown as a word, or as an icon whose tooltip and accessible name are the
   word, never only a color.
 

@@ -55,6 +55,7 @@ import { createDrafts } from './drafts'
 import { createKeepAwake } from './keepAwake'
 import { warnNotificationsOffOnce } from './notifyOff'
 import { createOrchestrator } from './orchestrator'
+import { cliDir, createCliServer } from './sessions/cli'
 import {
   countNeedsYou,
   readAsking,
@@ -64,6 +65,7 @@ import {
 } from './sessions/hookEvents'
 import {
   hasTmux,
+  globalPath,
   killTmux,
   enterTmux,
   escapeTmux,
@@ -344,6 +346,7 @@ async function start(): Promise<void> {
     return client
   }
   const orch = createOrchestrator({
+    cli: (handle) => createCliServer(cliDir(dataDir), handle),
     store: createStore(join(dataDir, 'sandtable.json')),
     cache: createSyncCache(join(dataDir, 'sync-cache.json')),
     board: createBoardClient(github.gql),
@@ -372,6 +375,7 @@ async function start(): Promise<void> {
     setup: { problem: ignoredProblem, copy: copyPaths, run: runSetup, suggest: suggestSetup },
     tmux: {
       startTmux,
+      globalPath,
       hasTmux,
       listTmux,
       killTmux,

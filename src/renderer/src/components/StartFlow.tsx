@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { sameRepo, ticketLabel } from '../../../shared/repo'
-import { sessionRepos } from '../../../shared/sessions'
+import { previousExtras } from '../../../shared/sessions'
 import type { Pass } from '@/hooks/useOverlapCheck'
 import type { Project, ProjectRepo, SessionRecord, Ticket } from '../../../shared/types'
 import { RepoPicker } from './RadioBox'
@@ -45,13 +45,7 @@ export function StartFlow({
   const { repos } = project
   const [chosen, setChosen] = useState('')
   const main = mainRepo?.github ?? chosen
-  const [picked, setPicked] = useState<string[]>(() =>
-    session && !session.checkout
-      ? sessionRepos(repos, { ...session, worktrees: session.worktrees.slice(1) }).map(
-          (r) => r.github
-        )
-      : []
-  )
+  const [picked, setPicked] = useState<string[]>(() => previousExtras(repos, session, undefined))
   const others = repos.filter((r) => !sameRepo(r.github, main))
 
   if (!picking)

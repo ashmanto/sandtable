@@ -16,41 +16,54 @@ import {
 import { IN_PROGRESS_LABEL } from '../../../shared/columns'
 import { serviceOf } from '../../../shared/repo'
 import { resetsText } from '../../../shared/sessionStatus'
-import type {
-  PrStage,
-  Project,
-  SessionRecord,
-  SessionState,
-  SessionStop,
-  Ticket
-} from '../../../shared/types'
+import { STATE_LABELS, type CardState } from '../../../shared/sessions'
+import type { PrStage, Project, SessionRecord, SessionStop, Ticket } from '../../../shared/types'
 
-/** A card or ticket state: a session state, a done ticket whose session is open, or a failed folder check. */
-export type CardState = SessionState | 'doneOpen' | 'cantStart'
+export type { CardState }
 
 /** Each card state's word, icon, and chip colors. */
 export const stateLook: Record<
   CardState,
   { label: string; icon: typeof CircleDot; className: string }
 > = {
-  needsYou: { label: 'Needs you', icon: CircleAlert, className: 'bg-amber-soft text-amber' },
-  idle: { label: 'Idle', icon: CirclePause, className: 'bg-neutral-soft text-fg-2' },
-  running: { label: 'Running', icon: CircleDot, className: 'bg-blue-soft text-blue' },
+  needsYou: {
+    label: STATE_LABELS.needsYou,
+    icon: CircleAlert,
+    className: 'bg-amber-soft text-amber'
+  },
+  idle: { label: STATE_LABELS.idle, icon: CirclePause, className: 'bg-neutral-soft text-fg-2' },
+  running: { label: STATE_LABELS.running, icon: CircleDot, className: 'bg-blue-soft text-blue' },
   reviewing: {
-    label: 'Reviewing',
+    label: STATE_LABELS.reviewing,
     icon: ScanSearch,
     className: 'bg-blue-soft text-blue [&>svg]:soft-pulse'
   },
-  done: { label: 'Done', icon: CircleCheckBig, className: 'bg-added-soft text-added' },
-  finished: { label: 'Finished', icon: CircleCheck, className: 'bg-neutral-soft text-neutral' },
-  limitReached: { label: 'Limit reached', icon: Hourglass, className: 'bg-neutral-soft text-fg-2' },
-  apiError: { label: 'API error', icon: TriangleAlert, className: 'bg-danger-soft text-danger' },
+  done: { label: STATE_LABELS.done, icon: CircleCheckBig, className: 'bg-added-soft text-added' },
+  finished: {
+    label: STATE_LABELS.finished,
+    icon: CircleCheck,
+    className: 'bg-neutral-soft text-neutral'
+  },
+  limitReached: {
+    label: STATE_LABELS.limitReached,
+    icon: Hourglass,
+    className: 'bg-neutral-soft text-fg-2'
+  },
+  apiError: {
+    label: STATE_LABELS.apiError,
+    icon: TriangleAlert,
+    className: 'bg-danger-soft text-danger'
+  },
   doneOpen: {
-    label: 'Done, session open',
+    label: STATE_LABELS.doneOpen,
     icon: CircleDashed,
     className: 'bg-neutral-soft text-foreground ring-1 ring-line-2 ring-inset'
   },
-  cantStart: { label: "Can't start", icon: CircleX, className: 'bg-danger-soft text-danger' }
+  cantStart: {
+    label: STATE_LABELS.cantStart,
+    icon: CircleX,
+    className: 'bg-danger-soft text-danger'
+  }
 }
 
 /** A state's words, with a plan limit's reset time when the session has one. */

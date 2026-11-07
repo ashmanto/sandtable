@@ -72,6 +72,7 @@ import { createTerminals } from './terminal'
 import { stopChildren } from './env/tools'
 import { createDrafts } from './drafts'
 import { sessionDraft } from '../shared/drafts'
+import type { CliHandler } from './sessions/cli'
 
 vi.mock('./env/tools', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./env/tools')>()),
@@ -7598,5 +7599,226 @@ describe('Sandbox commands', () => {
     await expect(
       t.orch.saveProject({ ...sandboxed, sandboxDomains: ['https://pypi.org'] })
     ).rejects.toThrow('Not a domain: https://pypi.org')
+  })
+})
+
+describe('sandtable CLI sockets', () => {
+  const settingsOf = (
+    t: ReturnType<typeof setup>,
+    id: string
+  ): {
+    permissions: { allow: string[] }
+    sandbox: { network: { allowUnixSockets: string[] } }
+  } => JSON.parse(readFileSync(join(t.dataDir, 'settings', `${id}.json`), 'utf8'))
+  const started = async (
+    opts: Parameters<typeof setup>[0] = {}
+  ): Promise<ReturnType<typeof setup>> => {
+    const t = setup({ cli: true, ...opts })
+    await t.orch.reconnect()
+    await t.orch.sync('p1')
+    return t
+  }
+
+  it('a ticket session starts with its socket on PATH', async () => {
+    const t = await started()
+    await t.orch.start('p1', 'octo/shop#147')
+    const [s] = (await t.orch.getBoard('p1')).sessions
+    expect(t.cli.open).toHaveBeenCalledWith(s.id)
+    const env = t.deps.tmux.startTmux.mock.calls[0][3]
+    expect(env?.SANDTABLE_SOCKET).toBe(`/cli/${s.id}.sock`)
+    expect(env?.PATH?.startsWith('/cli:')).toBe(true)
+    expect(settingsOf(t, s.id).permissions.allow).toContain('Bash(sandtable:*)')
+    const cmd = t.deps.tmux.startTmux.mock.calls[0][2]
+    expect(cmd[cmd.indexOf('--append-system-prompt') + 1]).toContain('`sandtable start|status')
+  })
+
+  it('keeps CLAUDE_CONFIG_DIR next to the socket', async () => {
+    const t = await started()
+    await t.orch.start('p1', 'octo/shop#147')
+    expect(t.deps.tmux.startTmux.mock.calls[0][3]).toMatchObject({
+      CLAUDE_CONFIG_DIR: t.claudeDir,
+      SANDTABLE_SOCKET: expect.any(String)
+    })
+  })
+
+  it('a sandboxed ticket session allows only its own socket', async () => {
+    const t = await started({ projects: [{ ...project, sandbox: true }] })
+    await t.orch.start('p1', 'octo/shop#147')
+    const [s] = (await t.orch.getBoard('p1')).sessions
+    expect(settingsOf(t, s.id).sandbox.network.allowUnixSockets).toEqual([
+      ...agentSockets(),
+      `/cli/${s.id}.sock`
+    ])
+  })
+
+  it('a session without a ticket gets no socket', async () => {
+    const t = await started()
+    const id = await t.orch.create('p1', 'octo/shop', false)
+    expect(t.cli.open).not.toHaveBeenCalled()
+    expect(t.deps.tmux.startTmux.mock.calls[0][3]?.SANDTABLE_SOCKET).toBeUndefined()
+    expect(settingsOf(t, id).permissions.allow).not.toContain('Bash(sandtable:*)')
+  })
+
+  it('starts without the CLI when the socket cannot open', async () => {
+    const t = await started()
+    t.cli.open.mockRejectedValue(new Error('EACCES'))
+    await t.orch.start('p1', 'octo/shop#147')
+    const [s] = (await t.orch.getBoard('p1')).sessions
+    const [, , cmd, env] = t.deps.tmux.startTmux.mock.calls[0]
+    expect(env?.SANDTABLE_SOCKET).toBeUndefined()
+    expect(settingsOf(t, s.id).permissions.allow).not.toContain('Bash(sandtable:*)')
+    expect(cmd[cmd.indexOf('--append-system-prompt') + 1]).not.toContain('`sandtable start|status')
+  })
+
+  it('closes the socket when the launch fails', async () => {
+    const t = await started()
+    t.deps.tmux.startTmux.mockRejectedValueOnce(new Error('tmux failed'))
+    await expect(t.orch.start('p1', 'octo/shop#147')).rejects.toThrow('tmux failed')
+    const [[id]] = t.cli.open.mock.calls
+    expect(t.cli.close).toHaveBeenCalledWith(id)
+  })
+
+  it("builds the session's PATH on the tmux server's PATH", async () => {
+    const t = await started()
+    t.deps.tmux.globalPath.mockResolvedValue('/tmux/bin:/usr/bin')
+    await t.orch.start('p1', 'octo/shop#147')
+    expect(t.deps.tmux.startTmux.mock.calls[0][3]?.PATH).toBe('/cli:/tmux/bin:/usr/bin')
+  })
+
+  it('a finished session closes its socket', async () => {
+    const t = await started()
+    await t.orch.start('p1', 'octo/shop#147')
+    const [s] = (await t.orch.getBoard('p1')).sessions
+    t.emit(s.id, 'finished')
+    expect(t.cli.close).toHaveBeenCalledWith(s.id)
+  })
+
+  it("reconnect reopens live ticket sessions' sockets", async () => {
+    const live = session({ id: 's1', state: 'running', ticketKey: 'octo/shop#147' })
+    const t = setup({ cli: true, sessions: [live, session({ id: 's2', state: 'finished' })] })
+    t.live.add(live.tmuxName)
+    await t.orch.reconnect()
+    expect(t.cli.open.mock.calls).toEqual([['s1']])
+  })
+
+  it('reconnect still loads when a socket fails to open', async () => {
+    const live = session({ id: 's1', state: 'running', ticketKey: 'octo/shop#147' })
+    const t = setup({ cli: true, sessions: [live] })
+    t.live.add(live.tmuxName)
+    t.cli.open.mockRejectedValue(new Error('EADDRINUSE'))
+    await expect(t.orch.reconnect()).resolves.toBeUndefined()
+  })
+
+  it('stop closes every socket', async () => {
+    const t = await started()
+    t.orch.stop()
+    expect(t.cli.closeAll).toHaveBeenCalled()
+  })
+})
+
+describe('sandtable start', () => {
+  const area = { name: 'area: sessions', color: '' }
+  const callerTicket = ticket({
+    key: 'octo/shop#1',
+    number: 1,
+    status: 'In Progress',
+    labels: [area]
+  })
+  const caller = session({
+    id: 'c1',
+    ticketKey: 'octo/shop#1',
+    tmuxName: 'st-p1-octo-shop-1',
+    branch: '1-x',
+    worktrees: ['/repos/shop-wt.noindex/1-x']
+  })
+  const ready = async (
+    opts: Parameters<typeof setup>[0] = {}
+  ): Promise<{ t: ReturnType<typeof setup>; run: CliHandler }> => {
+    const t = setup({
+      cli: true,
+      projects: [{ ...project, readyCheck: false }],
+      sessions: [caller],
+      tickets: [callerTicket, ticket({ labels: [area] })],
+      ...opts
+    })
+    for (const s of opts.sessions ?? [caller]) if (s.state !== 'finished') t.live.add(s.tmuxName)
+    await t.orch.reconnect()
+    await t.orch.sync('p1')
+    return { t, run: t.deps.cli!.mock.calls[0][0] }
+  }
+
+  it('start records startedBy on the new session', async () => {
+    const { t, run } = await ready()
+    expect(await run('c1', 'start', '#147')).toEqual({
+      code: 0,
+      text: 'Started #147 on 147-dark-mode-toggle'
+    })
+    const s = t.saved().sessions.find((x) => x.ticketKey === 'octo/shop#147')
+    expect(s?.startedBy).toBe('c1')
+  })
+
+  it("start leaves the caller's ticket out of the overlap check", async () => {
+    const { t, run } = await ready()
+    expect((await run('c1', 'start', '#147')).code).toBe(0)
+    expect(t.deps.claude.print).not.toHaveBeenCalled()
+  })
+
+  it('start refuses a ticket that needs triage and writes no labels', async () => {
+    const { t, run } = await ready({ tickets: [callerTicket, ticket()] })
+    const applyTriage = vi.spyOn(t.orch, 'applyTriage')
+    expect(await run('c1', 'start', '#147')).toEqual({
+      code: 1,
+      text: '#147 needs an area label first. Ask the user to start it in Sandtable, which offers triage.'
+    })
+    expect(applyTriage).not.toHaveBeenCalled()
+    expect(t.deps.areas.apply).not.toHaveBeenCalled()
+    expect(t.deps.claude.print).not.toHaveBeenCalled()
+    expect(t.deps.tmux.startTmux).not.toHaveBeenCalled()
+  })
+
+  it("start reports a live session's refusal as code 1", async () => {
+    const { run } = await ready({
+      sessions: [caller, session({ id: 'w', ticketKey: 'octo/shop#147' })]
+    })
+    expect(await run('c1', 'start', '#147')).toEqual({
+      code: 1,
+      text: 'Ticket already has a live session in Shop'
+    })
+  })
+
+  it('status prints Starting while a start for the ticket runs', async () => {
+    const { t, run } = await ready()
+    let release = (): void => undefined
+    t.deps.tmux.startTmux.mockImplementationOnce(() => new Promise<void>((r) => (release = r)))
+    const starting = run('c1', 'start', '#147')
+    await vi.waitFor(() => expect(t.deps.tmux.startTmux).toHaveBeenCalled())
+    expect(await run('c1', 'status', '#147')).toEqual({ code: 0, text: 'Starting' })
+    release()
+    await starting
+  })
+
+  it('a failed resume leaves no startedBy, and a Resume from the UI clears it', async () => {
+    const w = session({ id: 'w', state: 'finished', worktrees: [tempDir('st-wt-')] })
+    const { t, run } = await ready({ sessions: [caller, w] })
+    t.deps.tmux.startTmux.mockRejectedValueOnce(new Error('tmux failed'))
+    expect((await run('c1', 'start', '#147')).code).toBe(1)
+    expect(t.orch.session('w')?.startedBy).toBeUndefined()
+    expect((await run('c1', 'start', '#147')).code).toBe(0)
+    expect(t.orch.session('w')?.startedBy).toBe('c1')
+    t.emit('w', 'finished')
+    t.live.delete(w.tmuxName)
+    await t.orch.resume('w')
+    expect(t.orch.session('w')?.startedBy).toBeUndefined()
+  })
+
+  it('start resumes a finished session and marks who started it', async () => {
+    const w = session({ id: 'w', state: 'finished', worktrees: [tempDir('st-wt-')] })
+    const { t, run } = await ready({ sessions: [caller, w] })
+    expect(await run('c1', 'start', '#147')).toEqual({
+      code: 0,
+      text: 'Resumed #147 on 147-dark-mode-toggle'
+    })
+    expect(t.deps.tmux.startTmux).toHaveBeenCalled()
+    expect(t.saved().sessions.find((x) => x.id === 'w')?.startedBy).toBe('c1')
   })
 })

@@ -63,6 +63,7 @@ import type { PromptAnswer, SessionPrompt } from '../shared/prompt'
 import { MODELS, reassign, withGroup } from '../shared/types'
 import { appName, isApp } from '../shared/editors'
 import { isSandboxDomain, sandboxDomains } from '../shared/sandbox'
+import { createCliServer, type CliHandler } from './sessions/cli'
 import { branchName } from './git/branchName'
 import { ownGitDir, worktreePath } from './git/worktree'
 import type { AreasClient } from './github/areas'
@@ -160,6 +161,7 @@ import { createRoutines } from './sessions/routines'
 import { createUsageTracking } from './sessions/usageTracking'
 import { createJiraSignIn } from './sessions/jiraSignIn'
 import { createLeftovers } from './sessions/leftovers'
+import { createCliCommands } from './sessions/cliCommands'
 import { createTicketChat } from './sessions/ticketChat'
 import { tmuxName, typeIntoTmux } from './sessions/tmux'
 import { accountEnv, stopChildren } from './env/tools'
@@ -225,6 +227,7 @@ async function transcriptsIn(dir: string): Promise<string[]> {
 }
 
 export type OrchestratorDeps = {
+  cli?: (handle: CliHandler) => ReturnType<typeof createCliServer>
   store: Store
   cache: SyncCacheStore
   board: BoardClient
@@ -276,6 +279,7 @@ export type OrchestratorDeps = {
       env?: Record<string, string>,
       owner?: string
     ): Promise<void>
+    globalPath(): Promise<string | undefined>
     hasTmux(name: string): Promise<boolean>
     listTmux(): Promise<{ name: string; owner: string }[]>
     killTmux(name: string): Promise<void>
@@ -582,6 +586,8 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
   const activities = new Map<string, Activity>()
   const activityFiles = new Map<string, string>()
   const stoppers: (() => void)[] = []
+  const cliServer = deps.cli?.((...args) => cliCommands.run(...args))
+  if (cliServer) stoppers.push(() => void cliServer.closeAll())
   const write = serial()
   const writeCache = serial()
   const reading = serial()
@@ -849,6 +855,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     if (state !== 'limitReached' && state !== 'apiError') delete s.stop
     if (state === 'running') reviewLoop.leaveRound(s.id)
     if (state === 'finished') {
+      void cliServer?.close(s.id)
       commandLists.delete(s.id)
       eventCounts.delete(s.id)
       setAsking(s, false)
@@ -1415,6 +1422,26 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
   ): Promise<string> => {
     const eventsFile = join(eventsDir, `${id}.jsonl`)
     const settingsFile = join(settingsDir, `${id}.json`)
+    const cliSocket =
+      rules.ticket !== undefined ? await cliServer?.open(id).catch(() => undefined) : undefined
+    try {
+      return await launchWith(id, tmux, cwd, rules, opts, dir, eventsFile, settingsFile, cliSocket)
+    } catch (err) {
+      if (cliSocket) await cliServer?.close(id)
+      throw err
+    }
+  }
+  const launchWith = async (
+    id: string,
+    tmux: string,
+    cwd: string,
+    rules: Parameters<typeof sessionRules>[0],
+    opts: Parameters<typeof launch>[4],
+    dir: string,
+    eventsFile: string,
+    settingsFile: string,
+    cliSocket: string | undefined
+  ): Promise<string> => {
     await mkdir(eventsDir, { recursive: true })
     await mkdir(settingsDir, { recursive: true })
     await mkdir(join(deps.dataDir, 'status'), { recursive: true })
@@ -1436,11 +1463,18 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           statusScript,
           [
             ...(opts.allow ?? []),
+            ...(cliSocket ? ['Bash(sandtable:*)'] : []),
             `Read(/${imagesDir(id)}/**)`,
             `Read(/${notesFile(id)})`,
             `Edit(/${notesFile(id)})`
           ],
-          opts.sandbox && sandboxSettings(opts.sandbox, deps.dataDir, agentSockets(), npmCache),
+          opts.sandbox &&
+            sandboxSettings(
+              opts.sandbox,
+              deps.dataDir,
+              [...agentSockets(), ...(cliSocket ? [cliSocket] : [])],
+              npmCache
+            ),
           rules.ticket !== undefined && rules.worktree
             ? {
                 script: gateScript,
@@ -1451,14 +1485,26 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         )
       )
     )
-    const args = claudeArgs({ ...opts, settingsFile, rules: sessionRules(rules) })
+    const args = claudeArgs({
+      ...opts,
+      settingsFile,
+      rules: sessionRules({ ...rules, cli: !!cliSocket })
+    })
     const inherit = dir === deps.claudeDir && !deps.claudeDirSet
     startFrom.set(id, (await stat(eventsFile).catch(() => null))?.size ?? 0)
     await deps.tmux.startTmux(
       tmux,
       cwd,
       [...(inherit ? ['/usr/bin/env', '-u', 'CLAUDE_CONFIG_DIR'] : []), deps.claude.bin, ...args],
-      inherit ? undefined : { CLAUDE_CONFIG_DIR: dir },
+      inherit && !cliSocket
+        ? undefined
+        : {
+            ...(!inherit && { CLAUDE_CONFIG_DIR: dir }),
+            ...(cliSocket && {
+              SANDTABLE_SOCKET: cliSocket,
+              PATH: `${dirname(cliSocket)}:${(await deps.tmux.globalPath().catch(() => undefined)) ?? process.env.PATH ?? ''}`
+            })
+          },
       deps.dataDir
     )
     startBy.set(id, now().getTime() + START_EVENT_MS)
@@ -1706,10 +1752,10 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     if (!ticket) throw new Error('Unknown ticket')
     return ticket
   }
-  const candidatesFor = (projectId: string, ticket: Ticket): Ticket[] => {
+  const candidatesFor = (projectId: string, ticket: Ticket, exclude: string[] = []): Ticket[] => {
     const tickets = synced.get(projectId)?.tickets ?? []
     const map = statusMapOf(projectById(projectId))
-    return overlapCandidates(ticket, tickets, [
+    const busy = overlapCandidates(ticket, tickets, [
       ...[...starting.values(), ...checking.values()].flatMap(([key, p]) =>
         p === projectId ? [key] : []
       ),
@@ -1718,6 +1764,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       ),
       ...tickets.flatMap((t) => (columnFor(t.status, map) === 'inProgress' ? [t.key] : []))
     ])
+    return busy.filter((t) => !exclude.includes(t.key))
   }
 
   const transcriptOf = async (s: SessionRecord): Promise<ConversationEntry[] | null> => {
@@ -1769,6 +1816,25 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     recordRun,
     printRun,
     runsInFlight
+  })
+  const cliCommands = createCliCommands({
+    sessions: () => sessions,
+    synced,
+    projectById,
+    statusMapOf,
+    transcriptOf,
+    chat: ticketChat.chat,
+    pending: (id) => reviewLoop.pending(id),
+    busy: (projectId, ticketKey) =>
+      [...starting.values(), ...checking.values()].some(
+        ([key, p]) => key === ticketKey && p === projectId
+      ),
+    onChange: (cb) => subscribe(changeListeners, cb),
+    checkStart: (projectId, ticketKey) => api.checkStart(projectId, ticketKey),
+    checkReady: (projectId, ticketKey) => api.checkReady(projectId, ticketKey),
+    overlap: (projectId, ticketKey, exclude) => api.overlapFor(projectId, ticketKey, exclude),
+    start: (callerId, ...args) => api.startFor(callerId, ...args),
+    resume: (callerId, sessionId) => api.resumeFor(callerId, sessionId)
   })
   const routineChat = createRoutineChat({
     deps,
@@ -2061,7 +2127,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         if (!alive) {
           s.state = 'finished'
           delete s.startWarning
-        }
+        } else if (s.ticketKey) await cliServer?.open(s.id).catch(() => undefined)
         setAsking(s, alive && (notStarted(s) || (await deps.events.readAsking(s.eventsFile))))
         if (alive) s.state = shownState(s, (await lastStateOf(s)) ?? s.state)
         if (s.state !== 'limitReached' && s.state !== 'apiError') delete s.stop
@@ -2077,7 +2143,14 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     void syncWatched()
   }
 
-  return {
+  const api: Orchestrator & {
+    startFor: (
+      startedBy: string | undefined,
+      ...args: Parameters<Orchestrator['start']>
+    ) => Promise<void>
+    resumeFor: (startedBy: string | undefined, sessionId: string) => Promise<void>
+    overlapFor: (projectId: string, ticketKey: string, exclude: string[]) => Promise<Overlap[]>
+  } = {
     /** Loads the store, reattaches recorded sessions, and starts watching events, syncing, and polling tmux. */
     reconnect(tmuxAvailable = true): Promise<void> {
       return (loaded = load(tmuxAvailable))
@@ -2435,11 +2508,14 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       }
     },
 
-    async checkOverlap(projectId: string, ticketKey: string): Promise<Overlap[]> {
+    checkOverlap: (projectId: string, ticketKey: string): Promise<Overlap[]> =>
+      api.overlapFor(projectId, ticketKey, []),
+
+    async overlapFor(projectId: string, ticketKey: string, exclude: string[]): Promise<Overlap[]> {
       assertNoLiveSession(projectId, ticketKey)
       const project = projectById(projectId)
       const ticket = syncedTicket(projectId, ticketKey)
-      const candidates = candidatesFor(projectId, ticket)
+      const candidates = candidatesFor(projectId, ticket, exclude)
       if (!candidates.length) return []
       const repo = ticketRepo(project, ticket.repo)
       await checkFolders([repo])
@@ -2503,7 +2579,10 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       if (failed) throw new Error(`${APPLIED_BUT} couldn't refresh the board: ${failed}`)
     },
 
-    async start(
+    start: (...args) => api.startFor(undefined, ...args),
+
+    async startFor(
+      startedBy: string | undefined,
       projectId: string,
       ticketKey: string,
       extraRepos: string[] = [],
@@ -2632,7 +2711,8 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
             startedAt: now().toISOString(),
             state: 'running',
             startWarning: warning || undefined,
-            ...(note?.trim() && { note: fitBytes(note.trim(), MAX_NOTE_BYTES) })
+            ...(note?.trim() && { note: fitBytes(note.trim(), MAX_NOTE_BYTES) }),
+            ...(startedBy && { startedBy })
           })
         } catch (err) {
           await removeCreated()
@@ -2792,7 +2872,9 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       )
     },
 
-    async resume(sessionId: string): Promise<void> {
+    resume: (sessionId: string): Promise<void> => api.resumeFor(undefined, sessionId),
+
+    async resumeFor(startedBy: string | undefined, sessionId: string): Promise<void> {
       const s = sessionById(sessionId)
       assertFreeTmux(s.tmuxName, s.id)
       if (beingRemoved(s.worktrees)) throw new Error(REMOVING)
@@ -2802,6 +2884,10 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       else if (isLive(s)) throw new Error('Session is already running')
       resuming.add(s.id)
       await relaunch(s, dir)
+      if (s.startedBy === startedBy) return
+      if (startedBy) s.startedBy = startedBy
+      else delete s.startedBy
+      await persist()
     },
 
     async setRemoteControl(sessionId: string, on: boolean): Promise<void> {
@@ -3014,4 +3100,5 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       return removeWorktree(sessionId)
     }
   }
+  return api
 }
