@@ -2368,7 +2368,8 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           skippedRuns,
           routines,
           sessions,
-          (id, key) => synced.get(id)?.tickets.find((t) => t.key === key)?.title
+          (id, key) => synced.get(id)?.tickets.find((t) => t.key === key)?.title,
+          daysBefore(now(), 7).toISOString()
         )
       }
     },
@@ -2520,6 +2521,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       assertFreeTmux(tmuxName(projectId, ticketKey))
       starting.set(ticketId(projectId, ticketKey), [ticketKey, projectId])
       const target = `${projectId}\n${ticketKey}`
+      let launched = false
       startFailures = startFailures.filter(
         (f) => f.projectId !== projectId || f.ticketKey !== ticketKey
       )
@@ -2630,6 +2632,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           await removeCreated()
           throw err
         }
+        launched = true
         await reviewLoop.syncGate(sessions.at(-1)!)
         if (setup === false) await unpend(worktrees)
         ticket.repo = main.github
@@ -2651,19 +2654,20 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         ).catch(() => undefined)
       } catch (err) {
         const reason = messageOf(err)
+        if (launched) throw err
         if (!reason.startsWith(SETUP_CANCELLED)) {
-          const lines = reason.startsWith(SETUP_FAILED) && setupApi.setupProgress(target)?.lines
+          const lines = reason.startsWith(SETUP_FAILED) ? setupApi.setupProgress(target)?.lines : []
           startFailures.push({
             projectId,
             ticketKey,
             at: now().toISOString(),
             reason,
             repo: folderErrorRepo(reason),
-            ...(lines && { lines })
+            ...(lines?.length && { lines })
           })
-          void persist().catch(() => undefined)
-          changed(projectId)
         }
+        void persist().catch(() => undefined)
+        changed(projectId)
         throw err
       } finally {
         starting.delete(ticketId(projectId, ticketKey))

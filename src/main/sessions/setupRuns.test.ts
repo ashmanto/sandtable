@@ -227,6 +227,29 @@ describe('worktree setup', () => {
     expect(t.deps.git.removeWorktree).not.toHaveBeenCalled()
   })
 
+  it("forgets the earlier failure when a retry's setup is cancelled", async () => {
+    const t = await ready()
+    t.deps.setup.run.mockResolvedValueOnce(failing)
+    await expect(t.orch.start('p1', KEY)).rejects.toThrow(SETUP_FAILED)
+    await t.orch.flush()
+    expect(t.saved().startFailures).toHaveLength(1)
+    t.deps.setup.run.mockImplementation(
+      (_cwd, _cmd, { signal }) =>
+        new Promise((resolve) =>
+          signal?.addEventListener('abort', () =>
+            resolve({ code: null, why: 'cancelled', lines: [] })
+          )
+        )
+    )
+    await t.orch.cancelSetup(TARGET).catch(() => undefined)
+    const started = t.orch.start('p1', KEY)
+    await vi.waitFor(() => expect(t.deps.setup.run).toHaveBeenCalledTimes(2))
+    await t.orch.cancelSetup(TARGET)
+    await expect(started).rejects.toThrow(SETUP_CANCELLED)
+    await t.orch.flush()
+    expect(t.saved().startFailures).toEqual([])
+  })
+
   it("doesn't save a cancelled setup as a failed start", async () => {
     const t = await ready()
     t.deps.setup.run.mockImplementation(

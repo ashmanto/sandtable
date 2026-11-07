@@ -16,6 +16,7 @@ const failure = (over: Partial<StartFailure> = {}): StartFailure => ({
 })
 const titles: Record<string, string> = { 'octo/shop#1': 'Dark mode toggle' }
 const titleOf = (_: string, key: string): string | undefined => titles[key]
+const since = '2026-10-17T12:00:00.000Z'
 
 describe('couldntStartByProject', () => {
   it('lists a ticket failure under its project, named by its title, or its key without one', () => {
@@ -24,7 +25,8 @@ describe('couldntStartByProject', () => {
       [],
       [],
       [],
-      titleOf
+      titleOf,
+      since
     )
     expect(list).toEqual({
       p1: [
@@ -51,7 +53,8 @@ describe('couldntStartByProject', () => {
       skipped,
       [routine('r1')],
       [ran('r1', '2026-10-24T09:00:00.000Z')],
-      titleOf
+      titleOf,
+      since
     )
     expect(list).toEqual({
       p1: [
@@ -71,7 +74,7 @@ describe('couldntStartByProject', () => {
     const skipped: SkippedRun[] = [
       { routineId: 'gone', at: '2026-10-24T08:00:00.000Z', reason: 'closed' }
     ]
-    expect(couldntStartByProject([], skipped, [routine('r1')], [], titleOf)).toEqual({})
+    expect(couldntStartByProject([], skipped, [routine('r1')], [], titleOf, since)).toEqual({})
   })
 
   it("sorts each project's entries newest first", () => {
@@ -83,12 +86,22 @@ describe('couldntStartByProject', () => {
       ],
       [routine('r1')],
       [],
-      titleOf
+      titleOf,
+      since
     )
     expect(list.p1.map((e) => e.at)).toEqual([
       '2026-10-24T10:00:00.000Z',
       '2026-10-24T09:00:00.000Z',
       '2026-10-24T08:00:00.000Z'
     ])
+  })
+
+  it('leaves out skipped runs older than the 7 days Run history covers', () => {
+    const skipped: SkippedRun[] = [
+      { routineId: 'r1', at: '2026-10-17T11:00:00.000Z', reason: 'capped' },
+      { routineId: 'r1', at: '2026-10-17T13:00:00.000Z', reason: 'capped' }
+    ]
+    const list = couldntStartByProject([], skipped, [routine('r1')], [], titleOf, since)
+    expect(list.p1.map((e) => e.at)).toEqual(['2026-10-17T13:00:00.000Z'])
   })
 })

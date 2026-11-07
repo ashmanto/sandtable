@@ -48,11 +48,10 @@ refusal, a notification title, or a format example.
   and Sandtable remembers which are open.
 - A collapsed project also counts its sessions in **Running**, **Reviewing**, **Idle**, **Done**,
   and **Done, session open**. Hovering or focusing a count names the sessions it counts.
-- A project with runs that couldn't start shows "3 couldn't start" under its row, with no
-  notification. It opens a list of tickets whose **Start** failed and routine runs skipped or
-  failed since the routine's last session, each with its reason and a failed setup's last lines.
-  An entry opens its ticket or its routine's **Run history**, and leaves when the ticket starts,
-  leaves the board, or its folder passes the check, or when the routine runs again.
+- "3 couldn't start" under a project lists its failed ticket starts and its routine runs skipped
+  in the last 7 days since the routine's last session, with each reason and a failed setup's last
+  lines. An entry opens its ticket or **Run history**, and leaves when the ticket starts, leaves
+  the board, or its folder passes the check, or when the routine runs again.
 - An open project lists its sessions without a ticket and its ticket sessions in **Running**,
   **Needs you**, **Reviewing**, or **Idle**, oldest first, then those in **Done, session open**.
 - Each row shows its state as a word. A ticket session's row shows the ticket number and title,

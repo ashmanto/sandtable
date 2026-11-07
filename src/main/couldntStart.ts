@@ -1,13 +1,14 @@
 import type { CouldntStart } from '../shared/api'
 import type { Routine, SessionRecord, SkippedRun, StartFailure } from '../shared/types'
 
-/** Each project's failed ticket starts and the skipped runs since its routines' last session, newest first. */
+/** Each project's failed ticket starts and the skipped runs after `since` and its routine's last session, newest first. */
 export function couldntStartByProject(
   failures: StartFailure[],
   skipped: SkippedRun[],
   routines: Routine[],
   sessions: SessionRecord[],
-  titleOf: (projectId: string, ticketKey: string) => string | undefined
+  titleOf: (projectId: string, ticketKey: string) => string | undefined,
+  since: string
 ): Record<string, CouldntStart[]> {
   const out: Record<string, CouldntStart[]> = {}
   const add = (projectId: string, entry: CouldntStart): void =>
@@ -17,7 +18,7 @@ export function couldntStartByProject(
   for (const s of skipped) {
     const r = routines.find((x) => x.id === s.routineId)
     const last = sessions.filter((x) => x.routineId === s.routineId).map((x) => x.startedAt)
-    if (!r || last.some((at) => at >= s.at)) continue
+    if (!r || s.at < since || last.some((at) => at >= s.at)) continue
     add(r.projectId, {
       kind: 'routine',
       routineId: r.id,

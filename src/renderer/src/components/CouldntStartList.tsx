@@ -46,10 +46,10 @@ export function CouldntStartList({
       >
         <h2 className="px-3 pt-2.5 pb-1 text-xs text-fg-3">{title}</h2>
         <ul className="overflow-y-auto p-1">
-          {entries.map((e) => {
+          {entries.map((e, i) => {
             const [reason, ...lines] = linesOf(e)
             return (
-              <li key={`${e.kind}:${e.kind === 'ticket' ? e.ticketKey : e.routineId}:${e.at}`}>
+              <li key={`${e.kind}:${e.kind === 'ticket' ? e.ticketKey : e.routineId}:${e.at}:${i}`}>
                 <button
                   type="button"
                   className="flex w-full flex-col gap-0.5 rounded-sm px-2 py-1.5 text-left hover:bg-surface-3 focus-visible:bg-surface-3 focus-visible:outline-hidden"

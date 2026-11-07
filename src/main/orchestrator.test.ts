@@ -992,6 +992,19 @@ describe('saved start failures', () => {
     ])
   })
 
+  it('records no failure once the session has launched', async () => {
+    const t = setup()
+    await t.orch.reconnect()
+    await t.orch.sync('p1')
+    const save = t.deps.store.save.getMockImplementation()!
+    t.deps.store.save.mockImplementation(async (d) => {
+      if (d.sessions.length) throw new Error('disk full')
+      return save(d)
+    })
+    await expect(t.orch.start('p1', KEY)).rejects.toThrow('disk full')
+    expect((await t.orch.getBoard('p1')).couldntStart).toEqual({})
+  })
+
   it("drops a removed project's failures", async () => {
     const { t } = await failed()
     await t.orch.removeProject('p1')

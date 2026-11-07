@@ -80,3 +80,27 @@ it('opens the Run history for a routine entry', async () => {
   await userEvent.click(list.getByRole('button', { name: /Nightly triage/ }))
   expect(onOpenRunHistory).toHaveBeenCalledWith('r1')
 })
+
+it("lists two skips of a routine from one sync as two rows, without React's duplicate key warning", async () => {
+  const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+  const skip: CouldntStart = {
+    kind: 'routine',
+    routineId: 'r1',
+    name: 'Label triage',
+    at: '2026-10-24T10:00:00.000Z',
+    reason: 'capped'
+  }
+  render(
+    <CouldntStartList
+      project="Shop"
+      entries={[skip, skip]}
+      onOpenTicket={vi.fn()}
+      onOpenRunHistory={vi.fn()}
+    />
+  )
+  await userEvent.click(screen.getByRole('button', { name: "2 couldn't start" }))
+  const list = within(await screen.findByRole('dialog', { name: "Couldn't start in Shop" }))
+  expect(list.getAllByRole('button', { name: /Label triage/ })).toHaveLength(2)
+  expect(error.mock.calls.flat().join(' ')).not.toMatch(/same key/)
+  error.mockRestore()
+})
