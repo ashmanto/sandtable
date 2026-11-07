@@ -4,10 +4,19 @@ import {
   isDoneOpen,
   repoName,
   sessionRepos,
+  STATE_LABELS,
   ticketActions,
   tokenCapOf
 } from './sessions'
 import type { Project, SessionRecord } from './types'
+
+describe('STATE_LABELS', () => {
+  it('holds the words the board shows', () => {
+    expect(STATE_LABELS.needsYou).toBe('Needs you')
+    expect(STATE_LABELS.doneOpen).toBe('Done, session open')
+    expect(STATE_LABELS.limitReached).toBe('Limit reached')
+  })
+})
 
 const map = { todo: 'Todo', inProgress: 'In Progress', done: 'Done' }
 const s = (state: SessionRecord['state']): SessionRecord => ({ state }) as SessionRecord

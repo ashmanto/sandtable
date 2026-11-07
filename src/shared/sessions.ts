@@ -1,5 +1,22 @@
 import { columnFor } from './columns'
-import type { Project, ProjectRepo, SessionRecord, StatusMap } from './types'
+import type { Project, ProjectRepo, SessionRecord, SessionState, StatusMap } from './types'
+
+/** A card or ticket state: a session state, a done ticket whose session is open, or a failed folder check. */
+export type CardState = SessionState | 'doneOpen' | 'cantStart'
+
+/** Each card state's word, as the board shows it. */
+export const STATE_LABELS: Record<CardState, string> = {
+  needsYou: 'Needs you',
+  idle: 'Idle',
+  running: 'Running',
+  reviewing: 'Reviewing',
+  done: 'Done',
+  finished: 'Finished',
+  limitReached: 'Limit reached',
+  apiError: 'API error',
+  doneOpen: 'Done, session open',
+  cantStart: "Can't start"
+}
 
 /** The most bytes of text Sandtable passes to claude as a first message. */
 export const MAX_BODY_BYTES = 10000
