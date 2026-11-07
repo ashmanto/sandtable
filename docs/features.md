@@ -474,6 +474,31 @@ refusal, a notification title, or a format example.
 - If `claude` exits within 10 seconds of starting or resuming, the card, the ticket view, and the
   session view say so next to **Finished** and suggest running `claude` in the session's folder.
 
+## Sessions driving sessions
+
+- A ticket session gets a `sandtable` command on its `PATH`, with `start`, `status`, `wait`,
+  `summary`, and `info`, each taking a ticket such as `#12`, `owner/name#12`, or `APP-12`.
+  Routines and sessions without a ticket get none of it.
+- The command reaches only tickets in the session's own project, and refuses its own ticket with
+  "A session can't use sandtable on its own ticket".
+- `status` prints the ticket's state word, the same one the board's card shows. `info` prints the
+  branch and worktree paths. `summary` prints the saved summary draft of a finished session, or
+  else its last assistant message.
+- `start` runs the **Start** checks and refuses with their reason: blockers, a failed readiness
+  check, or an overlap with other work, apart from the calling session and the sessions it
+  started. A ticket that needs triage is refused with "needs an area label first". If the ticket's
+  newest session is finished, `start` resumes it. `start` never applies triage and never overrides
+  a finding.
+- A session can have at most 5 live sessions that it started. A sixth `start` is refused until one
+  finishes.
+- `wait` returns when the ticket needs you with nothing pending, finishes, hits a limit or an API
+  error, or is done. After 540 seconds, or the seconds you pass with `--timeout`, it exits with 3.
+- Exit codes are 0 for done, 1 for a refusal or failure (the reason goes to stderr), 2 for a usage
+  error, and 3 for a `wait` timeout.
+- The session's rules tell it to take another session's committed work with git, from the branch
+  `info` prints, and never to write in that worktree. Sandtable never types into a session for
+  the CLI.
+
 ## Ticket view
 
 - A ticket view with a **Details** tab, plus **Conversation** once the ticket has a session and
