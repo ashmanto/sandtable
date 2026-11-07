@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ChatState, ConversationEntry, SessionRecord, Ticket } from '../../shared/types'
 import { statusMapOf } from '../../shared/columns'
 import { project, session, setup, ticket } from '../test/orchestrator'
@@ -13,7 +13,12 @@ const target = ticket({ key: 'octo/shop#12', number: 12, title: 'Target' })
 const make = (
   sessions: SessionRecord[],
   tickets: Ticket[],
-  extra: { transcript?: ConversationEntry[] | null; chat?: ChatState['chat'] } = {}
+  extra: {
+    transcript?: ConversationEntry[] | null
+    chat?: ChatState['chat']
+    pending?: () => boolean
+    listeners?: Set<(projectId: string) => void>
+  } = {}
 ): CliHandler =>
   createCliCommands({
     sessions: () => sessions,
@@ -21,7 +26,13 @@ const make = (
     projectById: () => project,
     statusMapOf,
     transcriptOf: async () => extra.transcript ?? null,
-    chat: async () => ({ chat: extra.chat ?? null, answering: false })
+    chat: async () => ({ chat: extra.chat ?? null, answering: false }),
+    pending: extra.pending ?? (() => false),
+    onChange: (cb) => {
+      const set = extra.listeners ?? new Set()
+      set.add(cb)
+      return () => set.delete(cb)
+    }
   }).run
 
 describe('resolveTicket', () => {
@@ -46,7 +57,8 @@ describe('stateWord', () => {
   const map = statusMapOf(project)
   const done = ticket({ status: 'Done' })
   it('names each case', () => {
-    expect(stateWord(undefined, done, map, false)).toBe('No session')
+    expect(stateWord(undefined, ticket(), map, false)).toBe('No session')
+    expect(stateWord(undefined, done, map, false)).toBe('Done')
     expect(stateWord(session({ state: 'finished' }), done, map, false)).toBe('Done')
     expect(stateWord(session(), done, map, false)).toBe('Done, session open')
     expect(stateWord(session({ state: 'needsYou' }), ticket(), map, true)).toBe(
@@ -90,6 +102,11 @@ describe('sandtable commands', () => {
       [caller, session({ id: 'w', ticketKey: target.key, state: 'finished' })],
       [{ ...target, status: 'Done' }]
     )
+    expect(await run('c1', 'status', '#12')).toEqual({ code: 0, text: 'Done' })
+  })
+
+  it('status prints Done for a ticket in Done with no session', async () => {
+    const run = make([caller], [{ ...target, status: 'Done' }])
     expect(await run('c1', 'status', '#12')).toEqual({ code: 0, text: 'Done' })
   })
 
@@ -137,11 +154,76 @@ describe('sandtable commands', () => {
     })
   })
 
-  it('answers wait and start as not ready', async () => {
-    expect(await make([caller], [target])('c1', 'wait', '#12')).toEqual({
+  it('answers start as not ready', async () => {
+    expect(await make([caller], [target])('c1', 'start', '#12')).toEqual({
       code: 1,
       text: 'Not ready'
     })
+  })
+})
+
+describe('wait', () => {
+  afterEach(() => vi.useRealTimers())
+  const live = (over: Partial<SessionRecord> = {}): SessionRecord =>
+    session({ id: 'w', ticketKey: target.key, ...over })
+
+  it('returns at once when there is no live session', async () => {
+    expect(await make([caller], [target])('c1', 'wait', '#12')).toEqual({
+      code: 0,
+      text: 'No session'
+    })
+  })
+
+  it('returns at Needs you', async () => {
+    const run = make([caller, live({ state: 'needsYou' })], [target])
+    expect(await run('c1', 'wait', '#12')).toEqual({ code: 0, text: 'Needs you' })
+  })
+
+  it('keeps waiting while a review round is pending', async () => {
+    const w = live({ state: 'needsYou' })
+    let busy = true
+    const listeners = new Set<(projectId: string) => void>()
+    const run = make([caller, w], [target], { pending: () => busy, listeners })
+    let out: unknown
+    void run('c1', 'wait', '#12').then((r) => (out = r))
+    await vi.waitFor(() => expect(listeners.size).toBe(1))
+    expect(out).toBeUndefined()
+    busy = false
+    listeners.forEach((cb) => cb('p1'))
+    await vi.waitFor(() => expect(out).toEqual({ code: 0, text: 'Needs you' }))
+  })
+
+  it('returns when the session finishes', async () => {
+    const w = live({ state: 'running' })
+    const listeners = new Set<(projectId: string) => void>()
+    const run = make([caller, w], [target], { listeners })
+    const out = run('c1', 'wait', '#12')
+    await vi.waitFor(() => expect(listeners.size).toBe(1))
+    w.state = 'finished'
+    listeners.forEach((cb) => cb('p1'))
+    expect(await out).toEqual({ code: 0, text: 'Finished' })
+  })
+
+  it('times out with code 3 and the current state', async () => {
+    vi.useFakeTimers()
+    const listeners = new Set<(projectId: string) => void>()
+    const run = make([caller, live({ state: 'running' })], [target], { listeners })
+    const out = run('c1', 'wait', '#12', 5)
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(await out).toEqual({ code: 3, text: 'Running' })
+    expect(listeners.size).toBe(0)
+  })
+
+  it('unsubscribes after it returns', async () => {
+    const w = live({ state: 'running' })
+    const listeners = new Set<(projectId: string) => void>()
+    const run = make([caller, w], [target], { listeners })
+    const out = run('c1', 'wait', '#12')
+    await vi.waitFor(() => expect(listeners.size).toBe(1))
+    w.state = 'apiError'
+    listeners.forEach((cb) => cb('p1'))
+    await out
+    expect(listeners.size).toBe(0)
   })
 })
 

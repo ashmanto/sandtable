@@ -11,6 +11,9 @@ import type {
 } from '../../shared/types'
 import type { CliHandler } from './cli'
 
+const WAIT_DEFAULT_SEC = 540
+const WAIT_ENDS: string[] = ['finished', 'limitReached', 'apiError']
+
 const refuse = (text: string): { code: 1; text: string } => ({ code: 1, text })
 
 /** The ticket `arg` names (`#12`, `owner/name#12`, or `APP-12`, any case), or the refusal text. */
@@ -33,8 +36,8 @@ export function stateWord(
   map: StatusMap,
   asking: boolean
 ): string {
-  if (!s) return 'No session'
   const done = columnFor(ticket.status, map) === 'done'
+  if (!s) return done ? 'Done' : 'No session'
   if (isLive(s)) {
     if (asking || s.asking) return 'Needs you (asking)'
     return done ? STATE_LABELS.doneOpen : STATE_LABELS[s.state]
@@ -50,18 +53,58 @@ export function createCliCommands(ctx: {
   statusMapOf: (p: Project) => StatusMap
   transcriptOf: (s: SessionRecord) => Promise<ConversationEntry[] | null>
   chat: (projectId: string, ticketKey: string) => Promise<ChatState>
+  pending: (sessionId: string) => boolean
+  onChange: (cb: (projectId: string) => void) => () => void
 }): { run: CliHandler } {
-  const run: CliHandler = async (callerId, command, arg) => {
+  const run: CliHandler = async (callerId, command, arg, timeoutSec) => {
     const caller = ctx.sessions().find((s) => s.id === callerId)
     if (!caller?.ticketKey) return refuse('Not a Sandtable ticket session')
     const found = resolveTicket(ctx.synced.get(caller.projectId)?.tickets ?? [], arg)
     if (typeof found === 'string') return refuse(found)
     if (found.key === caller.ticketKey)
       return refuse("A session can't use sandtable on its own ticket")
-    if (command === 'wait' || command === 'start') return refuse('Not ready')
+    if (command === 'start') return refuse('Not ready')
     const label = ticketLabel(found)
-    const own = ctx.sessions().filter((s) => s.projectId === caller.projectId && !s.removedAt)
-    const s = currentSession(own, found.key)
+    const current = (): SessionRecord | undefined =>
+      currentSession(
+        ctx.sessions().filter((x) => x.projectId === caller.projectId && !x.removedAt),
+        found.key
+      )
+    const s = current()
+    if (command === 'wait') {
+      const map = ctx.statusMapOf(ctx.projectById(caller.projectId))
+      const look = (): { text: string; ready: boolean } => {
+        const now = current()
+        const t =
+          ctx.synced.get(caller.projectId)?.tickets.find((x) => x.key === found.key) ?? found
+        const text = stateWord(now, t, map, false)
+        const ready =
+          !now ||
+          !isLive(now) ||
+          columnFor(t.status, map) === 'done' ||
+          WAIT_ENDS.includes(now.state) ||
+          (now.state === 'needsYou' && !ctx.pending(now.id))
+        return { text, ready }
+      }
+      const first = look()
+      if (first.ready) return { code: 0, text: first.text }
+      return new Promise((resolve) => {
+        const finish = (reply: { code: 0 | 3; text: string }): void => {
+          clearTimeout(timer)
+          off()
+          resolve(reply)
+        }
+        const timer = setTimeout(
+          () => finish({ code: 3, text: look().text }),
+          (timeoutSec || WAIT_DEFAULT_SEC) * 1000
+        )
+        const off = ctx.onChange((projectId) => {
+          if (projectId !== caller.projectId) return
+          const { text, ready } = look()
+          if (ready) finish({ code: 0, text })
+        })
+      })
+    }
     if (command === 'status') {
       const map = ctx.statusMapOf(ctx.projectById(caller.projectId))
       return { code: 0, text: stateWord(s, found, map, false) }

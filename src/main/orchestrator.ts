@@ -1770,7 +1770,9 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     projectById,
     statusMapOf,
     transcriptOf,
-    chat: ticketChat.chat
+    chat: ticketChat.chat,
+    pending: (id) => reviewLoop.pending(id),
+    onChange: (cb) => subscribe(changeListeners, cb)
   })
   const routineChat = createRoutineChat({
     deps,
