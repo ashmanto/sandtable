@@ -707,6 +707,21 @@ describe('TicketCard worktree setup', () => {
       )
     afterEach(() => setStartFailures(project.id, []))
 
+    it("keeps a refusal the main process doesn't save when the board reloads", async () => {
+      vi.mocked(api.tickets.start).mockRejectedValueOnce(
+        new Error("This ticket is done, so it can't start")
+      )
+      renderCard()
+      await userEvent.click(screen.getByRole('button', { name: 'Start' }))
+      await userEvent.click(
+        within(await screen.findByRole('dialog')).getByRole('button', { name: 'Start' })
+      )
+      const text = "Couldn't start: This ticket is done, so it can't start"
+      expect(await screen.findByText(text)).toBeInTheDocument()
+      act(() => setStartFailures(project.id, []))
+      expect(screen.getByText(text)).toBeInTheDocument()
+    })
+
     it('shows a saved failure from the board after a restart', () => {
       renderCard()
       saved(folderError('octo/shop'), { repo: 'octo/shop' })

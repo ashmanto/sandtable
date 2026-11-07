@@ -374,7 +374,7 @@ function App(): React.JSX.Element | null {
         onOpenRunHistory={(projectId, routineId) => {
           setPage(null)
           toBoard(projectId)
-          openRunHistory(routineId)
+          openRunHistory(projectId, routineId)
         }}
         backForward={nav}
       />

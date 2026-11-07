@@ -2176,24 +2176,25 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         i < 0
           ? [...projects, withGroup(p, undefined)]
           : projects.with(i, withGroup(p, projects[i].group))
-      const fixed = new Set(
-        (
-          await Promise.all(
-            startFailures.map(async (f) => {
-              const repo = f.projectId === p.id ? f.repo : null
-              if (!repo) return null
-              return Promise.resolve()
-                .then(() => checkFolders([repoOf(p, repo)]))
-                .then(
-                  () => f,
-                  () => null
-                )
-            })
-          )
-        ).filter(Boolean)
+      const failed = [
+        ...new Set(startFailures.flatMap((f) => (f.projectId === p.id && f.repo ? [f.repo] : [])))
+      ]
+      const fixed: string[] = []
+      for (const repo of failed) {
+        try {
+          await checkFolders([repoOf(p, repo)])
+          fixed.push(repo)
+        } catch {
+          continue
+        }
+      }
+      const left = startFailures.filter(
+        (f) => f.projectId !== p.id || !f.repo || !fixed.includes(f.repo)
       )
-      startFailures = startFailures.filter((f) => !fixed.has(f))
+      const cleared = left.length < startFailures.length
+      startFailures = left
       await persist()
+      if (cleared) changed(p.id)
       for (const s of sessions) if (s.projectId === p.id) await reviewLoop.syncGate(s)
       if (resourced) {
         synced.delete(p.id)

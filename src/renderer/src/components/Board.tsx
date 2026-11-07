@@ -539,6 +539,7 @@ export function Board({
         project={project}
         projects={projects}
         routines={view?.routines ?? []}
+        loaded={!!view}
         sessions={view?.sessions ?? []}
         onRoutine={onRoutine}
         onOpenSession={onOpenSession}

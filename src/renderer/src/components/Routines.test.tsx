@@ -193,12 +193,38 @@ describe('Routines', () => {
   })
 
   it("opens a routine's Run history when asked from the sidebar, before or after the section shows", async () => {
-    act(() => openRunHistory('r2'))
+    act(() => openRunHistory('p1', 'r2'))
     renderRoutines()
     expect(await screen.findByRole('dialog', { name: 'Triage: run history' })).toBeInTheDocument()
     await userEvent.keyboard('{Escape}')
-    act(() => openRunHistory('r1'))
+    act(() => openRunHistory('p1', 'r1'))
     expect(await screen.findByRole('dialog', { name: 'Nightly: run history' })).toBeInTheDocument()
+  })
+
+  it("ignores another project's Run history request", async () => {
+    act(() => openRunHistory('p2', 'r1'))
+    renderRoutines()
+    await act(async () => {})
+    expect(screen.queryByRole('dialog')).toBeNull()
+    act(() => openRunHistory('p1', 'r1'))
+  })
+
+  it('drops a Run history request for a routine its project no longer has', async () => {
+    act(() => openRunHistory('p1', 'gone'))
+    const view = render(
+      <Routines
+        project={project}
+        projects={[project, other]}
+        routines={[nightly]}
+        sessions={[]}
+        onRoutine={vi.fn()}
+        onOpenSession={vi.fn()}
+      />
+    )
+    view.unmount()
+    renderRoutines([{ ...nightly, id: 'gone', name: 'Back' }])
+    await act(async () => {})
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   it('starts again once its last session finished', () => {

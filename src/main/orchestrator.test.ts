@@ -1005,6 +1005,30 @@ describe('saved start failures', () => {
     expect((await t.orch.getBoard('p1')).couldntStart).toEqual({})
   })
 
+  it("checks each failed repo's folder once on save, and tells the board when it clears", async () => {
+    const folders = moved()
+    const t = setup({
+      folders,
+      startFailures: ['octo/shop#147', 'octo/shop#148'].map((ticketKey) => ({
+        projectId: 'p1',
+        ticketKey,
+        at: '2026-10-24T11:00:00.000Z',
+        reason: folderError('octo/shop'),
+        repo: 'octo/shop'
+      }))
+    })
+    await t.orch.reconnect()
+    folders['/repos/shop'] = ['octo/shop']
+    const changes: string[] = []
+    t.orch.onChange((id) => changes.push(id))
+    t.deps.githubReposOf.mockClear()
+    t.deps.board.tickets.mockReturnValue(new Promise(() => undefined))
+    await t.orch.saveProject(project)
+    expect(t.deps.githubReposOf.mock.calls).toEqual([['/repos/shop']])
+    expect(t.saved().startFailures).toEqual([])
+    expect(changes).toContain('p1')
+  })
+
   it("drops a removed project's failures", async () => {
     const { t } = await failed()
     await t.orch.removeProject('p1')

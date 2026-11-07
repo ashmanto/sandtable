@@ -57,10 +57,12 @@ export function Routines({
   routines,
   sessions,
   onRoutine,
-  onOpenSession
+  onOpenSession,
+  loaded = true
 }: {
   project: Project
   projects: Project[]
+  loaded?: boolean
   routines: Routine[]
   sessions: SessionRecord[]
   onRoutine: OpenRoutine
@@ -73,14 +75,12 @@ export function Routines({
   const { later, afterMenu } = useAfterMenu()
   useEffect(
     () =>
-      onRunHistoryAsk((id) => {
-        const r = routines.find((x) => x.id === id)
-        if (!r) return false
+      onRunHistoryAsk(project.id, loaded ? routines.map((r) => r.id) : null, (id) => {
+        const r = routines.find((x) => x.id === id)!
         setHistory((h) => ({ routine: r, opened: (h?.opened ?? 0) + 1 }))
         setShown(true)
-        return true
       }),
-    [routines]
+    [project.id, loaded, routines]
   )
   const start = (r: Routine): void => {
     setError(null)

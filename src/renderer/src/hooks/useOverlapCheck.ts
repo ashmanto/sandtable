@@ -66,12 +66,13 @@ const set = (key: string, check: Check | null): void => {
   changed()
 }
 
-/** Why a ticket's last Start failed, the repo whose folder failed it, if one did, and a failed setup's last lines. */
-type StartFailure = { reason: string; repo: string | null; lines?: string[] }
+/** Why a ticket's last Start failed, the repo whose folder failed it, if one did, a failed setup's last lines, and whether only this window knows it. */
+type StartFailure = { reason: string; repo: string | null; lines?: string[]; local?: true }
 
-/** Replaces the project's failures with the ones the main process saved. */
+/** Replaces the project's saved failures with the main process's, keeping a refusal only this window saw until the next Start. */
 export function setStartFailures(projectId: string, entries: CouldntStart[]): void {
-  for (const key of failures.keys()) if (key.startsWith(`${projectId}\n`)) failures.delete(key)
+  for (const [key, f] of failures)
+    if (key.startsWith(`${projectId}\n`) && !f.local) failures.delete(key)
   for (const e of entries)
     if (e.kind === 'ticket')
       failures.set(`${projectId}\n${e.ticketKey}`, {
@@ -117,7 +118,7 @@ export async function startTicket(
   } catch (err) {
     const reason = errorMessage(err)
     if (!reason.startsWith(SETUP_FAILED) && !reason.startsWith(SETUP_CANCELLED))
-      failures.set(key, { reason, repo: folderErrorRepo(reason) })
+      failures.set(key, { reason, repo: folderErrorRepo(reason), local: true })
     return false
   } finally {
     pending.delete(key)

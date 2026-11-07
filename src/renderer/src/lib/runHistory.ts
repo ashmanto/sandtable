@@ -1,19 +1,26 @@
 import { listenerSet } from '@/lib/fanOut'
 import type { RoutineRun } from '../../../shared/types'
 
-let asked: string | null = null
+let asked: { projectId: string; routineId: string } | null = null
 const { subscribe, changed } = listenerSet()
 
-/** Asks the Routines section holding this routine to open its Run history, now or when it next shows. */
-export function openRunHistory(routineId: string): void {
-  asked = routineId
+/** Asks the project's Routines section to open this routine's Run history, now or when it next shows. */
+export function openRunHistory(projectId: string, routineId: string): void {
+  asked = { projectId, routineId }
   changed()
 }
 
-/** Hands each asked routine to `take`, now and on every later ask, until `take` returns true for it. */
-export function onRunHistoryAsk(take: (routineId: string) => boolean): () => void {
+/** Opens each Run history asked of this project's loaded routines, now and on later asks, and drops an ask for a routine it no longer has. */
+export function onRunHistoryAsk(
+  projectId: string,
+  routineIds: string[] | null,
+  open: (routineId: string) => void
+): () => void {
   const honor = (): void => {
-    if (asked && take(asked)) asked = null
+    if (asked?.projectId !== projectId || !routineIds) return
+    const { routineId } = asked
+    asked = null
+    if (routineIds.includes(routineId)) open(routineId)
   }
   honor()
   return subscribe(honor)
