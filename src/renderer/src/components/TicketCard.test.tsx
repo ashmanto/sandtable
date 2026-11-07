@@ -1,12 +1,16 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SandtableApi } from '../../../shared/api'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { CouldntStart, SandtableApi } from '../../../shared/api'
+import { folderError } from '../../../shared/repo'
 import type { ModelUsage, SessionRecord, SetupProgress, Ticket } from '../../../shared/types'
 import { SETUP_CANCELLED, SETUP_FAILED } from '../../../shared/worktreeSetup'
 import { fakeSandtable, project, session, ticket } from '../test/fixtures'
 import type { DragHandle } from '@/hooks/useTicketDrag'
+import { setStartFailures } from '@/hooks/useOverlapCheck'
 import { TicketCard } from './TicketCard'
+
+type StartFailure = Extract<CouldntStart, { kind: 'ticket' }>
 
 const t = ticket(98, { status: 'Done' })
 const opus: ModelUsage = {
@@ -684,6 +688,52 @@ describe('TicketCard worktree setup', () => {
     await act(async () => finish())
     await startWith('Start with note')
     expect(screen.getByRole('textbox', { name: 'Note for this session' })).toHaveValue('')
+  })
+
+  describe('saved failures', () => {
+    const saved = (reason: string, over: Partial<StartFailure> = {}): void =>
+      act(() =>
+        setStartFailures(project.id, [
+          {
+            kind: 'ticket',
+            name: tk.title,
+            ticketKey: tk.key,
+            at: failed.startedAt,
+            reason,
+            repo: null,
+            ...over
+          }
+        ])
+      )
+    afterEach(() => setStartFailures(project.id, []))
+
+    it('shows a saved failure from the board after a restart', () => {
+      renderCard()
+      saved(folderError('octo/shop'), { repo: 'octo/shop' })
+      expect(screen.getByText("Can't start")).toBeInTheDocument()
+      expect(
+        screen.getByText(`Couldn't start: ${folderError('octo/shop')}. Nothing was created.`)
+      ).toBeInTheDocument()
+    })
+
+    it('shows a saved setup failure with its last lines when no setup block shows, and offers Start, not Start anyway', () => {
+      renderCard()
+      saved(`${SETUP_FAILED}: npm install exited with code 1`, { lines: ['npm ERR! boom'] })
+      expect(
+        screen.getByText(`Couldn't start: ${SETUP_FAILED}: npm install exited with code 1`)
+      ).toBeInTheDocument()
+      expect(screen.getByText('npm ERR! boom')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Start' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Start anyway' })).toBeNull()
+    })
+
+    it('hides a saved setup failure while the setup block shows it', () => {
+      renderCard()
+      saved(`${SETUP_FAILED}: npm install exited with code 1`, { lines: ['npm ERR! boom'] })
+      act(() => push(target, failed))
+      expect(screen.queryByText(/Couldn't start/)).toBeNull()
+      expect(screen.queryByText('npm ERR! boom')).toBeNull()
+    })
   })
 
   it("doesn't show Couldn't start when the setup is cancelled", async () => {

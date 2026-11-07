@@ -6,6 +6,7 @@ import { SETUP_CANCELLED, SETUP_FAILED } from '../../../shared/worktreeSetup'
 import { useWorktreeSetup } from './useWorktreeSetup'
 import type { Line } from '@/lib/cleanUp'
 import type { Model, Overlap, Project, SetupProgress, StartCheck } from '../../../shared/types'
+import type { CouldntStart } from '../../../shared/api'
 
 /** What the Start check hands on: the overlap candidates, and whether to check readiness first. */
 export type Pass = Pick<StartCheck, 'overlap' | 'ready'>
@@ -65,8 +66,21 @@ const set = (key: string, check: Check | null): void => {
   changed()
 }
 
-/** Why a ticket's last Start failed, and the repo whose folder failed it, if one did. */
-type StartFailure = { reason: string; repo: string | null }
+/** Why a ticket's last Start failed, the repo whose folder failed it, if one did, and a failed setup's last lines. */
+type StartFailure = { reason: string; repo: string | null; lines?: string[] }
+
+/** Replaces the project's failures with the ones the main process saved. */
+export function setStartFailures(projectId: string, entries: CouldntStart[]): void {
+  for (const key of failures.keys()) if (key.startsWith(`${projectId}\n`)) failures.delete(key)
+  for (const e of entries)
+    if (e.kind === 'ticket')
+      failures.set(`${projectId}\n${e.ticketKey}`, {
+        reason: e.reason,
+        repo: e.repo,
+        lines: e.lines
+      })
+  changed()
+}
 
 /** How a card or the ticket view says a Start failed. */
 export const failureText = ({ reason, repo }: StartFailure): string =>

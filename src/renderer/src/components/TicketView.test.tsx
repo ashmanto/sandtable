@@ -16,7 +16,7 @@ import {
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { HeaderFrame } from '@/lib/headerFrame'
 import { TicketView } from './TicketView'
-import { refineMessage } from '@/hooks/useOverlapCheck'
+import { refineMessage, setStartFailures } from '@/hooks/useOverlapCheck'
 import { folderError } from '../../../shared/repo'
 import { TicketCard } from './TicketCard'
 
@@ -1805,6 +1805,27 @@ describe('a start that fails after the card that began it unmounts', () => {
     })
     expect(onProjectSaved).toHaveBeenCalled()
     await vi.waitFor(() => expect(screen.queryByText("Can't start")).toBeNull())
+  })
+
+  it('shows a saved setup failure with its last lines after a restart', () => {
+    const reason = `${SETUP_FAILED}: npm install exited with code 1`
+    act(() =>
+      setStartFailures(project.id, [
+        {
+          kind: 'ticket',
+          name: t.title,
+          ticketKey: t.key,
+          at: '2026-10-24T10:00:00.000Z',
+          reason,
+          repo: null,
+          lines: ['npm ERR! boom']
+        }
+      ])
+    )
+    render(ticketView())
+    expect(screen.getByText(`Couldn't start: ${reason}`)).toBeInTheDocument()
+    expect(screen.getByText('npm ERR! boom')).toBeInTheDocument()
+    act(() => setStartFailures(project.id, []))
   })
 })
 
