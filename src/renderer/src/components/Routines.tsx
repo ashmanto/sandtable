@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { useAfterMenu } from '@/hooks/useAfterMenu'
+import { onRunHistoryAsk, skipReason } from '@/lib/runHistory'
 import { stateLook } from '@/lib/card'
 import { cardUsage, hasPrice, money, pricedTotal } from '@/lib/usage'
 import { cn, errorMessage, plural } from '@/lib/utils'
@@ -42,15 +43,6 @@ const startedBy = (run: RoutineRun): string =>
         ? 'On schedule'
         : 'Started by you'
 
-const skipReason = (run: Extract<RoutineRun, { kind: 'skipped' }>): string =>
-  run.reason === 'capped'
-    ? 'Daily cap reached'
-    : run.reason === 'failed'
-      ? `Couldn't start: ${run.error ?? 'unknown error'}`
-      : run.reason === 'running'
-        ? 'Its last session was still open'
-        : 'Sandtable was closed or the Mac was asleep'
-
 const openPill: Partial<Record<SessionState, string>> = {
   running: 'bg-blue-soft text-blue inset-ring-blue/40 hover:bg-blue-soft',
   needsYou: 'bg-amber-soft text-amber hover:bg-amber-soft',
@@ -79,6 +71,17 @@ export function Routines({
   const [shown, setShown] = useState(false)
   const [starting, setStarting] = useState<string[]>([])
   const { later, afterMenu } = useAfterMenu()
+  useEffect(
+    () =>
+      onRunHistoryAsk((id) => {
+        const r = routines.find((x) => x.id === id)
+        if (!r) return false
+        setHistory((h) => ({ routine: r, opened: (h?.opened ?? 0) + 1 }))
+        setShown(true)
+        return true
+      }),
+    [routines]
+  )
   const start = (r: Routine): void => {
     setError(null)
     setStarting((ids) => [...ids, r.id])

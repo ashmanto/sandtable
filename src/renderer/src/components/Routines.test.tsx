@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { SandtableApi } from '../../../shared/api'
 import type { Routine, RoutineRun, SessionRecord } from '../../../shared/types'
 import { adhoc, fakeSandtable, project } from '../test/fixtures'
+import { openRunHistory } from '@/lib/runHistory'
 import { Routines } from './Routines'
 
 let api: SandtableApi
@@ -189,6 +190,15 @@ describe('Routines', () => {
     await userEvent.click(screen.getByRole('menuitem', { name: 'Run history' }))
     const sheet = await screen.findByRole('dialog', { name: 'Nightly: run history' })
     expect(within(sheet).getByText('Loading')).toHaveClass('text-xs', 'text-fg-3')
+  })
+
+  it("opens a routine's Run history when asked from the sidebar, before or after the section shows", async () => {
+    act(() => openRunHistory('r2'))
+    renderRoutines()
+    expect(await screen.findByRole('dialog', { name: 'Triage: run history' })).toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+    act(() => openRunHistory('r1'))
+    expect(await screen.findByRole('dialog', { name: 'Nightly: run history' })).toBeInTheDocument()
   })
 
   it('starts again once its last session finished', () => {

@@ -817,4 +817,36 @@ describe('ProjectSidebar', () => {
       expect(ids(onArrange.mock.calls[1][0])).toEqual(['p2', 'p1'])
     })
   })
+
+  it("shows the couldn't-start line under a project only when it has entries, folded or open", async () => {
+    const onOpenTicket = vi.fn()
+    render(
+      sidebar({
+        onOpenTicket,
+        couldntStart: {
+          p1: [
+            {
+              kind: 'ticket',
+              name: 'Dark mode toggle',
+              ticketKey: 'octo/shop#52',
+              at: '2026-10-24T11:00:00.000Z',
+              reason: 'tmux broke',
+              repo: null
+            }
+          ]
+        }
+      })
+    )
+    expect(screen.getAllByRole('button', { name: /couldn't start/ })).toHaveLength(1)
+    await userEvent.click(screen.getByRole('button', { name: /sessions of Shop/ }))
+    expect(screen.getByRole('button', { name: "1 couldn't start" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: "1 couldn't start" }))
+    await userEvent.click(
+      within(await screen.findByRole('dialog', { name: "Couldn't start in Shop" })).getByRole(
+        'button',
+        { name: /Dark mode toggle/ }
+      )
+    )
+    expect(onOpenTicket).toHaveBeenCalledWith('p1', 'octo/shop#52')
+  })
 })

@@ -4,6 +4,7 @@ import { Board } from './components/Board'
 import { NewSessionDialog } from './components/NewSessionDialog'
 import { ProjectSidebar, slide } from './components/ProjectSidebar'
 import { RoutineEditor, type OpenRoutine, type RoutineDraft } from './components/RoutineEditor'
+import { openRunHistory } from '@/lib/runHistory'
 import { SessionView } from './components/SessionView'
 import { Settings } from './components/Settings'
 import { SetupGuide } from './components/SetupGuide'
@@ -354,6 +355,7 @@ function App(): React.JSX.Element | null {
         onArrange={arrange}
         selectedId={route?.projectId ?? null}
         needsYou={counts}
+        couldntStart={(view ?? lastView)?.couldntStart}
         sessions={(view ?? lastView)?.sidebarSessions ?? []}
         openSessionId={openSession}
         openTicketKey={route?.name === 'ticket' ? route.ticketKey : null}
@@ -369,6 +371,11 @@ function App(): React.JSX.Element | null {
         onSettings={() => setPage('settings')}
         onUsage={() => setPage('usage')}
         onRoutine={onRoutine}
+        onOpenRunHistory={(projectId, routineId) => {
+          setPage(null)
+          toBoard(projectId)
+          openRunHistory(routineId)
+        }}
         backForward={nav}
       />
       <HeaderFrame value={header}>
