@@ -416,6 +416,61 @@ describe('wait', () => {
     await vi.waitFor(() => expect(out).toEqual({ code: 0, text: 'Needs you' }))
   })
 
+  it('keeps waiting while a CLI start is still in checkStart', async () => {
+    let release = (): void => undefined
+    const f = fakes()
+    f.checkStart.mockImplementation(
+      () =>
+        new Promise(
+          (r) => (release = () => r({ triage: false, problems: [], overlap: [], ready: false }))
+        )
+    )
+    const other = session({ id: 'c2', ticketKey: 'octo/shop#2' })
+    const all = [caller, other]
+    const listeners = new Set<(projectId: string) => void>()
+    const run = make(all, [target], { starts: f, listeners })
+    const starting = run('c1', 'start', '#12')
+    await vi.waitFor(() => expect(f.checkStart).toHaveBeenCalled())
+    expect(await run('c2', 'status', '#12')).toEqual({ code: 0, text: 'Starting' })
+    let out: unknown
+    void run('c2', 'wait', '#12').then((r) => (out = r))
+    await vi.waitFor(() => expect(listeners.size).toBe(1))
+    expect(out).toBeUndefined()
+    release()
+    await starting
+    all.push(live({ state: 'needsYou' }))
+    listeners.forEach((cb) => cb('p1'))
+    await vi.waitFor(() => expect(out).toEqual({ code: 0, text: 'Needs you' }))
+  })
+
+  it('refuses a second start of a ticket that is already starting', async () => {
+    let release = (): void => undefined
+    const f = fakes()
+    f.checkStart.mockImplementation(
+      () =>
+        new Promise(
+          (r) => (release = () => r({ triage: false, problems: [], overlap: [], ready: false }))
+        )
+    )
+    const run = make([caller, session({ id: 'c2', ticketKey: 'octo/shop#2' })], [target], {
+      starts: f
+    })
+    const first = run('c1', 'start', '#12')
+    await vi.waitFor(() => expect(f.checkStart).toHaveBeenCalled())
+    expect(await run('c2', 'start', '#12')).toEqual({ code: 1, text: '#12 is already starting' })
+    release()
+    expect((await first).code).toBe(0)
+  })
+
+  it('returns at once when the caller already hung up', async () => {
+    const listeners = new Set<(projectId: string) => void>()
+    const run = make([caller, live({ state: 'running' })], [target], { listeners })
+    const ac = new AbortController()
+    ac.abort()
+    expect((await run('c1', 'wait', '#12', undefined, ac.signal)).code).toBe(3)
+    expect(listeners.size).toBe(0)
+  })
+
   it('caps the timeout at an hour', async () => {
     vi.useFakeTimers()
     const listeners = new Set<(projectId: string) => void>()

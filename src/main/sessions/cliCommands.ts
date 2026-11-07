@@ -76,6 +76,7 @@ export function createCliCommands(ctx: {
   resume: (callerId: string, sessionId: string) => Promise<void>
 }): { run: CliHandler } {
   const inFlight = new Map<string, number>()
+  const startingTickets = new Set<string>()
   const startFor = async (caller: SessionRecord, found: Ticket): Promise<string> => {
     const { projectId } = caller
     const label = ticketLabel(found)
@@ -147,13 +148,17 @@ export function createCliCommands(ctx: {
         return refuse(
           `This session already started ${START_CAP} live sessions. Wait for one to finish.`
         )
+      const ticketId = `${caller.projectId}\n${found.key}`
+      if (startingTickets.has(ticketId)) return refuse(`${ticketLabel(found)} is already starting`)
       inFlight.set(callerId, pending + 1)
+      startingTickets.add(ticketId)
       try {
         return { code: 0, text: await startFor(caller, found) }
       } catch (err) {
         return refuse(messageOf(err))
       } finally {
         inFlight.set(callerId, (inFlight.get(callerId) ?? 1) - 1)
+        startingTickets.delete(ticketId)
       }
     }
     const label = ticketLabel(found)
@@ -164,7 +169,9 @@ export function createCliCommands(ctx: {
       )
     const s = current()
     const startingNow = (now: SessionRecord | undefined): boolean =>
-      !(now && isLive(now)) && ctx.busy(caller.projectId, found.key)
+      !(now && isLive(now)) &&
+      (startingTickets.has(`${caller.projectId}\n${found.key}`) ||
+        ctx.busy(caller.projectId, found.key))
     if (command === 'wait') {
       const map = ctx.statusMapOf(ctx.projectById(caller.projectId))
       const look = (): { text: string; ready: boolean } => {
@@ -184,6 +191,7 @@ export function createCliCommands(ctx: {
       }
       const first = look()
       if (first.ready) return { code: 0, text: first.text }
+      if (signal?.aborted) return { code: 3, text: first.text }
       return new Promise((resolve) => {
         const finish = (reply: { code: 0 | 3; text: string }): void => {
           clearTimeout(timer)

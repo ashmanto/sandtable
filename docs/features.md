@@ -489,7 +489,8 @@ refusal, a notification title, or a format example.
   else its last assistant message.
 - `start` on a new session runs the **Start** checks and refuses with their reason: blockers, a
   failed readiness check, or an overlap with other work, apart from the calling session and the
-  live sessions it started. A ticket that needs triage is refused with "needs an area label first".
+  live sessions it started. A ticket that needs triage is refused with "needs an area label first",
+  and a ticket that another `start` is starting with "is already starting".
 - If the ticket's newest session is finished, `start` resumes it without the checks, as
   **Resume** does. `start` never applies triage and never overrides a finding.
 - A session can have at most 5 live sessions that it started, not counting those whose ticket is

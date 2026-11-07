@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -105,6 +105,22 @@ describe('sandtable CLI server', () => {
     const first = await server.open('0123456789ab-one')
     await expect(server.open('0123456789ab-two')).rejects.toThrow()
     expect(existsSync(first)).toBe(true)
+  })
+
+  it('opens one server when two opens for a session overlap', async () => {
+    const { server } = make(async () => ({ code: 0, text: '' }))
+    const [a, b] = await Promise.all([server.open('s1'), server.open('s1')])
+    expect(a).toBe(b)
+    expect(existsSync(a)).toBe(true)
+    await server.close('s1')
+    expect(existsSync(a)).toBe(false)
+  })
+
+  it('makes an existing folder private', async () => {
+    const { dir, server } = make(async () => ({ code: 0, text: '' }))
+    chmodSync(dir, 0o755)
+    await server.open('s1')
+    expect(statSync(dir).mode & 0o777).toBe(0o700)
   })
 
   it('reopens over a stale socket file', async () => {

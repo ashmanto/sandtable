@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdir, rename, unlink, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, rename, unlink, writeFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type Server } from 'node:http'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -121,27 +121,37 @@ export function createCliServer(
     return done
   }
 
+  const opening = new Map<string, Promise<string>>()
+  const openNow = async (sessionId: string): Promise<string> => {
+    await closing.get(sessionId)
+    const existing = servers.get(sessionId)
+    if (existing) return existing.socket
+    await mkdir(dir, { recursive: true, mode: 0o700 })
+    await chmod(dir, 0o700)
+    const script = join(dir, 'sandtable')
+    const temp = `${script}.${randomUUID()}`
+    await writeFile(temp, CLI_SCRIPT, { mode: 0o755 })
+    await rename(temp, script)
+    const socket = join(dir, `${sessionId.slice(0, 12)}.sock`)
+    if ([...servers.values()].some((s) => s.socket === socket))
+      throw new Error(`Another session uses ${socket}`)
+    await unlink(socket).catch(() => undefined)
+    const server = serve(sessionId)
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(socket, resolve)
+    })
+    servers.set(sessionId, { socket, server })
+    return socket
+  }
+
   return {
-    async open(sessionId) {
-      await closing.get(sessionId)
-      const existing = servers.get(sessionId)
-      if (existing) return existing.socket
-      await mkdir(dir, { recursive: true, mode: 0o700 })
-      const script = join(dir, 'sandtable')
-      const temp = `${script}.${randomUUID()}`
-      await writeFile(temp, CLI_SCRIPT, { mode: 0o755 })
-      await rename(temp, script)
-      const socket = join(dir, `${sessionId.slice(0, 12)}.sock`)
-      if ([...servers.values()].some((s) => s.socket === socket))
-        throw new Error(`Another session uses ${socket}`)
-      await unlink(socket).catch(() => undefined)
-      const server = serve(sessionId)
-      await new Promise<void>((resolve, reject) => {
-        server.once('error', reject)
-        server.listen(socket, resolve)
-      })
-      servers.set(sessionId, { socket, server })
-      return socket
+    open(sessionId) {
+      const pending = opening.get(sessionId)
+      if (pending) return pending
+      const done = openNow(sessionId).finally(() => opening.delete(sessionId))
+      opening.set(sessionId, done)
+      return done
     },
     close,
     closeAll: () => Promise.all([...servers.keys()].map(close)).then(() => undefined)

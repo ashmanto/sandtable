@@ -45,7 +45,7 @@ export function StartFlow({
   const { repos } = project
   const [chosen, setChosen] = useState('')
   const main = mainRepo?.github ?? chosen
-  const [picked, setPicked] = useState<string[]>(() => previousExtras(repos, session, main))
+  const [picked, setPicked] = useState<string[]>(() => previousExtras(repos, session, undefined))
   const others = repos.filter((r) => !sameRepo(r.github, main))
 
   if (!picking)
