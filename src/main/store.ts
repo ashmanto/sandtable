@@ -8,7 +8,8 @@ import type {
   ProjectGroup,
   Routine,
   SessionRecord,
-  SkippedRun
+  SkippedRun,
+  StartFailure
 } from '../shared/types'
 
 export type StoreData = {
@@ -21,6 +22,7 @@ export type StoreData = {
   findings: Finding[]
   routines: Routine[]
   skippedRuns: SkippedRun[]
+  startFailures: StartFailure[]
   setupPending: string[]
   setupHintsOff: string[]
 }
@@ -68,6 +70,7 @@ export const emptyStore = (): StoreData => ({
   findings: [],
   routines: [],
   skippedRuns: [],
+  startFailures: [],
   setupPending: [],
   setupHintsOff: []
 })

@@ -51,6 +51,7 @@ import type {
   SetupSuggestion,
   Step,
   SkippedRun,
+  StartFailure,
   StartCheck,
   Ticket,
   TicketDetails,
@@ -93,6 +94,7 @@ import {
   CREATED,
   findRepo,
   folderError,
+  folderErrorRepo,
   isTrackerKey,
   parseTicketKey,
   sameRepo,
@@ -161,7 +163,7 @@ import { createTicketChat } from './sessions/ticketChat'
 import { tmuxName, typeIntoTmux } from './sessions/tmux'
 import { accountEnv, stopChildren } from './env/tools'
 import { copyPaths, ignoredProblem, runSetup, stopSetups, suggestSetup } from './env/worktreeSetup'
-import { SETUP_CANCELLED } from '../shared/worktreeSetup'
+import { SETUP_CANCELLED, SETUP_FAILED } from '../shared/worktreeSetup'
 import { draftFile } from './drafts'
 import { serial, type Run, type Store } from './store'
 import type { SyncCache, SyncCacheStore } from './syncCache'
@@ -549,6 +551,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
   let findings: Finding[] = []
   let routines: Routine[] = []
   let skippedRuns: SkippedRun[] = []
+  let startFailures: StartFailure[] = []
   let setupPending: string[] = []
   let setupHintsOff: string[] = []
   const transcriptFolders = new Map<string, string>()
@@ -594,6 +597,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         findings,
         routines,
         skippedRuns,
+        startFailures,
         setupPending,
         setupHintsOff
       })
@@ -947,6 +951,14 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         syncedAt: new Date(startedAt).toISOString(),
         error: truncated.join(' ') || null
       })
+      if (!truncated.length) {
+        const keys = new Set(tickets.map((t) => t.key))
+        const kept = startFailures.filter((f) => f.projectId !== projectId || keys.has(f.ticketKey))
+        if (kept.length < startFailures.length) {
+          startFailures = kept
+          void persist().catch(() => undefined)
+        }
+      }
       if (merged) mergedPrs.set(projectId, merged.prs)
       persistCache()
       onSync(
@@ -1994,6 +2006,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     runs = data.runs
     routines = data.routines
     skippedRuns = data.skippedRuns
+    startFailures = data.startFailures
     setupPending = data.setupPending
     setupHintsOff = data.setupHintsOff
     findings = data.findings.filter((f) => {
@@ -2162,6 +2175,23 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         i < 0
           ? [...projects, withGroup(p, undefined)]
           : projects.with(i, withGroup(p, projects[i].group))
+      const fixed = new Set(
+        (
+          await Promise.all(
+            startFailures.map(async (f) => {
+              const repo = f.projectId === p.id ? f.repo : null
+              if (!repo) return null
+              return Promise.resolve()
+                .then(() => checkFolders([repoOf(p, repo)]))
+                .then(
+                  () => f,
+                  () => null
+                )
+            })
+          )
+        ).filter(Boolean)
+      )
+      startFailures = startFailures.filter((f) => !fixed.has(f))
       await persist()
       for (const s of sessions) if (s.projectId === p.id) await reviewLoop.syncGate(s)
       if (resourced) {
@@ -2210,6 +2240,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       projects = projects.filter((x) => x.id !== id)
       chats = chats.filter((c) => c.projectId !== id)
       runs = runs.filter((r) => r.projectId !== id)
+      startFailures = startFailures.filter((f) => f.projectId !== id)
       skippedRuns = skippedRuns.filter(
         (x) => routines.find((r) => r.id === x.routineId)?.projectId !== id
       )
@@ -2480,6 +2511,10 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       assertNoLiveSession(projectId, ticketKey)
       assertFreeTmux(tmuxName(projectId, ticketKey))
       starting.set(ticketId(projectId, ticketKey), [ticketKey, projectId])
+      const target = `${projectId}\n${ticketKey}`
+      startFailures = startFailures.filter(
+        (f) => f.projectId !== projectId || f.ticketKey !== ticketKey
+      )
       try {
         if (!ticket.repo && !mainRepo) throw new Error('Choose the repo for this ticket')
         const main = repoOf(project, mainRepo || ticket.repo)
@@ -2532,7 +2567,6 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           throw new Error(`Another ticket's session uses ${branch}`)
         }
         const worktrees = made.map((m) => m.path)
-        const target = `${projectId}\n${ticketKey}`
         if (setup === false) skipSetups(target)
         else
           await runSetups(
@@ -2607,6 +2641,22 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           () => "Started, but couldn't set In Progress",
           false
         ).catch(() => undefined)
+      } catch (err) {
+        const reason = messageOf(err)
+        if (!reason.startsWith(SETUP_CANCELLED)) {
+          const lines = reason.startsWith(SETUP_FAILED) && setupApi.setupProgress(target)?.lines
+          startFailures.push({
+            projectId,
+            ticketKey,
+            at: now().toISOString(),
+            reason,
+            repo: folderErrorRepo(reason),
+            ...(lines && { lines })
+          })
+          void persist().catch(() => undefined)
+          changed(projectId)
+        }
+        throw err
       } finally {
         starting.delete(ticketId(projectId, ticketKey))
       }
