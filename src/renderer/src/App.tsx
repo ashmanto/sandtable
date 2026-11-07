@@ -4,6 +4,7 @@ import { Board } from './components/Board'
 import { NewSessionDialog } from './components/NewSessionDialog'
 import { ProjectSidebar, slide } from './components/ProjectSidebar'
 import { RoutineEditor, type OpenRoutine, type RoutineDraft } from './components/RoutineEditor'
+import { dropRunHistoryAsk, openRunHistory } from '@/lib/runHistory'
 import { SessionView } from './components/SessionView'
 import { Settings } from './components/Settings'
 import { SetupGuide } from './components/SetupGuide'
@@ -273,6 +274,8 @@ function App(): React.JSX.Element | null {
   const project = projects.find((p) => p.id === route?.projectId)
   if (project && search.projectId !== project.id) setSearch({ projectId: project.id, text: '' })
   const toBoard = (projectId: string): void => setRoute({ name: 'board', projectId })
+  const boardShown = route?.name === 'board' && !page ? route.projectId : null
+  useEffect(() => dropRunHistoryAsk(boardShown), [boardShown])
   const toSession = (projectId: string, sessionId: string): void =>
     setRoute({ name: 'session', projectId, sessionId })
   const openConversation = (projectId: string, ticketKey: string): void =>
@@ -354,6 +357,7 @@ function App(): React.JSX.Element | null {
         onArrange={arrange}
         selectedId={route?.projectId ?? null}
         needsYou={counts}
+        couldntStart={(view ?? lastView)?.couldntStart}
         sessions={(view ?? lastView)?.sidebarSessions ?? []}
         openSessionId={openSession}
         openTicketKey={route?.name === 'ticket' ? route.ticketKey : null}
@@ -369,6 +373,11 @@ function App(): React.JSX.Element | null {
         onSettings={() => setPage('settings')}
         onUsage={() => setPage('usage')}
         onRoutine={onRoutine}
+        onOpenRunHistory={(projectId, routineId) => {
+          setPage(null)
+          toBoard(projectId)
+          openRunHistory(projectId, routineId)
+        }}
         backForward={nav}
       />
       <HeaderFrame value={header}>

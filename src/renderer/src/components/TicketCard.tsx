@@ -54,7 +54,7 @@ import { useSetupHint } from '@/hooks/useSetupHint'
 import { RemoteMark } from './RemoteToggle'
 import { SessionBadge, type CardState } from './SessionBadge'
 import { SessionElsewhere } from './SessionElsewhere'
-import { SetupBlock } from './SetupBlock'
+import { LastLines, SetupBlock } from './SetupBlock'
 import { useAfterMenu } from '@/hooks/useAfterMenu'
 import { StartFlow } from './StartFlow'
 import { Tip } from './Tip'
@@ -582,12 +582,13 @@ export function TicketCard({
     removeWorktree: () => run(() => cleanUp(id, false), actionLabels.removeWorktree[1]),
     endSession: () => run(() => cleanUp(id, true), actionLabels.endSession[1])
   }
+  const failed = failure && !setup.progress && !error && !result ? failure : null
   const message: Line | null = error
     ? { text: error, danger: true }
     : result
       ? { text: result, danger: false }
-      : failure
-        ? { text: failureText(failure), danger: true }
+      : failed
+        ? { text: failureText(failed), danger: true }
         : session?.startWarning
           ? { text: session.startWarning, danger: true }
           : hintError
@@ -704,6 +705,7 @@ export function TicketCard({
             {message.text}
           </p>
         )}
+        {failed?.lines && <LastLines lines={failed.lines} />}
         <OverlapCheck {...overlap} area={areaOf(ticket.labels)} />
         <SetupBlock {...setup} project={project} />
         <SetupHint

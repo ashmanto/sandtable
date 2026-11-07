@@ -67,7 +67,13 @@ import { Estimate, Num, ShareBar } from './Usage'
 import type { OpenRoutine } from './RoutineEditor'
 import { NavButtons, NeedsYouCount } from './ViewHeader'
 import { parseTicketKey, ticketLabel } from '../../../shared/repo'
-import { SIDEBAR_WIDTH, sidebarWidth, type SidebarSession } from '../../../shared/api'
+import {
+  SIDEBAR_WIDTH,
+  sidebarWidth,
+  type CouldntStart,
+  type SidebarSession
+} from '../../../shared/api'
+import { CouldntStartList } from './CouldntStartList'
 import type { Project, ProjectGroup, Routine, SessionRecord } from '../../../shared/types'
 
 /** The sidebar's slide, shared with the panel margin that moves with it. */
@@ -333,6 +339,7 @@ export function ProjectSidebar({
   groups,
   selectedId,
   needsYou,
+  couldntStart = {},
   sessions,
   openSessionId,
   openTicketKey,
@@ -346,6 +353,7 @@ export function ProjectSidebar({
   onSettings,
   onUsage,
   onRoutine,
+  onOpenRunHistory = () => undefined,
   backForward,
   hidden = false,
   inset = false,
@@ -357,6 +365,7 @@ export function ProjectSidebar({
   groups: ProjectGroup[]
   selectedId: string | null
   needsYou: Record<string, number>
+  couldntStart?: Record<string, CouldntStart[]>
   sessions: SidebarSession[]
   openSessionId: string | null
   openTicketKey: string | null
@@ -370,6 +379,7 @@ export function ProjectSidebar({
   onSettings: () => void
   onUsage: () => void
   onRoutine: OpenRoutine
+  onOpenRunHistory?: (projectId: string, routineId: string) => void
   backForward?: Nav
   hidden?: boolean
   inset?: boolean
@@ -603,6 +613,16 @@ export function ProjectSidebar({
               )}
           </span>
         </DndRow>
+        {!!couldntStart[p.id]?.length && (
+          <div className="pt-px pl-4">
+            <CouldntStartList
+              project={p.name}
+              entries={couldntStart[p.id]}
+              onOpenTicket={(key) => onOpenTicket(p.id, key)}
+              onOpenRunHistory={(id) => onOpenRunHistory(p.id, id)}
+            />
+          </div>
+        )}
         {expanded && (
           <ul className="flex flex-col gap-px pt-px pl-4">
             {mine.map((s) => (

@@ -81,7 +81,7 @@ import { ClearNeedsYou, RaiseCap } from './ClearNeedsYou'
 import { ModelChip } from './ModelChoice'
 import { NoteComposer } from './NoteComposer'
 import { OverlapCheck } from './OverlapCheck'
-import { SetupBlock } from './SetupBlock'
+import { LastLines, SetupBlock } from './SetupBlock'
 import { SessionBadge } from './SessionBadge'
 import { SessionElsewhere } from './SessionElsewhere'
 import { useAfterMenu } from '@/hooks/useAfterMenu'
@@ -403,7 +403,6 @@ export function TicketView({
   )
   const session = sessions[0]
   const live = !!session && isLive(session)
-  const danger = error ?? (failure && failureText(failure)) ?? session?.startWarning
   const map = statusMapOf(project)
   const done = ticket ? columnFor(ticket.status, map) === 'done' : false
   const doneOpen = !!session && isDoneOpen(session, ticket, map)
@@ -517,6 +516,8 @@ export function TicketView({
   }, [hasSession, hasWorktree])
 
   const held = !!overlap.check || !!setup.progress
+  const failed = failure && !setup.progress && !error ? failure : null
+  const danger = error ?? (failed && failureText(failed)) ?? session?.startWarning
 
   const id = session?.id ?? ''
   const handlers: Record<TicketAction, () => void> = {
@@ -878,6 +879,11 @@ export function TicketView({
       </ViewHeader>
       {result && <p className="px-4 py-1.5 text-xs text-fg-2">{result}</p>}
       {danger && <p className="bg-danger-soft px-4 py-1.5 text-xs text-danger">{danger}</p>}
+      {failed?.lines && (
+        <div className="px-4 py-1.5">
+          <LastLines lines={failed.lines} />
+        </div>
+      )}
       <OverlapCheck {...overlap} area={areaOf(ticket?.labels ?? [])} className="px-4 py-1.5" />
       <SetupBlock {...setup} project={project} className="px-4 py-1.5" />
       {ticket && <Instructions project={project} labels={ticket.labels} />}

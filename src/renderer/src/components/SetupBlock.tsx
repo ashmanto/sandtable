@@ -101,3 +101,14 @@ export function SetupBlock({
     </div>
   )
 }
+
+/** A failed setup's saved last lines, under the failure. */
+export function LastLines({ lines }: { lines: string[] }): React.JSX.Element {
+  return (
+    <ul aria-label="Last lines" className="font-mono text-xs wrap-anywhere text-fg-3">
+      {lines.slice(-SHOWN_LINES).map((line, i) => (
+        <li key={i}>{line}</li>
+      ))}
+    </ul>
+  )
+}

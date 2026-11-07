@@ -68,6 +68,13 @@ them through Tailwind classes and never name a raw color.
   "1 reviewing", "1 idle", "1 done", "1 done, session open", or "1 at its limit"; the **Reviewing** count's icon pulses too. A
   project's count chips take keyboard focus, and their tooltip is the count in words followed by
   the title of each session in that state, one per line.
+- A project's "3 couldn't start" line is a ghost row under the project row, indented like its
+  sessions, with `CircleX` in `danger` and the words in `fg-2`. It opens a popover beside the
+  sidebar, at most 60% of the window tall and scrolling, headed "Couldn't start in <project>" in
+  `fg-3`. Each entry is a row with a **Ticket** or **Routine** chip in `fg-2` on `neutral-soft`,
+  the name in `fg`, the reason and time in `fg-2` and `fg-3`, and a failed setup's last lines in
+  mono `fg-3` under it. The card and ticket view show a saved setup failure's last lines the same
+  way, under **Couldn't start**.
 - Pull request states are chips with a word: **Open** is `blue` on `blue-soft`, **Merged** is
   `fg` on `neutral-soft`, and **Closed** is `fg-3` on `neutral-soft`. Where an open pull request
   stands is a chip with a 12 px `GitPullRequest` icon and a word: **PR open** is `blue` on

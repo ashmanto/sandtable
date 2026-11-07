@@ -330,6 +330,16 @@ export type SkippedRun = {
   trigger?: RunTrigger
 }
 
+/** A ticket's last failed Start, kept until it starts, leaves the board, or its folder passes the check; `repo` is the repo whose folder failed it, `lines` a failed setup's last lines. */
+export type StartFailure = {
+  projectId: string
+  ticketKey: string
+  at: string
+  reason: string
+  repo: string | null
+  lines?: string[]
+}
+
 /** One run in a routine's history: a skipped time or a session, where `place` is its branch or "main checkout", `waitingFor` the tool it stopped to ask permission for, and `warning` its start warning. */
 export type RoutineRun = { at: string; scheduled: boolean; trigger?: RunTrigger } & (
   | { kind: 'skipped'; reason: SkippedRun['reason']; error?: string }

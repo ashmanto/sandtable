@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { BoardView } from '../../../shared/api'
+import { setStartFailures } from './useOverlapCheck'
 
 /** The board of a project, reloaded whenever the main process reports a change. */
 export function useBoard(projectId: string | null): {
@@ -13,7 +14,9 @@ export function useBoard(projectId: string | null): {
     let current = true
     const load = (): void => {
       void window.sandtable.board.get(projectId).then((view) => {
-        if (current) setLoaded({ projectId, view })
+        if (!current) return
+        setStartFailures(projectId, view.couldntStart[projectId] ?? [])
+        setLoaded({ projectId, view })
       })
     }
     load()

@@ -35,7 +35,9 @@ import type {
   SessionRecord,
   SetupProgress,
   SetupSuggestion,
+  SkippedRun,
   StartCheck,
+  StartFailure,
   Step,
   Ticket,
   Theme,
@@ -63,7 +65,21 @@ export type BoardView = {
   error: string | null
   needsYou: Record<string, number>
   routines: Routine[]
+  /** Every project's failed ticket starts and unresolved skipped routine runs, newest first. */
+  couldntStart: Record<string, CouldntStart[]>
 }
+
+/** A run that couldn't start: a ticket's failed Start, or a routine run skipped after its last session started. */
+export type CouldntStart =
+  | ({ kind: 'ticket'; name: string } & Omit<StartFailure, 'projectId'>)
+  | {
+      kind: 'routine'
+      routineId: string
+      name: string
+      at: string
+      reason: SkippedRun['reason']
+      error?: string
+    }
 
 /** Whether the sidebar is hidden, its width, and whether the window is in full screen. */
 export type WindowFrame = { sidebarHidden: boolean; sidebarWidth: number; fullScreen: boolean }

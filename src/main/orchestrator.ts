@@ -51,6 +51,7 @@ import type {
   SetupSuggestion,
   Step,
   SkippedRun,
+  StartFailure,
   StartCheck,
   Ticket,
   TicketDetails,
@@ -93,6 +94,7 @@ import {
   CREATED,
   findRepo,
   folderError,
+  folderErrorRepo,
   isTrackerKey,
   parseTicketKey,
   sameRepo,
@@ -153,6 +155,7 @@ import { parseTriage, TRIAGE_SCHEMA, triagePrompt, usableArea } from './sessions
 import { createLiveView } from './sessions/liveView'
 import { createReviewLoop } from './sessions/reviewLoop'
 import { createSetupRuns } from './sessions/setupRuns'
+import { couldntStartByProject } from './couldntStart'
 import { createRoutines } from './sessions/routines'
 import { createUsageTracking } from './sessions/usageTracking'
 import { createJiraSignIn } from './sessions/jiraSignIn'
@@ -161,7 +164,7 @@ import { createTicketChat } from './sessions/ticketChat'
 import { tmuxName, typeIntoTmux } from './sessions/tmux'
 import { accountEnv, stopChildren } from './env/tools'
 import { copyPaths, ignoredProblem, runSetup, stopSetups, suggestSetup } from './env/worktreeSetup'
-import { SETUP_CANCELLED } from '../shared/worktreeSetup'
+import { SETUP_CANCELLED, SETUP_FAILED } from '../shared/worktreeSetup'
 import { draftFile } from './drafts'
 import { serial, type Run, type Store } from './store'
 import type { SyncCache, SyncCacheStore } from './syncCache'
@@ -549,6 +552,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
   let findings: Finding[] = []
   let routines: Routine[] = []
   let skippedRuns: SkippedRun[] = []
+  let startFailures: StartFailure[] = []
   let setupPending: string[] = []
   let setupHintsOff: string[] = []
   const transcriptFolders = new Map<string, string>()
@@ -594,6 +598,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         findings,
         routines,
         skippedRuns,
+        startFailures,
         setupPending,
         setupHintsOff
       })
@@ -946,6 +951,19 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         tickets,
         syncedAt: new Date(startedAt).toISOString(),
         error: truncated.join(' ') || null
+      })
+      if (!truncated.length) {
+        const keys = new Set(tickets.map((t) => t.key))
+        const kept = startFailures.filter((f) => f.projectId !== projectId || keys.has(f.ticketKey))
+        if (kept.length < startFailures.length) {
+          startFailures = kept
+          void persist().catch(() => undefined)
+        }
+      }
+      void clearFixedFolders(project).then((cleared) => {
+        if (!cleared) return
+        void persist().catch(() => undefined)
+        changed(projectId)
       })
       if (merged) mergedPrs.set(projectId, merged.prs)
       persistCache()
@@ -1333,6 +1351,20 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     await deps.tmux.killTmux(s.tmuxName)
     if (await deps.tmux.hasTmux(s.tmuxName)) throw new Error("Couldn't end the session")
     setState(s, 'finished')
+  }
+
+  const clearFixedFolders = async (p: Project): Promise<boolean> => {
+    const checked = startFailures.filter((f) => f.projectId === p.id && f.repo)
+    const fixed: string[] = []
+    for (const repo of new Set(checked.map((f) => f.repo!))) {
+      const r = findRepo(p.repos, repo)
+      const remotes = r ? await deps.githubReposOf(r.path).catch(() => []) : []
+      if (!r || remotes.some((g) => sameRepo(g, repo))) fixed.push(repo)
+    }
+    const left = startFailures.filter((f) => !checked.includes(f) || !fixed.includes(f.repo!))
+    const cleared = left.length < startFailures.length
+    startFailures = left
+    return cleared
   }
 
   const checkFolders = async (repos: ProjectRepo[]): Promise<void> => {
@@ -1994,6 +2026,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     runs = data.runs
     routines = data.routines
     skippedRuns = data.skippedRuns
+    startFailures = data.startFailures
     setupPending = data.setupPending
     setupHintsOff = data.setupHintsOff
     findings = data.findings.filter((f) => {
@@ -2162,7 +2195,9 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         i < 0
           ? [...projects, withGroup(p, undefined)]
           : projects.with(i, withGroup(p, projects[i].group))
+      const cleared = await clearFixedFolders(p)
       await persist()
+      if (cleared) changed(p.id)
       for (const s of sessions) if (s.projectId === p.id) await reviewLoop.syncGate(s)
       if (resourced) {
         synced.delete(p.id)
@@ -2210,6 +2245,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       projects = projects.filter((x) => x.id !== id)
       chats = chats.filter((c) => c.projectId !== id)
       runs = runs.filter((r) => r.projectId !== id)
+      startFailures = startFailures.filter((f) => f.projectId !== id)
       skippedRuns = skippedRuns.filter(
         (x) => routines.find((r) => r.id === x.routineId)?.projectId !== id
       )
@@ -2330,7 +2366,15 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         syncedAt,
         error,
         needsYou,
-        routines: routines.filter((r) => r.projectId === projectId)
+        routines: routines.filter((r) => r.projectId === projectId),
+        couldntStart: couldntStartByProject(
+          startFailures,
+          skippedRuns,
+          routines,
+          sessions,
+          (id, key) => synced.get(id)?.tickets.find((t) => t.key === key)?.title,
+          daysBefore(now(), 7).toISOString()
+        )
       }
     },
 
@@ -2480,12 +2524,19 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       assertNoLiveSession(projectId, ticketKey)
       assertFreeTmux(tmuxName(projectId, ticketKey))
       starting.set(ticketId(projectId, ticketKey), [ticketKey, projectId])
+      const target = `${projectId}\n${ticketKey}`
+      let picked = false
+      let launched = false
       try {
         if (!ticket.repo && !mainRepo) throw new Error('Choose the repo for this ticket')
         const main = repoOf(project, mainRepo || ticket.repo)
         const extras = extraRepos.map((r) => repoOf(project, r))
         if (extras.includes(main)) throw new Error('Extra repo is the main repo')
         const repos = [...new Set([main, ...extras])]
+        picked = true
+        startFailures = startFailures.filter(
+          (f) => f.projectId !== projectId || f.ticketKey !== ticketKey
+        )
         const mine = sessions.filter((s) => s.projectId === projectId)
         const branch =
           currentSession(mine, ticketKey)?.branch ??
@@ -2532,7 +2583,6 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           throw new Error(`Another ticket's session uses ${branch}`)
         }
         const worktrees = made.map((m) => m.path)
-        const target = `${projectId}\n${ticketKey}`
         if (setup === false) skipSetups(target)
         else
           await runSetups(
@@ -2588,6 +2638,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           await removeCreated()
           throw err
         }
+        launched = true
         await reviewLoop.syncGate(sessions.at(-1)!)
         if (setup === false) await unpend(worktrees)
         ticket.repo = main.github
@@ -2607,6 +2658,23 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           () => "Started, but couldn't set In Progress",
           false
         ).catch(() => undefined)
+      } catch (err) {
+        const reason = messageOf(err)
+        if (launched || !picked) throw err
+        if (!reason.startsWith(SETUP_CANCELLED)) {
+          const lines = reason.startsWith(SETUP_FAILED) ? setupApi.setupProgress(target)?.lines : []
+          startFailures.push({
+            projectId,
+            ticketKey,
+            at: now().toISOString(),
+            reason,
+            repo: folderErrorRepo(reason),
+            ...(lines?.length && { lines })
+          })
+        }
+        void persist().catch(() => undefined)
+        changed(projectId)
+        throw err
       } finally {
         starting.delete(ticketId(projectId, ticketKey))
       }

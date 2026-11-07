@@ -6,6 +6,7 @@ import { SETUP_CANCELLED, SETUP_FAILED } from '../../../shared/worktreeSetup'
 import { useWorktreeSetup } from './useWorktreeSetup'
 import type { Line } from '@/lib/cleanUp'
 import type { Model, Overlap, Project, SetupProgress, StartCheck } from '../../../shared/types'
+import type { CouldntStart } from '../../../shared/api'
 
 /** What the Start check hands on: the overlap candidates, and whether to check readiness first. */
 export type Pass = Pick<StartCheck, 'overlap' | 'ready'>
@@ -65,8 +66,22 @@ const set = (key: string, check: Check | null): void => {
   changed()
 }
 
-/** Why a ticket's last Start failed, and the repo whose folder failed it, if one did. */
-type StartFailure = { reason: string; repo: string | null }
+/** Why a ticket's last Start failed, the repo whose folder failed it, if one did, a failed setup's last lines, and whether only this window knows it. */
+type StartFailure = { reason: string; repo: string | null; lines?: string[]; local?: true }
+
+/** Replaces the project's saved failures with the main process's, keeping a refusal only this window saw until the next Start. */
+export function setStartFailures(projectId: string, entries: CouldntStart[]): void {
+  for (const [key, f] of failures)
+    if (key.startsWith(`${projectId}\n`) && !f.local) failures.delete(key)
+  for (const e of entries)
+    if (e.kind === 'ticket')
+      failures.set(`${projectId}\n${e.ticketKey}`, {
+        reason: e.reason,
+        repo: e.repo,
+        lines: e.lines
+      })
+  changed()
+}
 
 /** How a card or the ticket view says a Start failed. */
 export const failureText = ({ reason, repo }: StartFailure): string =>
@@ -102,8 +117,12 @@ export async function startTicket(
     return true
   } catch (err) {
     const reason = errorMessage(err)
-    if (!reason.startsWith(SETUP_FAILED) && !reason.startsWith(SETUP_CANCELLED))
-      failures.set(key, { reason, repo: folderErrorRepo(reason) })
+    if (
+      !reason.startsWith(SETUP_FAILED) &&
+      !reason.startsWith(SETUP_CANCELLED) &&
+      !failures.has(key)
+    )
+      failures.set(key, { reason, repo: folderErrorRepo(reason), local: true })
     return false
   } finally {
     pending.delete(key)

@@ -11,6 +11,7 @@ import type {
   SessionRecord,
   SessionState,
   SkippedRun,
+  StartFailure,
   Ticket
 } from '../../shared/types'
 import { tempDirs } from './tempDirs'
@@ -158,6 +159,7 @@ export function setup(
     findings?: Finding[]
     routines?: Routine[]
     skippedRuns?: SkippedRun[]
+    startFailures?: StartFailure[]
     setupPending?: string[]
   } = {}
 ) {
@@ -172,6 +174,7 @@ export function setup(
     ...(opts.findings && { findings: opts.findings }),
     ...(opts.routines && { routines: opts.routines }),
     ...(opts.skippedRuns && { skippedRuns: opts.skippedRuns }),
+    ...(opts.startFailures && { startFailures: opts.startFailures }),
     ...(opts.setupPending && { setupPending: opts.setupPending })
   }
   const folders = opts.folders ?? {
