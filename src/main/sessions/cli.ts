@@ -97,19 +97,24 @@ export function createCliServer(
       })
     })
 
-  const close = async (sessionId: string): Promise<void> => {
+  const closing = new Map<string, Promise<void>>()
+  const close = (sessionId: string): Promise<void> => {
     const open = servers.get(sessionId)
-    if (!open) return
+    if (!open) return closing.get(sessionId) ?? Promise.resolve()
     servers.delete(sessionId)
-    await new Promise<void>((resolve) => {
+    const done = new Promise<void>((resolve) => {
       open.server.close(() => resolve())
       open.server.closeAllConnections()
     })
-    await unlink(open.socket).catch(() => undefined)
+      .then(() => unlink(open.socket).catch(() => undefined))
+      .finally(() => closing.delete(sessionId))
+    closing.set(sessionId, done)
+    return done
   }
 
   return {
     async open(sessionId) {
+      await closing.get(sessionId)
       const existing = servers.get(sessionId)
       if (existing) return existing.socket
       await mkdir(dir, { recursive: true })

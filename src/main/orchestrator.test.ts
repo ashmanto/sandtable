@@ -7487,6 +7487,14 @@ describe('sandtable CLI sockets', () => {
     expect(t.cli.open.mock.calls).toEqual([['s1']])
   })
 
+  it('reconnect still loads when a socket fails to open', async () => {
+    const live = session({ id: 's1', state: 'running', ticketKey: 'octo/shop#147' })
+    const t = setup({ cli: true, sessions: [live] })
+    t.live.add(live.tmuxName)
+    t.cli.open.mockRejectedValue(new Error('EADDRINUSE'))
+    await expect(t.orch.reconnect()).resolves.toBeUndefined()
+  })
+
   it('stop closes every socket', async () => {
     const t = await started()
     t.orch.stop()

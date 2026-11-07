@@ -2053,7 +2053,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         if (!alive) {
           s.state = 'finished'
           delete s.startWarning
-        } else if (s.ticketKey) await cliServer?.open(s.id)
+        } else if (s.ticketKey) await cliServer?.open(s.id).catch(() => undefined)
         setAsking(s, alive && (notStarted(s) || (await deps.events.readAsking(s.eventsFile))))
         if (alive) s.state = shownState(s, (await lastStateOf(s)) ?? s.state)
         if (s.state !== 'limitReached' && s.state !== 'apiError') delete s.stop

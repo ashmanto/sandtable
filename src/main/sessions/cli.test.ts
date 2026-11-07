@@ -83,6 +83,17 @@ describe('sandtable CLI server', () => {
     expect(await server.open('s1')).toBe(await server.open('s1'))
   })
 
+  it('keeps a reopened socket when an earlier close is still pending', async () => {
+    const { server } = make(async () => ({ code: 0, text: 'ok' }))
+    for (let i = 0; i < 20; i++) {
+      await server.open('s1')
+      void server.close('s1')
+      const socket = await server.open('s1')
+      await new Promise((r) => setTimeout(r, 5))
+      expect(existsSync(socket)).toBe(true)
+    }
+  })
+
   it('removes the socket file on close', async () => {
     const { server } = make(async () => ({ code: 0, text: 'ok' }))
     const socket = await server.open('s1')
