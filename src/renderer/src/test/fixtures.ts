@@ -112,6 +112,7 @@ export function boardView(over: Partial<BoardView> = {}): BoardView {
     error: null,
     needsYou: {},
     routines: [],
+    couldntStart: {},
     ...over
   }
 }

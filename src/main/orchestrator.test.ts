@@ -985,6 +985,13 @@ describe('saved start failures', () => {
     expect(t.saved().startFailures).toEqual([])
   })
 
+  it("lists every project's failures on the board, named by the ticket's title", async () => {
+    const { t } = await failed()
+    expect((await t.orch.getBoard('p2')).couldntStart.p1).toMatchObject([
+      { kind: 'ticket', ticketKey: KEY, name: 'Dark mode toggle', repo: 'octo/shop' }
+    ])
+  })
+
   it("drops a removed project's failures", async () => {
     const { t } = await failed()
     await t.orch.removeProject('p1')

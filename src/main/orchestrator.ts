@@ -155,6 +155,7 @@ import { parseTriage, TRIAGE_SCHEMA, triagePrompt, usableArea } from './sessions
 import { createLiveView } from './sessions/liveView'
 import { createReviewLoop } from './sessions/reviewLoop'
 import { createSetupRuns } from './sessions/setupRuns'
+import { couldntStartByProject } from './couldntStart'
 import { createRoutines } from './sessions/routines'
 import { createUsageTracking } from './sessions/usageTracking'
 import { createJiraSignIn } from './sessions/jiraSignIn'
@@ -2361,7 +2362,14 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         syncedAt,
         error,
         needsYou,
-        routines: routines.filter((r) => r.projectId === projectId)
+        routines: routines.filter((r) => r.projectId === projectId),
+        couldntStart: couldntStartByProject(
+          startFailures,
+          skippedRuns,
+          routines,
+          sessions,
+          (id, key) => synced.get(id)?.tickets.find((t) => t.key === key)?.title
+        )
       }
     },
 
