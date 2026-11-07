@@ -1309,3 +1309,13 @@ describe('gate script', () => {
     expect(JSON.parse(hook(f, 'gh pr create')).hookSpecificOutput.permissionDecision).toBe('deny')
   })
 })
+
+describe('sessionRules CLI', () => {
+  it('adds the sandtable rule only when cli is set', () => {
+    const base = { repo: 'octo/shop', ticket: '#46', worktree: true }
+    expect(sessionRules({ ...base, cli: true })).toContain(
+      '`sandtable start|status|wait|summary|info <ticket>`'
+    )
+    expect(sessionRules(base)).not.toContain('sandtable start')
+  })
+})

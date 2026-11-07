@@ -7413,3 +7413,83 @@ describe('Sandbox commands', () => {
     ).rejects.toThrow('Not a domain: https://pypi.org')
   })
 })
+
+describe('sandtable CLI sockets', () => {
+  const settingsOf = (
+    t: ReturnType<typeof setup>,
+    id: string
+  ): {
+    permissions: { allow: string[] }
+    sandbox: { network: { allowUnixSockets: string[] } }
+  } => JSON.parse(readFileSync(join(t.dataDir, 'settings', `${id}.json`), 'utf8'))
+  const started = async (
+    opts: Parameters<typeof setup>[0] = {}
+  ): Promise<ReturnType<typeof setup>> => {
+    const t = setup({ cli: true, ...opts })
+    await t.orch.reconnect()
+    await t.orch.sync('p1')
+    return t
+  }
+
+  it('a ticket session starts with its socket on PATH', async () => {
+    const t = await started()
+    await t.orch.start('p1', 'octo/shop#147')
+    const [s] = (await t.orch.getBoard('p1')).sessions
+    expect(t.cli.open).toHaveBeenCalledWith(s.id)
+    const env = t.deps.tmux.startTmux.mock.calls[0][3]
+    expect(env?.SANDTABLE_SOCKET).toBe(`/cli/${s.id}.sock`)
+    expect(env?.PATH?.startsWith('/cli:')).toBe(true)
+    expect(settingsOf(t, s.id).permissions.allow).toContain('Bash(sandtable:*)')
+    const cmd = t.deps.tmux.startTmux.mock.calls[0][2]
+    expect(cmd[cmd.indexOf('--append-system-prompt') + 1]).toContain('`sandtable start|status')
+  })
+
+  it('keeps CLAUDE_CONFIG_DIR next to the socket', async () => {
+    const t = await started()
+    await t.orch.start('p1', 'octo/shop#147')
+    expect(t.deps.tmux.startTmux.mock.calls[0][3]).toMatchObject({
+      CLAUDE_CONFIG_DIR: t.claudeDir,
+      SANDTABLE_SOCKET: expect.any(String)
+    })
+  })
+
+  it('a sandboxed ticket session allows only its own socket', async () => {
+    const t = await started({ projects: [{ ...project, sandbox: true }] })
+    await t.orch.start('p1', 'octo/shop#147')
+    const [s] = (await t.orch.getBoard('p1')).sessions
+    expect(settingsOf(t, s.id).sandbox.network.allowUnixSockets).toEqual([
+      ...agentSockets(),
+      `/cli/${s.id}.sock`
+    ])
+  })
+
+  it('a session without a ticket gets no socket', async () => {
+    const t = await started()
+    const id = await t.orch.create('p1', 'octo/shop', false)
+    expect(t.cli.open).not.toHaveBeenCalled()
+    expect(t.deps.tmux.startTmux.mock.calls[0][3]?.SANDTABLE_SOCKET).toBeUndefined()
+    expect(settingsOf(t, id).permissions.allow).not.toContain('Bash(sandtable:*)')
+  })
+
+  it('a finished session closes its socket', async () => {
+    const t = await started()
+    await t.orch.start('p1', 'octo/shop#147')
+    const [s] = (await t.orch.getBoard('p1')).sessions
+    t.emit(s.id, 'finished')
+    expect(t.cli.close).toHaveBeenCalledWith(s.id)
+  })
+
+  it("reconnect reopens live ticket sessions' sockets", async () => {
+    const live = session({ id: 's1', state: 'running', ticketKey: 'octo/shop#147' })
+    const t = setup({ cli: true, sessions: [live, session({ id: 's2', state: 'finished' })] })
+    t.live.add(live.tmuxName)
+    await t.orch.reconnect()
+    expect(t.cli.open.mock.calls).toEqual([['s1']])
+  })
+
+  it('stop closes every socket', async () => {
+    const t = await started()
+    t.orch.stop()
+    expect(t.cli.closeAll).toHaveBeenCalled()
+  })
+})

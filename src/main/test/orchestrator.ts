@@ -159,6 +159,7 @@ export function setup(
     routines?: Routine[]
     skippedRuns?: SkippedRun[]
     setupPending?: string[]
+    cli?: boolean
   } = {}
 ) {
   const dataDir = tempDir('st-orch-')
@@ -188,7 +189,13 @@ export function setup(
   const askingFiles = new Set<string>()
   const linear = fakeLinear(opts.tickets)
   const jira = fakeJira(opts.tickets)
+  const cli = {
+    open: vi.fn(async (id: string) => `/cli/${id}.sock`),
+    close: vi.fn<(id: string) => Promise<void>>(async () => undefined),
+    closeAll: vi.fn(async () => undefined)
+  }
   const deps = {
+    ...(opts.cli && { cli: vi.fn<NonNullable<OrchestratorDeps['cli']>>(() => cli) }),
     store: {
       load: vi.fn(async () => structuredClone(saved)),
       save: vi.fn(async (d: StoreData) => {
@@ -333,6 +340,7 @@ export function setup(
   return {
     orch,
     deps,
+    cli,
     linear,
     jira,
     live,

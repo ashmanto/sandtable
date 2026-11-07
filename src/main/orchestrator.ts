@@ -62,6 +62,7 @@ import type { PromptAnswer, SessionPrompt } from '../shared/prompt'
 import { MODELS, reassign, withGroup } from '../shared/types'
 import { appName, isApp } from '../shared/editors'
 import { isSandboxDomain, sandboxDomains } from '../shared/sandbox'
+import { createCliServer, type CliHandler } from './sessions/cli'
 import { branchName } from './git/branchName'
 import { ownGitDir, worktreePath } from './git/worktree'
 import type { AreasClient } from './github/areas'
@@ -222,6 +223,7 @@ async function transcriptsIn(dir: string): Promise<string[]> {
 }
 
 export type OrchestratorDeps = {
+  cli?: (handle: CliHandler) => ReturnType<typeof createCliServer>
   store: Store
   cache: SyncCacheStore
   board: BoardClient
@@ -578,6 +580,8 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
   const activities = new Map<string, Activity>()
   const activityFiles = new Map<string, string>()
   const stoppers: (() => void)[] = []
+  const cliServer = deps.cli?.(async () => ({ code: 1, text: 'Not ready' }))
+  if (cliServer) stoppers.push(() => void cliServer.closeAll())
   const write = serial()
   const writeCache = serial()
   const reading = serial()
@@ -844,6 +848,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     if (state !== 'limitReached' && state !== 'apiError') delete s.stop
     if (state === 'running') reviewLoop.leaveRound(s.id)
     if (state === 'finished') {
+      void cliServer?.close(s.id)
       commandLists.delete(s.id)
       eventCounts.delete(s.id)
       setAsking(s, false)
@@ -1383,6 +1388,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
   ): Promise<string> => {
     const eventsFile = join(eventsDir, `${id}.jsonl`)
     const settingsFile = join(settingsDir, `${id}.json`)
+    const cliSocket = rules.ticket !== undefined ? await cliServer?.open(id) : undefined
     await mkdir(eventsDir, { recursive: true })
     await mkdir(settingsDir, { recursive: true })
     await mkdir(join(deps.dataDir, 'status'), { recursive: true })
@@ -1404,11 +1410,18 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           statusScript,
           [
             ...(opts.allow ?? []),
+            ...(cliSocket ? ['Bash(sandtable:*)'] : []),
             `Read(/${imagesDir(id)}/**)`,
             `Read(/${notesFile(id)})`,
             `Edit(/${notesFile(id)})`
           ],
-          opts.sandbox && sandboxSettings(opts.sandbox, deps.dataDir, agentSockets(), npmCache),
+          opts.sandbox &&
+            sandboxSettings(
+              opts.sandbox,
+              deps.dataDir,
+              [...agentSockets(), ...(cliSocket ? [cliSocket] : [])],
+              npmCache
+            ),
           rules.ticket !== undefined && rules.worktree
             ? {
                 script: gateScript,
@@ -1419,14 +1432,26 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         )
       )
     )
-    const args = claudeArgs({ ...opts, settingsFile, rules: sessionRules(rules) })
+    const args = claudeArgs({
+      ...opts,
+      settingsFile,
+      rules: sessionRules({ ...rules, cli: !!cliSocket })
+    })
     const inherit = dir === deps.claudeDir && !deps.claudeDirSet
     startFrom.set(id, (await stat(eventsFile).catch(() => null))?.size ?? 0)
     await deps.tmux.startTmux(
       tmux,
       cwd,
       [...(inherit ? ['/usr/bin/env', '-u', 'CLAUDE_CONFIG_DIR'] : []), deps.claude.bin, ...args],
-      inherit ? undefined : { CLAUDE_CONFIG_DIR: dir },
+      inherit && !cliSocket
+        ? undefined
+        : {
+            ...(!inherit && { CLAUDE_CONFIG_DIR: dir }),
+            ...(cliSocket && {
+              SANDTABLE_SOCKET: cliSocket,
+              PATH: `${dirname(cliSocket)}:${process.env.PATH ?? ''}`
+            })
+          },
       deps.dataDir
     )
     startBy.set(id, now().getTime() + START_EVENT_MS)
@@ -2028,7 +2053,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         if (!alive) {
           s.state = 'finished'
           delete s.startWarning
-        }
+        } else if (s.ticketKey) await cliServer?.open(s.id)
         setAsking(s, alive && (notStarted(s) || (await deps.events.readAsking(s.eventsFile))))
         if (alive) s.state = shownState(s, (await lastStateOf(s)) ?? s.state)
         if (s.state !== 'limitReached' && s.state !== 'apiError') delete s.stop
