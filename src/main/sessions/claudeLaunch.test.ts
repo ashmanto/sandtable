@@ -1179,7 +1179,11 @@ describe('gate script', () => {
     'gh api repos/o/r/pulls -fhead=b',
     "gh api graphql -f query='mutation($i:ID!){createPullRequest(input:{repositoryId:$i}){pullRequest{url}}}'",
     'gh api graphql -f query=mutation{createPullRequest}',
-    'gh api --hostname h graphql -f query=mutation{createPullRequest}'
+    'gh api --hostname h graphql -f query=mutation{createPullRequest}',
+    '"gh" api graphql -f query=mutation{createPullRequest}',
+    '\\gh api graphql -f query=mutation{createPullRequest}',
+    'gh api \\\n  graphql -f query=mutation{createPullRequest}',
+    "echo $(gh api graphql -f query='mutation($i:ID!){createPullRequest(input:{repositoryId:$i}){pullRequest{url}}}')"
   ])('denies %j while the gate is closed and records the denial', (command) => {
     const f = fixture()
     expect(JSON.parse(hook(f, command))).toEqual({
@@ -1200,6 +1204,7 @@ describe('gate script', () => {
     'gh api repos/o/r/pulls/1/comments -f body=x',
     'gh api -X GET repos/o/r/pulls -f state=open',
     "gh api graphql -f query='query{viewer{login}}'",
+    "gh api graphql -f query='query{viewer{login}}' && grep -r createPullRequest src",
     'git log'
   ])('allows %j', (command) => {
     const f = fixture()

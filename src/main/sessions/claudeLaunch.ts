@@ -367,9 +367,11 @@ in=$(cat)
 cmd=$(printf '%s' "$in" | plutil -extract tool_input.command raw -o - - 2>/dev/null) || cmd=$in
 case $cmd in *gh*) ;; *) exit 0 ;; esac
 set -f
+pieces() { printf '%s\n' "$cmd" | awk '{ if (sub(/\\$/, "")) printf "%s ", $0; else print }' | tr "$1" '\n\n\n\n\n\n\n\n' | tr ' \t' '\001\001'; }
+bare() { printf '%s' "$1" | tr '\001' ' ' | tr -d '\\"'"'"; }
 hit=
-for s in $(printf '%s\n' "$cmd" | awk '{ if (sub(/\\$/, "")) printf "%s ", $0; else print }' | tr ';&|()<>\140' '\n\n\n\n\n\n\n\n' | tr ' \t' '\001\001'); do
-  s=$(printf '%s' "$s" | tr '\001' ' ' | tr -d '\\"'"'")
+for s in $(pieces ';&|()<>\140'); do
+  s=$(bare "$s")
   if printf '%s' "$s" | grep -Eq '(^|[[:space:]/"'"'"'])gh[[:space:]]+pr[[:space:]]+(create|new)([[:space:]"'"'"']|$)'; then hit=1; break; fi
   printf '%s' "$s" | grep -Eq '(^|[[:space:]/"'"'"'])gh[[:space:]]+api[[:space:]]' || continue
   printf '%s' "$s" | grep -Eq '(^|[[:space:]/])pulls["'"'"']?([[:space:]]|$)' || continue
@@ -377,8 +379,11 @@ for s in $(printf '%s\n' "$cmd" | awk '{ if (sub(/\\$/, "")) printf "%s ", $0; e
   if printf '%s' "$s" | grep -Eiq -- '-X[[:space:]]*POST|--method[[:space:]=]+POST' ||
     printf '%s' "$s" | grep -Eq -- '(^|[[:space:]])(-[fF]|--field|--raw-field|--input)'; then hit=1; break; fi
 done
-if [ -z "$hit" ] && printf '%s' "$cmd" | grep -q createPullRequest &&
-  printf '%s' "$cmd" | grep -Eq '(^|[[:space:]/"'"'"'])gh[[:space:]]+api[[:space:]].*graphql'; then hit=1; fi
+[ -n "$hit" ] || for s in $(pieces ';&|<>\140'); do
+  s=$(bare "$s")
+  printf '%s' "$s" | grep -q createPullRequest || continue
+  if printf '%s' "$s" | grep -Eq '(^|[[:space:]/(])gh[[:space:]]+api[[:space:]](.*[[:space:]])?graphql([[:space:]]|$)'; then hit=1; break; fi
+done
 [ -n "$hit" ] || exit 0
 want=$(cat "$gate" 2>/dev/null)
 [ "$want" = open ] && exit 0
