@@ -504,6 +504,22 @@ describe('ProjectSidebar', () => {
     expect(await screen.findByRole('tooltip')).toHaveTextContent('1 needs you Login')
   })
 
+  it('names API error sessions in the Needs you tooltip, and no done ones', async () => {
+    const sessions = [
+      adhoc({ id: 'a1', name: 'Login', state: 'needsYou' }),
+      adhoc({ id: 'a2', name: 'Nightly sync', state: 'apiError' }),
+      {
+        ...adhoc({ id: 'a3', ticketKey: 'o/shop#2', name: 'Shipped', state: 'apiError' }),
+        done: true as const
+      }
+    ]
+    render(sidebar({ sessions, needsYou: { p1: 2 } }))
+    await userEvent.hover(screen.getByRole('img', { name: '2 need you' }))
+    const tip = await screen.findByRole('tooltip')
+    expect(tip).toHaveTextContent('2 need you Login Nightly sync')
+    expect(tip).not.toHaveTextContent('Shipped')
+  })
+
   it('offers Edit project and New session in the More menu', async () => {
     const onEdit = vi.fn()
     const onNewSession = vi.fn()

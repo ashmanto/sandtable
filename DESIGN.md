@@ -67,7 +67,7 @@ them through Tailwind classes and never name a raw color.
   **Limit reached** counts are the same bare chip in that state's colors and icon, named "2 running",
   "1 reviewing", "1 idle", "1 done", "1 done, session open", or "1 at its limit"; the **Reviewing** count's icon pulses too. A
   project's count chips take keyboard focus, and their tooltip is the count in words followed by
-  the title of each session in that state, one per line.
+  the title of each session it counts, one per line; **Needs you** also names **API error** sessions.
 - A project's "3 couldn't start" line is a ghost row under the project row, indented like its
   sessions, with `CircleX` in `danger` and the words in `fg-2`. It opens a popover beside the
   sidebar, at most 60% of the window tall and scrolling, headed "Couldn't start in <project>" in
