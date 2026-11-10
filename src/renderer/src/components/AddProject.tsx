@@ -17,14 +17,16 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { FieldHeading, RadioBox } from './RadioBox'
+import { RadioBox } from './RadioBox'
 import { useLatestLoad } from '../hooks/useLatestLoad'
 import { useSteps } from '../hooks/useSteps'
 import { LabeledSelect, LoadState, Problem, Spinner, StepFlow } from './StepFlow'
 import { EmojiPicker } from './EmojiPicker'
 import { ProjectTile } from './ProjectTile'
 import { InstructionsField } from './InstructionsField'
+import { JiraReview, JiraStep } from './JiraStep'
 import { LinearReview, LinearStep } from './LinearStep'
+import { useJiraSource } from '../hooks/useJiraSource'
 import { useLinearSource } from '../hooks/useLinearSource'
 import { insetClass } from './Activity'
 import { linkClass } from './SetupHint'
@@ -52,7 +54,6 @@ import { TOKEN_CAPS } from '../../../shared/pricing'
 import { compact } from '@/lib/usage'
 import type {
   Account,
-  JiraAccount,
   Model,
   Project,
   ProjectRepo,
@@ -135,11 +136,6 @@ const boardName = (url: string): string | null => {
   }
 }
 
-const NO_ACCOUNT = { site: '', email: '', token: '' }
-
-type Board = { id: number; name: string }
-
-/** Runs `load` so that only the latest call through `counter` sets its result, error, and loading flag. */
 /** The add-project flow: name, tickets from, repos, and review; prefilled to edit. */
 export function AddProject({
   project,
@@ -176,28 +172,7 @@ export function AddProject({
       : null
   )
   const linear = useLinearSource(project)
-  const jiraAccountsLoad = useLatestLoad<JiraAccount[]>()
-  const {
-    data: jiraAccounts,
-    loading: jiraAccountsLoading,
-    error: jiraAccountsError
-  } = jiraAccountsLoad
-  const jiraFilterRef = useRef<HTMLInputElement>(null)
-  const focusFilter = useRef(false)
-  const [jiraSite, setJiraSite] = useState(project?.jira?.site ?? '')
-  const [adding, setAdding] = useState<{ site: string; email: string; token: string } | null>(null)
-  const [signingIn, setSigningIn] = useState(false)
-  const [signInError, setSignInError] = useState<string | null>(null)
-  const jiraLoad = useLatestLoad<{ key: string; name: string }[]>()
-  const { data: jiraList, loading: jiraLoading, error: jiraError } = jiraLoad
-  const [jiraKey, setJiraKey] = useState(project?.jira?.project ?? '')
-  const [jiraName, setJiraName] = useState(project?.jira?.name ?? '')
-  const boardsLoad = useLatestLoad<Board[]>()
-  const { data: jiraBoards, loading: boardsLoading, error: boardsError } = boardsLoad
-  const [jiraBoard, setJiraBoard] = useState<Board | null | undefined>(
-    project?.jira ? (project.jira.board ?? null) : undefined
-  )
-  const [jiraFilter, setJiraFilter] = useState('')
+  const jira = useJiraSource(project)
   const [url, setUrl] = useState(board0?.source.url ?? '')
   const boardLoad = useLatestLoad(
     board0
@@ -251,51 +226,17 @@ export function AddProject({
   }, [entries])
 
   useEffect(() => {
-    if (project?.jira) {
-      void loadJiraAccounts()
-      void loadJiraProjects(project.jira.site, project.jira.project)
-      void loadJiraBoards(project.jira.site, project.jira.project, project.jira.board ?? null)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- loads the saved project's lists once; later picks load their own
-  }, [])
-
-  useEffect(() => {
-    if (!jiraList || !focusFilter.current) return
-    focusFilter.current = false
-    jiraFilterRef.current?.focus()
-  }, [jiraList])
-
-  useEffect(() => {
     if (!settingsOpen) void window.sandtable.accounts.list().then(setAccounts)
   }, [settingsOpen])
 
   const board = source === 'board' && loaded?.url === url.trim() ? loaded : null
   const included = entries.filter((e) => e.include)
-  const shownJira = jiraList?.filter((p) =>
-    `${p.key} ${p.name}`.toLowerCase().includes(jiraFilter.trim().toLowerCase())
-  )
-
   function issue(i: number): string | null {
     if (i === 0) return name.trim() ? null : 'Enter a name'
     if (i === 1) {
       if (!source) return 'Choose where tickets come from'
       if (source === 'issues') return null
-      if (source === 'jira')
-        return jiraKey
-          ? jiraBoard !== undefined
-            ? null
-            : boardsLoading
-              ? 'Loading Jira boards…'
-              : boardsError
-                ? 'Load the Jira boards'
-                : 'Choose a Jira board'
-          : !jiraSite
-            ? 'Choose a Jira account'
-            : jiraLoading
-              ? 'Loading Jira projects…'
-              : jiraList
-                ? 'Choose a Jira project'
-                : 'Load the Jira projects'
+      if (source === 'jira') return jira.issue
       if (source === 'linear') return linear.issue
       if (loading) return 'Loading the board…'
       if (!board) return 'Load the board'
@@ -361,85 +302,6 @@ export function AddProject({
     )
   }
 
-  function loadJiraAccounts(): Promise<void> {
-    return jiraAccountsLoad.load(
-      () => window.sandtable.projects.jiraAccounts(),
-      (loaded) => {
-        if (!loaded.length) setAdding(NO_ACCOUNT)
-      }
-    )
-  }
-
-  function loadJiraProjects(site: string, keep: string): Promise<void> {
-    return jiraLoad.load(
-      () => window.sandtable.projects.jiraProjects(site),
-      (loaded) => {
-        const kept = loaded.find((p) => p.key === keep)
-        setJiraKey(kept ? keep : '')
-        if (kept) setJiraName(kept.name)
-      }
-    )
-  }
-
-  function loadJiraBoards(
-    site: string,
-    key: string,
-    keep: Board | null | undefined
-  ): Promise<void> {
-    return boardsLoad.load(
-      () => window.sandtable.projects.jiraBoards(site, key),
-      (loaded) => {
-        setJiraBoard(
-          loaded.length === 0 || keep === null
-            ? null
-            : (loaded.find((b) => b.id === keep?.id) ??
-                (loaded.length === 1 ? loaded[0] : undefined))
-        )
-      }
-    )
-  }
-
-  function pickJiraProject(p: { key: string; name: string }): void {
-    setJiraKey(p.key)
-    setJiraName(p.name)
-    boardsLoad.set(null)
-    setJiraBoard(undefined)
-    void loadJiraBoards(jiraSite, p.key, undefined)
-  }
-
-  function pickJiraAccount(site: string): void {
-    boardsLoad.cancel()
-    boardsLoad.set(null)
-    setJiraBoard(undefined)
-    setJiraSite(site)
-    jiraLoad.set(null)
-    setJiraKey('')
-    setJiraFilter('')
-    void loadJiraProjects(site, '')
-  }
-
-  async function addJiraAccount(): Promise<void> {
-    if (!adding || signingIn || !adding.site.trim() || !adding.email.trim() || !adding.token.trim())
-      return
-    setSigningIn(true)
-    setSignInError(null)
-    try {
-      const added = await window.sandtable.projects.jiraSignIn(
-        adding.site.trim(),
-        adding.email.trim(),
-        adding.token
-      )
-      jiraAccountsLoad.set((as) => [...(as ?? []).filter((a) => a.site !== added.site), added])
-      setAdding(null)
-      focusFilter.current = true
-      pickJiraAccount(added.site)
-    } catch (err) {
-      setSignInError(errorMessage(err))
-    } finally {
-      setSigningIn(false)
-    }
-  }
-
   function changeUrl(value: string): void {
     setUrl(value)
     setBadUrl(false)
@@ -458,12 +320,8 @@ export function AddProject({
     boardLoad.set(null)
     linear.reset()
     if (value === 'linear') linear.activate()
-    if (value === 'jira' && !jiraAccounts && !jiraAccountsLoading) void loadJiraAccounts()
-    if (value === 'jira' && jiraAccounts?.length === 0) setAdding(NO_ACCOUNT)
-    if (value !== 'jira') {
-      setAdding(null)
-      setSignInError(null)
-    }
+    if (value === 'jira') jira.activate()
+    else jira.reset()
     setEntries((es) => es.filter((e) => e.include))
     setFolderError(null)
     setTypedError(null)
@@ -580,14 +438,7 @@ export function AddProject({
         board: { source: parseBoardUrl(url), statusMap: statusMap as StatusMap }
       }),
       ...(source === 'linear' && linear.saved && { linear: linear.saved }),
-      ...(source === 'jira' && {
-        jira: {
-          site: jiraSite,
-          project: jiraKey,
-          name: jiraName,
-          ...(jiraBoard && { board: jiraBoard })
-        }
-      }),
+      ...(source === 'jira' && jira.saved && { jira: jira.saved }),
       ...(remoteControl !== undefined && { remoteControl }),
       ...(claudeDir !== undefined && { claudeDir }),
       ...(keepDoneDays !== DEFAULT_KEEP_DONE_DAYS && { keepDoneDays }),
@@ -631,7 +482,7 @@ export function AddProject({
         : source === 'linear'
           ? linear.summary
           : source === 'jira'
-            ? `Jira project ${jiraKey}`
+            ? jira.summary
             : 'Repo issues'
     return plural(included.length, 'repo')
   }
@@ -893,221 +744,7 @@ export function AddProject({
         </div>
       )}
       {source === 'linear' && <LinearStep source={linear} />}
-      {source === 'jira' && (
-        <div className="mt-4 flex flex-col gap-3">
-          <div className="flex flex-col gap-2">
-            <FieldHeading id="jira-account">Jira account</FieldHeading>
-            <LoadState
-              loading={jiraAccountsLoading}
-              text="Loading Jira accounts…"
-              failed={
-                jiraAccountsError
-                  ? { title: "Couldn't read the saved Jira accounts.", detail: jiraAccountsError }
-                  : null
-              }
-              onRetry={() => void loadJiraAccounts()}
-            />
-            {jiraAccounts && jiraAccounts.length > 0 && (
-              <div role="radiogroup" aria-labelledby="jira-account" className="flex flex-col gap-2">
-                {jiraAccounts.map((a) => (
-                  <RadioBox
-                    key={a.site}
-                    name="jira-account"
-                    checked={jiraSite === a.site}
-                    title={<span className="font-mono">{a.site}</span>}
-                    help={`${a.email} · token encrypted on this Mac`}
-                    disabled={signingIn}
-                    onChange={() => pickJiraAccount(a.site)}
-                  />
-                ))}
-              </div>
-            )}
-            {adding ? (
-              <div
-                role="group"
-                aria-label="Add a Jira account"
-                className="flex flex-col gap-3 rounded-card bg-card p-3"
-              >
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="jira-site">Jira site</Label>
-                    <Input
-                      id="jira-site"
-                      autoFocus
-                      autoComplete="off"
-                      spellCheck={false}
-                      className="font-mono"
-                      placeholder="yourteam.atlassian.net"
-                      value={adding.site}
-                      onChange={(e) => setAdding({ ...adding, site: e.target.value })}
-                      onKeyDown={onEnter(() => void addJiraAccount())}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="jira-email">Atlassian email</Label>
-                    <Input
-                      id="jira-email"
-                      autoComplete="off"
-                      spellCheck={false}
-                      placeholder="you@company.com"
-                      value={adding.email}
-                      onChange={(e) => setAdding({ ...adding, email: e.target.value })}
-                      onKeyDown={onEnter(() => void addJiraAccount())}
-                    />
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="jira-token">API token</Label>
-                  <Input
-                    id="jira-token"
-                    type="password"
-                    autoComplete="off"
-                    spellCheck={false}
-                    className="font-mono"
-                    placeholder="Paste a token from id.atlassian.com"
-                    aria-describedby="jira-token-help"
-                    value={adding.token}
-                    onChange={(e) => setAdding({ ...adding, token: e.target.value })}
-                    onKeyDown={onEnter(() => void addJiraAccount())}
-                  />
-                  <p id="jira-token-help" className="text-xs text-fg-2">
-                    Sandtable keeps it encrypted with a key from your macOS Keychain and reuses it
-                    for every project on this site.
-                  </p>
-                </div>
-                {signInError && <Problem title={signInError} />}
-                <div className="flex gap-2">
-                  <Button
-                    disabled={
-                      signingIn ||
-                      !adding.site.trim() ||
-                      !adding.email.trim() ||
-                      !adding.token.trim()
-                    }
-                    onClick={() => void addJiraAccount()}
-                  >
-                    {signingIn ? 'Signing in…' : 'Add account'}
-                  </Button>
-                  {!!jiraAccounts?.length && (
-                    <Button
-                      variant="ghost"
-                      onClick={() => {
-                        setAdding(null)
-                        setSignInError(null)
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  )}
-                </div>
-              </div>
-            ) : (
-              jiraAccounts && (
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  className="self-start"
-                  onClick={() => setAdding(NO_ACCOUNT)}
-                >
-                  Add a Jira account…
-                </Button>
-              )
-            )}
-          </div>
-          <LoadState
-            loading={jiraLoading}
-            text="Loading Jira projects…"
-            failed={
-              jiraError ? { title: "Couldn't load the Jira projects.", detail: jiraError } : null
-            }
-            onRetry={() => void loadJiraProjects(jiraSite, jiraKey)}
-          />
-          {jiraList?.length === 0 && <p className="text-xs text-fg-2">No projects on this site.</p>}
-          {shownJira && jiraList?.length !== 0 && (
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="jira-filter">Filter projects</Label>
-              <Input
-                ref={jiraFilterRef}
-                id="jira-filter"
-                autoComplete="off"
-                spellCheck={false}
-                placeholder={`Filter ${plural(jiraList!.length, 'project')}`}
-                value={jiraFilter}
-                onChange={(e) => setJiraFilter(e.target.value)}
-              />
-              {shownJira.length === 0 ? (
-                <p className="text-xs text-fg-2">No project matches.</p>
-              ) : (
-                <div
-                  role="radiogroup"
-                  aria-label="Jira project"
-                  className="flex max-h-72 flex-col gap-2 overflow-y-auto"
-                >
-                  {shownJira.map((p) => (
-                    <RadioBox
-                      key={p.key}
-                      name="jira-project"
-                      checked={jiraKey === p.key}
-                      title={p.name}
-                      help={p.key}
-                      onChange={() => pickJiraProject(p)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          {jiraKey && (
-            <LoadState
-              loading={boardsLoading}
-              text="Loading Jira boards…"
-              failed={
-                boardsError
-                  ? { title: "Couldn't load the Jira boards.", detail: boardsError }
-                  : null
-              }
-              onRetry={() => void loadJiraBoards(jiraSite, jiraKey, jiraBoard)}
-            >
-              {jiraBoards?.length === 0 && (
-                <p className="text-xs text-fg-2">
-                  This project has no board, so Sandtable shows every issue.
-                </p>
-              )}
-              {!!jiraBoards?.length && (
-                <div className="flex flex-col gap-2">
-                  <FieldHeading id="jira-board">Jira board</FieldHeading>
-                  <p id="jira-board-help" className="text-xs text-fg-2">
-                    Sandtable shows what the board shows: its active sprints, or, on a board without
-                    sprints, everything outside its backlog.
-                  </p>
-                  <div
-                    role="radiogroup"
-                    aria-labelledby="jira-board"
-                    aria-describedby="jira-board-help"
-                    className="flex max-h-72 flex-col gap-2 overflow-y-auto"
-                  >
-                    {jiraBoards.map((b) => (
-                      <RadioBox
-                        key={b.id}
-                        name="jira-board"
-                        checked={jiraBoard?.id === b.id}
-                        title={b.name}
-                        onChange={() => setJiraBoard(b)}
-                      />
-                    ))}
-                    <RadioBox
-                      name="jira-board"
-                      checked={jiraBoard === null}
-                      title="No board (show every issue)"
-                      onChange={() => setJiraBoard(null)}
-                    />
-                  </div>
-                </div>
-              )}
-            </LoadState>
-          )}
-        </div>
-      )}
+      {source === 'jira' && <JiraStep source={jira} />}
     </>
   )
 
@@ -1287,12 +924,7 @@ export function AddProject({
               <span className="truncate font-mono text-xs text-fg-2">{url.trim()}</span>
             </>
           ) : source === 'jira' ? (
-            <>
-              <span>{`Jira project ${jiraName} (${jiraKey}) on ${jiraSite}`}</span>
-              <span className="text-xs text-fg-2">
-                {jiraBoard ? `On board ${jiraBoard.name}` : 'No board, so every issue shows'}
-              </span>
-            </>
+            <JiraReview source={jira} />
           ) : source === 'linear' ? (
             <LinearReview source={linear} />
           ) : (
@@ -1312,7 +944,7 @@ export function AddProject({
           ) : source === 'jira' ? (
             <span>
               Issues in the To Do category are To do; In Progress, In progress; Done, Done.
-              {jiraBoard &&
+              {jira.saved?.board &&
                 " Only the board's issues show: those in its active sprints, or, on a board without sprints, those outside its backlog."}
             </span>
           ) : source === 'linear' ? (
@@ -1553,8 +1185,7 @@ export function AddProject({
                   {new Intl.ListFormat('en').format(
                     sandboxDomains({
                       ...(source === 'linear' && linear.saved && { linear: linear.saved }),
-                      ...(source === 'jira' &&
-                        jiraSite && { jira: { site: jiraSite, project: jiraKey, name: jiraName } })
+                      ...(source === 'jira' && jira.saved && { jira: jira.saved })
                     })
                   )}
                   , which sessions always reach.
