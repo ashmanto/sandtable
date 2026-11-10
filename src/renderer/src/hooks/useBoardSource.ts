@@ -57,7 +57,7 @@ export function useBoardSource(
   const [badUrl, setBadUrl] = useState(false)
   const [statusMap, setStatusMap] = useState<Partial<StatusMap>>(board0?.statusMap ?? {})
   const loaded = boardLoad.data
-  const board = loaded?.url === url.trim() ? loaded : null
+  const board = loaded?.url === url.trim() && boardName(url) ? loaded : null
 
   function load(): void {
     if (!boardName(url)) return setBadUrl(true)

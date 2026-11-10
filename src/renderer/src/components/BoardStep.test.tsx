@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SandtableApi } from '../../../shared/api'
 import { useBoardSource } from '../hooks/useBoardSource'
-import { fakeSandtable } from '../test/fixtures'
+import { fakeSandtable, project } from '../test/fixtures'
 import { BoardStep } from './BoardStep'
 
 const URL = 'https://github.com/users/octo/projects/2'
@@ -23,8 +23,8 @@ beforeEach(() => {
   vi.mocked(api.projects.boardRepos).mockResolvedValue(['octo/shop', 'octo/shop-web'])
 })
 
-function Harness(): React.JSX.Element {
-  const source = useBoardSource(undefined, on)
+function Harness({ saved }: { saved?: typeof project }): React.JSX.Element {
+  const source = useBoardSource(saved, on)
   return (
     <>
       <BoardStep source={source} />
@@ -72,6 +72,12 @@ describe('BoardStep', () => {
     await userEvent.type(url(), '0')
     expect(on.cleared).toHaveBeenCalledTimes(1)
     expect(screen.getByLabelText('loaded')).toHaveTextContent('false')
+    expect(screen.getByLabelText('issue')).toHaveTextContent('Load the board')
+  })
+
+  it('asks to load the board when a saved board URL is malformed', () => {
+    const board = { ...project.board!, source: { ...project.board!.source, url: 'not a url' } }
+    render(<Harness saved={{ ...project, board }} />)
     expect(screen.getByLabelText('issue')).toHaveTextContent('Load the board')
   })
 })

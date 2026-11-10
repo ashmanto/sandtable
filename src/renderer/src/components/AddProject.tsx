@@ -804,7 +804,7 @@ export function AddProject({
           ) : source === 'jira' ? (
             <span>
               Issues in the To Do category are To do; In Progress, In progress; Done, Done.
-              {jira.saved?.board &&
+              {jira.jiraBoard &&
                 " Only the board's issues show: those in its active sprints, or, on a board without sprints, those outside its backlog."}
             </span>
           ) : source === 'linear' ? (
@@ -1044,8 +1044,11 @@ export function AddProject({
                   Added to{' '}
                   {new Intl.ListFormat('en').format(
                     sandboxDomains({
-                      ...(source === 'linear' && linear.saved && { linear: linear.saved }),
-                      ...(source === 'jira' && jira.saved && { jira: jira.saved })
+                      ...(source === 'linear' && { linear: { team: linear.team, projects: [] } }),
+                      ...(source === 'jira' &&
+                        jira.jiraSite && {
+                          jira: { site: jira.jiraSite, project: jira.jiraKey, name: jira.jiraName }
+                        })
                     })
                   )}
                   , which sessions always reach.
