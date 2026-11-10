@@ -65,9 +65,12 @@ async function recoverOriginHead(dir: string): Promise<string | undefined> {
   return gitNetwork(dir, what, 'remote', 'set-head', 'origin', '--auto')
 }
 
-/** Returns where a branch's worktree lives: `<repoPath>-wt.noindex/<branch>`; Spotlight skips `.noindex`. */
+/** The suffix of the folder that holds a repo's worktrees; Spotlight skips `.noindex`. */
+export const WT_SUFFIX = '-wt.noindex'
+
+/** Returns where a branch's worktree lives: `<repoPath>-wt.noindex/<branch>`. */
 export function worktreePath(repoPath: string, branch: string): string {
-  return `${repoPath}-wt.noindex/${branch}`
+  return `${repoPath}${WT_SUFFIX}/${branch}`
 }
 
 async function existingWorktree(repoPath: string, branch: string): Promise<string | undefined> {

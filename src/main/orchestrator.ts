@@ -65,7 +65,7 @@ import { appName, isApp } from '../shared/editors'
 import { isSandboxDomain, sandboxDomains } from '../shared/sandbox'
 import { createCliServer, type CliHandler } from './sessions/cli'
 import { branchName } from './git/branchName'
-import { ownGitDir, worktreePath } from './git/worktree'
+import { ownGitDir, worktreePath, WT_SUFFIX } from './git/worktree'
 import type { AreasClient } from './github/areas'
 import { boardError, type BoardClient } from './github/board'
 import type { RepoIssuesClient } from './github/repoIssues'
@@ -652,8 +652,14 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     if (!sessions.includes(s)) throw new Error('Unknown session')
     if (s.removedAt) throw new Error('The worktree was removed')
   }
-  const repoPathsOf = (s: SessionRecord): string[] =>
-    projects.find((p) => p.id === s.projectId)?.repos.map((r) => r.path) ?? []
+  const repoPathsOf = (s: SessionRecord): string[] => [
+    ...new Set([
+      ...(projects.find((p) => p.id === s.projectId)?.repos.map((r) => r.path) ?? []),
+      ...s.worktrees
+        .map(dirname)
+        .flatMap((d) => (d.endsWith(WT_SUFFIX) ? [d.slice(0, -WT_SUFFIX.length)] : []))
+    ])
+  ]
   const changesOf = async (sessionId: string): Promise<RepoChanges[]> => {
     const s = sessionById(sessionId)
     if (s.removedAt) throw new Error('The worktree was removed')

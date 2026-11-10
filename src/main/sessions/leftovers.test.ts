@@ -1,4 +1,8 @@
+import { execFileSync } from 'node:child_process'
+import { existsSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { checkRemovable, removeWorktree, worktreePath } from '../git/worktree'
 import type { SessionRecord } from '../../shared/types'
 import { project, session, settle, setup, tempDir, ticket } from '../test/orchestrator'
 
@@ -307,5 +311,93 @@ describe('leftover sessions', () => {
     launched()
     await created
     expect(await t.orch.leftovers()).toEqual([])
+  })
+})
+
+describe('leftover sessions with real git', () => {
+  const git = (cwd: string, ...args: string[]): string =>
+    execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe' })
+  const branch = '147-dark-mode-toggle'
+  let repo: string
+  let wt: string
+
+  beforeEach(() => {
+    const root = tempDir('st-git-')
+    repo = path.join(root, 'shop')
+    git(root, 'init', '-b', 'main', repo)
+    git(repo, 'config', 'user.name', 'Test')
+    git(repo, 'config', 'user.email', 'test@example.com')
+    git(repo, 'config', 'commit.gpgsign', 'false')
+    git(repo, 'config', 'core.hooksPath', '/dev/null')
+    writeFileSync(path.join(repo, 'a.txt'), 'a\n')
+    git(repo, 'add', '.')
+    git(repo, 'commit', '-m', 'init')
+    git(root, 'clone', '--bare', repo, path.join(root, 'origin.git'))
+    git(repo, 'remote', 'add', 'origin', path.join(root, 'origin.git'))
+    wt = worktreePath(repo, branch)
+    git(repo, 'worktree', 'add', '-b', branch, wt, 'main')
+    git(wt, 'push', '-u', 'origin', branch)
+  })
+
+  const orchestrator = async (
+    repos: { github: string; path: string }[],
+    state: SessionRecord['state'] = 'finished'
+  ): Promise<ReturnType<typeof setup>> => {
+    const t = setup({
+      projects: [{ ...project, repos }],
+      sessions: [session({ state, worktrees: [wt] })]
+    })
+    t.deps.git.checkRemovable.mockImplementation(checkRemovable)
+    t.deps.git.removeWorktree.mockImplementation(removeWorktree)
+    if (state !== 'finished') t.live.add('st-p1-octo-shop-147')
+    await t.orch.reconnect()
+    return t
+  }
+  const deleted = async (state?: SessionRecord['state']): Promise<ReturnType<typeof setup>> => {
+    const t = await orchestrator([{ ...project.repos[0], path: repo }], state)
+    await t.orch.removeProject('p1')
+    return t
+  }
+
+  it('removes a clean, pushed worktree of a deleted project', async () => {
+    const t = await deleted()
+    expect(await t.orch.removeWorktree('s1')).toEqual({ removed: true })
+    expect(existsSync(wt)).toBe(false)
+    expect(await t.orch.leftovers()).toEqual([])
+  })
+
+  it("ends a deleted project's live session and removes its worktree", async () => {
+    const t = await deleted('running')
+    expect(await t.orch.endAndRemove('s1')).toEqual({ removed: true })
+    expect(existsSync(wt)).toBe(false)
+    expect(await t.orch.leftovers()).toEqual([])
+  })
+
+  it('removes the worktree of a repo that left a project that still exists', async () => {
+    const t = await orchestrator([project.repos[1]])
+    expect(await t.orch.removeWorktree('s1')).toEqual({ removed: true })
+    expect(existsSync(wt)).toBe(false)
+  })
+
+  it("refuses a deleted project's worktree with uncommitted changes", async () => {
+    const t = await deleted()
+    writeFileSync(path.join(wt, 'b.txt'), 'b\n')
+    expect(await t.orch.removeWorktree('s1')).toEqual({
+      removed: false,
+      reason: 'Uncommitted changes'
+    })
+    expect(existsSync(wt)).toBe(true)
+  })
+
+  it("refuses a deleted project's worktree with unpushed commits", async () => {
+    const t = await deleted()
+    writeFileSync(path.join(wt, 'b.txt'), 'b\n')
+    git(wt, 'add', '.')
+    git(wt, 'commit', '-m', 'local')
+    expect(await t.orch.removeWorktree('s1')).toEqual({
+      removed: false,
+      reason: 'Commits not pushed'
+    })
+    expect(existsSync(wt)).toBe(true)
   })
 })
