@@ -127,7 +127,7 @@ describe('RoutineEditor', () => {
         'radio'
       )
       expect(choices.map((c) => c.textContent)).toEqual([
-        'Project (Opus)',
+        'Project',
         'Account default',
         'Fable',
         'Opus',
@@ -135,6 +135,7 @@ describe('RoutineEditor', () => {
         'Haiku'
       ])
       expect(model('Project (Opus)')).toBeChecked()
+      expect(screen.getByText("Project follows the project's model, Opus.")).toBeInTheDocument()
       await fill()
       await userEvent.click(screen.getByRole('button', { name: 'Save' }))
       expect(vi.mocked(api.routines.save).mock.calls[0][0]).not.toHaveProperty('model')

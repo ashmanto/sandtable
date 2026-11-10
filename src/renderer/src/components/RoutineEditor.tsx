@@ -350,14 +350,18 @@ export function RoutineEditor({
               <FieldHeading id="routine-model">Model</FieldHeading>
               <Segmented
                 options={[
-                  ['project', `Project (${modelLabel(project.model)})`],
+                  ['project', 'Project', `Project (${modelLabel(project.model)})`],
                   ...MODEL_CHOICES.map((m): [Model | 'default', string] => [m, modelLabel(m)])
                 ]}
                 value={model}
                 onChange={setModel}
                 aria-labelledby="routine-model"
+                aria-describedby="routine-model-help"
                 className="auto-cols-auto"
               />
+              <p id="routine-model-help" className="text-xs text-fg-2">
+                Project follows the project&apos;s model, {modelLabel(project.model)}.
+              </p>
             </div>
             <MessageField
               id="routine-message"
