@@ -47,13 +47,15 @@ refusal, a notification title, or a format example.
 - A project's tile shows or hides its sessions. Any project can be open, the selected one opens,
   and Sandtable remembers which are open.
 - A collapsed project also counts its sessions in **Running**, **Reviewing**, **Idle**, **Done**,
-  and **Done, session open**. Hovering or focusing a count names the sessions it counts.
+  **Done, session open**, and **Limit reached**. Hovering or focusing a count names the sessions it
+  counts.
 - "3 couldn't start" under a project lists its failed ticket starts and its routine runs skipped
   in the last 7 days since the routine's last session, with each reason and a failed setup's last
   lines. An entry opens its ticket or **Run history**, and leaves when the ticket starts, leaves
   the board, or its folder passes the check, or when the routine runs again.
 - An open project lists its sessions without a ticket and its ticket sessions in **Running**,
-  **Needs you**, **Reviewing**, or **Idle**, oldest first, then those in **Done, session open**.
+  **Needs you**, **Reviewing**, **Idle**, **Limit reached**, or **API error**, oldest first, then
+  those in **Done, session open**.
 - Each row shows its state as a word. A ticket session's row shows the ticket number and title,
   and hovering or focusing it shows the full title and state. A **Needs you** row adds "asking"
   while Claude asks you something, or "capped" at its token cap.
@@ -489,16 +491,20 @@ refusal, a notification title, or a format example.
 - The command reaches only tickets in the session's own project, and refuses its own ticket with
   "A session can't use sandtable on its own ticket". A `#12` that matches issues in more than one
   repo is refused with "matches" and both keys; use the full `owner/name#12` key.
-- `status` prints the ticket's state word, the same one the board's card shows, such as
-  `No session` or `Needs you (asking)`, or `Starting` while a start runs its checks. `info` prints
-  the branch and worktree paths. `summary` prints the saved summary draft of a finished session, or
-  else its last assistant message.
+- `status` prints the state word of the ticket's newest session, such as `Running`,
+  `Limit reached`, or `Done, session open`, or `Needs you (asking)` while Claude asks you
+  something. It prints `Done` for a ticket in Done with no live session, `No session` for another
+  ticket without one, `Starting` while a start runs its checks, and never `Can't start`.
+- `info` prints the branch and worktree paths. `summary` prints the saved summary draft of a
+  finished session, or else its last assistant message.
 - `start` on a new session runs the **Start** checks and refuses with their reason: blockers, a
   failed readiness check, or an overlap with other work, apart from the calling session and the
   live sessions it started. A ticket that needs triage is refused with "needs an area label first",
   and a ticket that another `start` is starting with "is already starting".
 - If the ticket's newest session is finished, `start` resumes it without the checks, as
   **Resume** does. `start` never applies triage and never overrides a finding.
+- `start` gives up after 900 seconds and exits with 1 and curl's timeout error, but the start
+  keeps running in Sandtable and can still succeed; `status` or `wait` shows whether it did.
 - A session can have at most 5 live sessions that it started, not counting those whose ticket is
   in Done, and a resume counts against that cap. A sixth `start` is refused until one finishes.
 - `wait` returns when the ticket needs you with nothing pending, goes idle, finishes, hits a limit
