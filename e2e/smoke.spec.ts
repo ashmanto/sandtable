@@ -924,19 +924,24 @@ test.describe('packaged app', () => {
     expect(stdout).not.toContain('com.apple.security.get-task-allow')
   })
 
-  test('quits on a remote debugging switch when the inspector is closed', () => {
-    for (const flag of ['--remote-debugging-port=0', '--remote-debugging-pipe']) {
-      const { status } = spawnSync(
-        packaged,
-        [flag, `--user-data-dir=${tempDir('sandtable-e2e-')}`],
-        {
-          timeout: 15_000,
-          killSignal: 'SIGKILL',
-          env: { ...process.env, SANDTABLE_E2E: '1', SANDTABLE_TOOLS_PATH: passingTools() }
-        }
-      )
-      expect(status, flag).toBe(1)
-    }
+  test('quits on any switch but --user-data-dir when the inspector is closed', () => {
+    const run = (flags: string[]): ReturnType<typeof spawnSync> =>
+      spawnSync(packaged, [...flags, `--user-data-dir=${tempDir('sandtable-e2e-')}`], {
+        timeout: 10_000,
+        killSignal: 'SIGKILL',
+        env: { ...process.env, SANDTABLE_E2E: '1', SANDTABLE_TOOLS_PATH: passingTools() }
+      })
+    const flags = [
+      '--remote-debugging-port=0',
+      '--remote-debugging-pipe',
+      '--gpu-launcher=/usr/bin/true',
+      '--browser-subprocess-path=/usr/bin/true',
+      '--renderer-cmd-prefix=/usr/bin/true'
+    ]
+    expect(Object.fromEntries(flags.map((f) => [f, run([f]).status]))).toEqual(
+      Object.fromEntries(flags.map((f) => [f, 1]))
+    )
+    expect(run([]).signal).toBe('SIGKILL')
   })
 
   test('turns off running as Node and NODE_OPTIONS, and loads only an intact asar', () => {
