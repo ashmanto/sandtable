@@ -28,6 +28,7 @@ import type {
   JiraProject,
   LinearTeam,
   LinearWorkspace,
+  Effort,
   Model,
   ModelUsage,
   UsageByWeek,
@@ -60,7 +61,7 @@ import type {
   Triage
 } from '../shared/types'
 import type { PromptAnswer, SessionPrompt } from '../shared/prompt'
-import { MODELS, reassign, withGroup } from '../shared/types'
+import { EFFORTS, MODELS, reassign, withGroup } from '../shared/types'
 import { appName, isApp } from '../shared/editors'
 import { isSandboxDomain, sandboxDomains } from '../shared/sandbox'
 import { createCliServer, type CliHandler } from './sessions/cli'
@@ -403,7 +404,8 @@ export type Orchestrator = {
     firstMessage?: string,
     model?: Model | null,
     setupId?: string,
-    setup?: false
+    setup?: false,
+    effort?: Effort | null
   ): Promise<string>
   setupProgress(target: string): SetupProgress | null
   cancelSetup(target: string): Promise<void>
@@ -1413,6 +1415,14 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     assertModel(model)
     return model
   }
+  const assertEffort = (e: unknown): void => {
+    if (e !== undefined && !EFFORTS.includes(e as Effort)) throw new Error('Not an effort')
+  }
+  const effortOf = (p: Project, choice: Effort | null | undefined): Effort | undefined => {
+    const effort = choice === undefined ? p.effort : (choice ?? undefined)
+    assertEffort(effort)
+    return effort
+  }
   const added = (): Account[] => accounts.filter((a) => a.dir !== deps.claudeDir)
   const allAccounts = (): Account[] => [{ name: 'Default', dir: deps.claudeDir }, ...added()]
   const launch = async (
@@ -1523,13 +1533,17 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     tmux: string,
     cwd: string,
     rules: Parameters<typeof sessionRules>[0],
-    opts: Omit<Parameters<typeof launch>[4], 'remoteControl' | 'model' | 'sandbox'>,
-    choice: Model | null | undefined,
+    opts: Omit<Parameters<typeof launch>[4], 'remoteControl' | 'model' | 'effort' | 'sandbox'>,
+    choice: { model?: Model | null; effort?: Effort | null },
     sandboxed: boolean
   ): Promise<
-    Pick<SessionRecord, 'eventsFile' | 'remoteControl' | 'claudeDir' | 'model' | 'sandbox'>
+    Pick<
+      SessionRecord,
+      'eventsFile' | 'remoteControl' | 'claudeDir' | 'model' | 'effort' | 'sandbox'
+    >
   > => {
-    const model = modelOf(project, choice)
+    const model = modelOf(project, choice.model)
+    const effort = effortOf(project, choice.effort)
     const remoteControl = remoteControlOf(project)
     const sandbox = sandboxed ? sandboxOf(project) : undefined
     const eventsFile = await launch(
@@ -1537,7 +1551,14 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       tmux,
       cwd,
       rules,
-      { ...opts, remoteControl, model, sandbox, repoPaths: project.repos.map((r) => r.path) },
+      {
+        ...opts,
+        remoteControl,
+        model,
+        effort,
+        sandbox,
+        repoPaths: project.repos.map((r) => r.path)
+      },
       project.claudeDir
     )
     launchedAt.set(id, now().getTime())
@@ -1546,6 +1567,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       remoteControl,
       claudeDir: project.claudeDir,
       ...(model && { model }),
+      ...(effort && { effort }),
       ...(sandbox && { sandbox: { allowedDomains: sandbox } })
     }
   }
@@ -1625,6 +1647,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       launchedAt.set(s.id, now().getTime())
       delete s.startWarning
       assertModel(s.model)
+      assertEffort(s.effort)
       const project = projectById(s.projectId)
       const conversationId = (await conversationFiles(s)).pop()?.id ?? s.id
       const sandbox = s.routineId ? undefined : sandboxOf(project)
@@ -1656,6 +1679,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           resume: true,
           remoteControl: s.remoteControl,
           model: s.model,
+          effort: s.effort,
           allow: s.trigger ? undefined : routines.find((r) => r.id === s.routineId)?.allow,
           sandbox,
           repoPaths: repoPathsOf(s)
@@ -1946,11 +1970,13 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       scheduled?: boolean
       trigger?: RunTrigger
       model?: Model | null
+      effort?: Effort | null
       setupId?: string
       setup?: false
     }
   ): Promise<string> => {
     modelOf(picked, opts.model)
+    effortOf(picked, opts.effort)
     const repo = repoOf(picked, github)
     await checkFolders([repo])
     const id = randomUUID()
@@ -1998,7 +2024,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           allow: opts.allow,
           ...(opts.prompt !== undefined && { prompt: opts.prompt })
         },
-        opts.model,
+        { model: opts.model, effort: opts.effort },
         !opts.routineId
       ).finally(() => creating.delete(tmux))
       sessions.push({
@@ -2253,6 +2279,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       if (project.tokenCap !== undefined && !TOKEN_CAPS.includes(project.tokenCap))
         throw new Error('Not a token cap')
       assertModel(project.model)
+      assertEffort(project.effort)
       if (project.editor !== undefined && typeof project.editor !== 'string')
         throw new Error('Not an editor')
       if (!isApp(project.editor)) delete project.editor
@@ -2712,7 +2739,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
               prompt: openingPrompt(ticket, serviceOf(project), note),
               ...(plan && { permissionMode: 'plan' as const })
             },
-            choice,
+            { model: choice },
             true
           )
           sessions.push({
@@ -2783,7 +2810,8 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       firstMessage?: string,
       model?: Model | null,
       setupId?: string,
-      setup?: false
+      setup?: false,
+      effort?: Effort | null
     ): Promise<string> {
       if (firstMessage && tooLong(firstMessage)) throw new Error('Shorten the first message')
       if (setupId !== undefined && (typeof setupId !== 'string' || !UUID.test(setupId)))
@@ -2805,6 +2833,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
               )
             : firstMessage?.trim() || undefined,
           model,
+          effort,
           setupId,
           setup
         })

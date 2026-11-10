@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi, type M
 import type {
   BoardSource,
   LastView,
+  Effort,
   Model,
   Project,
   ProjectGroup,
@@ -4819,6 +4820,89 @@ describe('createTicket', () => {
     await expect(t.orch.createTicket('p1', 'octo/shop', 'T', '')).rejects.toThrow(
       "Created octo/shop#9, but couldn't refresh the board: rate limited"
     )
+  })
+})
+
+describe('Effort', () => {
+  const started = (t: ReturnType<typeof setup>): (string | undefined)[] =>
+    t.deps.tmux.startTmux.mock.calls.map(([, , cmd]) =>
+      cmd.includes('--effort') ? cmd[cmd.indexOf('--effort') + 1] : undefined
+    )
+
+  it.each([
+    [undefined, undefined],
+    ['high', 'high']
+  ] as const)('starts a ticket with project effort %s', async (projectEffort, effort) => {
+    const t = setup({ projects: [{ ...project, effort: projectEffort }] })
+    await t.orch.reconnect()
+    await t.orch.sync('p1')
+    await t.orch.start('p1', 'octo/shop#147')
+    expect(started(t)).toEqual([effort])
+    expect(t.saved().sessions[0].effort).toBe(effort)
+  })
+
+  it.each([
+    [undefined, 'high'],
+    ['low', 'low'],
+    [null, undefined]
+  ] as const)('creates a session with choice %s on a High project', async (choice, effort) => {
+    const t = setup({ projects: [{ ...project, effort: 'high' }] })
+    await t.orch.reconnect()
+    const id = await t.orch.create(
+      'p1',
+      'octo/shop',
+      false,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      choice
+    )
+    expect(started(t)).toEqual([effort])
+    expect(t.orch.session(id)?.effort).toBe(effort)
+  })
+
+  it.each([undefined, 'low'] as const)(
+    'resumes with the session’s effort %s, not the project’s',
+    async (effort) => {
+      const t = setup({
+        projects: [{ ...project, effort: 'max' }],
+        sessions: [session({ state: 'finished', worktrees: [tempWorktree()], effort })]
+      })
+      await t.orch.reconnect()
+      await t.orch.resume('s1')
+      expect(started(t)).toEqual([effort])
+    }
+  )
+
+  it('refuses an effort that isn’t offered', async () => {
+    const bad = '--dangerously-skip-permissions' as Effort
+    const t = setup({
+      sessions: [session({ state: 'finished', worktrees: [tempWorktree()], effort: bad })]
+    })
+    await t.orch.reconnect()
+    await t.orch.sync('p1')
+    for (const e of [bad, null, { x: 1 }] as unknown as Effort[])
+      await expect(t.orch.saveProject({ ...project, effort: e })).rejects.toThrow('Not an effort')
+    await expect(
+      t.orch.create(
+        'p1',
+        'octo/shop',
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        bad
+      )
+    ).rejects.toThrow('Not an effort')
+    await expect(t.orch.resume('s1')).rejects.toThrow('Not an effort')
+    expect(t.deps.tmux.startTmux).not.toHaveBeenCalled()
+    expect(t.deps.git.ensureWorktree).not.toHaveBeenCalled()
+    await t.orch.saveProject({ ...project, effort: 'low' })
+    expect(t.saved().projects[0].effort).toBe('low')
   })
 })
 
