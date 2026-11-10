@@ -13,6 +13,7 @@ import {
 } from 'electron'
 import { sidebarWidth, type PushArgs, type PushChannel, type WindowFrame } from '../shared/api'
 import type { LastView, Theme } from '../shared/types'
+import { url } from 'inspector'
 import { homedir } from 'os'
 import { join } from 'path'
 import { spawn } from 'node-pty'
@@ -189,7 +190,12 @@ const toFront = (w: BrowserWindow): void => {
   w.show()
   w.focus()
 }
-const primary = app.requestSingleInstanceLock()
+// Shipped builds turn off the inspect fuse, so the inspector is never open there.
+const refused =
+  !url() &&
+  ['remote-debugging-port', 'remote-debugging-pipe'].some((s) => app.commandLine.hasSwitch(s))
+if (refused) app.exit(1)
+const primary = !refused && app.requestSingleInstanceLock()
 if (!primary) app.quit()
 else {
   if (app.commandLine.hasSwitch('user-data-dir'))
