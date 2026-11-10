@@ -11,7 +11,7 @@ afterPack: build/afterPack.mjs
 mac:
   target: dir
   identity: '-'
-  hardenedRuntime: false
+  hardenedRuntime: true
   notarize: false
 npmRebuild: false
 electronFuses:

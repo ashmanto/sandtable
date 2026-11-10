@@ -912,6 +912,18 @@ test.describe('packaged app', () => {
     expect(stderr).toContain('Identifier=com.ashmanto.sandtable')
   })
 
+  test('runs under the hardened runtime without DYLD variables or debugger attach', () => {
+    const { status, stdout, stderr } = spawnSync(
+      'codesign',
+      ['-dv', '--entitlements', '-', '--xml', join(packaged, '../../..')],
+      { encoding: 'utf8' }
+    )
+    expect(status).toBe(0)
+    expect(stderr).toMatch(/flags=0x\w+\(adhoc,runtime\)/)
+    expect(stdout).not.toContain('com.apple.security.cs.allow-dyld-environment-variables')
+    expect(stdout).not.toContain('com.apple.security.get-task-allow')
+  })
+
   test('turns off running as Node and NODE_OPTIONS, and loads only an intact asar', () => {
     const { status, stdout } = spawnSync(
       'npx',
