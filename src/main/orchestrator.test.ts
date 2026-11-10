@@ -2121,6 +2121,34 @@ describe('reconnect and polling', () => {
     )
   })
 
+  it('watches only sessions that can still write', async () => {
+    const t = setup({
+      sessions: [
+        session(),
+        session({ id: 's2', state: 'finished' }),
+        session({ id: 's3', state: 'finished', removedAt: '2026-10-25T00:00:00.000Z' })
+      ]
+    })
+    t.live.add('st-p1-octo-shop-147')
+    await t.orch.reconnect()
+    const ids = t.deps.events.watchEvents.mock.calls[0][2]
+    expect(ids.seed).toEqual(['s1', 's2'])
+    expect(ids.live()).toEqual(['s1'])
+  })
+
+  it('rescans a session started after reconnect until it ends', async () => {
+    const t = setup()
+    await t.orch.reconnect()
+    await t.orch.sync('p1')
+    const ids = t.deps.events.watchEvents.mock.calls[0][2]
+    expect(ids.live()).toEqual([])
+    await t.orch.start('p1', 'octo/shop#147')
+    const [s] = (await t.orch.getBoard('p1')).sessions
+    expect(ids.live()).toEqual([s.id])
+    await t.orch.end(s.id)
+    expect(ids.live()).toEqual([])
+  })
+
   it('marks a session finished when a poll finds its tmux gone', async () => {
     const t = setup({ sessions: [session()] })
     t.live.add('st-p1-octo-shop-147')

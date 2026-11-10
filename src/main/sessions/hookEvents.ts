@@ -1,4 +1,4 @@
-import { mkdirSync, readdirSync, readFileSync, watch } from 'node:fs'
+import { mkdirSync, readFileSync, watch } from 'node:fs'
 import { open, readFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { parseJson } from '../../shared/json'
@@ -234,7 +234,8 @@ interface Tail extends Memory {
 /** Watches `<dir>/<sessionId>.jsonl` files and calls onChange for each new state event or change in asking; returns a stop function. */
 export function watchEvents(
   dir: string,
-  onChange: (sessionId: string, state: SessionState | null, asking: boolean) => void
+  onChange: (sessionId: string, state: SessionState | null, asking: boolean) => void,
+  ids: { seed: string[]; live: () => string[] }
 ): () => void {
   const tails = new Map<string, Tail>()
   let stopped = false
@@ -295,10 +296,14 @@ export function watchEvents(
   }
 
   mkdirSync(dir, { recursive: true })
-  for (const name of readdirSync(dir)) {
-    if (!name.endsWith('.jsonl')) continue
-    const tail = tailFor(basename(name, '.jsonl'))
-    const text = readFileSync(join(dir, name))
+  for (const id of ids.seed) {
+    let text
+    try {
+      text = readFileSync(join(dir, `${id}.jsonl`))
+    } catch {
+      continue
+    }
+    const tail = tailFor(id)
     tail.offset = text.lastIndexOf(0x0a) + 1
     for (const line of text.subarray(0, tail.offset).toString('utf8').split('\n'))
       stateFromLine(line, tail)
@@ -311,8 +316,7 @@ export function watchEvents(
 
   const timer = setInterval(() => {
     try {
-      for (const name of readdirSync(dir))
-        if (name.endsWith('.jsonl')) schedule(basename(name, '.jsonl'))
+      for (const id of ids.live()) schedule(id)
     } catch {
       return
     }
