@@ -54,10 +54,10 @@ const step = async (name: string, args: string[]): Promise<void> => {
   if (res.code !== 0) throw failure(name, args[0], res)
 }
 
-/** Runs a step that types into the pane after leaving copy mode, where tmux would take the keys itself. */
+/** Runs a step that types into the pane in the same tmux call that leaves copy mode, where tmux would take the keys itself. */
 const send = async (name: string, args: string[]): Promise<void> => {
-  await tmux(['copy-mode', '-q', '-t', `=${name}:`])
-  await step(name, args)
+  const res = await tmux(['copy-mode', '-q', '-t', `=${name}:`, ';', ...args])
+  if (res.code !== 0) throw failure(name, args[0], res)
 }
 
 /** Pastes `text` into the session as one bracketed paste; throws when a step fails. */

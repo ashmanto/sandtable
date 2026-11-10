@@ -284,6 +284,7 @@ describe('tmux sessions', () => {
     copyMode(name)
     await keysTmux(name, ['2', 'Down', 'Enter'])
     await vi.waitFor(() => expect(readFileSync(out, 'utf8')).toBe('2\x1b[B\r'), { timeout: 5000 })
+    expect(inMode(name)).toBe('0')
   })
 
   it('leaves copy mode before pressing Escape', async () => {
@@ -291,6 +292,15 @@ describe('tmux sessions', () => {
     copyMode(name)
     await escapeTmux(name)
     await vi.waitFor(() => expect(readFileSync(out, 'utf8')).toBe('\x1b'), { timeout: 5000 })
+    expect(inMode(name)).toBe('0')
+  })
+
+  it('throws, sending nothing, when tmux cannot leave copy mode', async () => {
+    const { name, out } = await rawCat()
+    vi.mocked(run).mockResolvedValueOnce({ code: 1, stdout: '', stderr: 'unknown flag -q' })
+    await expect(enterTmux(name)).rejects.toThrow(/send-keys failed for .*unknown flag -q/)
+    await new Promise((done) => setTimeout(done, 300))
+    expect(readFileSync(out, 'utf8')).toBe('')
   })
 
   it('reads the text on the screen, and throws when the session is gone', async () => {
@@ -323,15 +333,15 @@ describe('tmux sessions', () => {
 
   it('waits 100 ms after each key before sending the next', async () => {
     const ok = { code: 0, stdout: '', stderr: '' }
-    for (let i = 0; i < 4; i++) vi.mocked(run).mockResolvedValueOnce(ok)
+    vi.mocked(run).mockResolvedValueOnce(ok).mockResolvedValueOnce(ok)
     vi.useFakeTimers({ toFake: ['setTimeout'] })
     try {
       const calls = vi.mocked(run).mock.calls.length
       const sent = keysTmux(unique(), ['1', 'Enter'])
       await vi.advanceTimersByTimeAsync(99)
-      expect(vi.mocked(run).mock.calls.length - calls).toBe(2)
+      expect(vi.mocked(run).mock.calls.length - calls).toBe(1)
       await vi.advanceTimersByTimeAsync(1)
-      expect(vi.mocked(run).mock.calls.length - calls).toBe(4)
+      expect(vi.mocked(run).mock.calls.length - calls).toBe(2)
       await vi.advanceTimersByTimeAsync(100)
       await sent
     } finally {
