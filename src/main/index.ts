@@ -87,6 +87,11 @@ import {
   saveSettings
 } from './settings'
 import { createWindowState, MIN_WIDTH, placeWindow, type WindowStateStore } from './windowState'
+import { logToFile } from './log'
+
+if (app.commandLine.hasSwitch('user-data-dir'))
+  app.setAppLogsPath(join(app.getPath('userData'), 'logs'))
+logToFile(join(app.getPath('logs'), 'main.log'))
 
 let win: BrowserWindow | null = null
 let pendingOpen: LastView | 'settings' | null = null

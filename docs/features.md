@@ -112,6 +112,8 @@ refusal, a notification title, or a format example.
 - Only one copy of Sandtable runs at a time; opening it again brings the window forward.
 - If the window's page crashes, Sandtable reloads it, at most once every 10 seconds. Sessions keep
   running in tmux.
+- Errors and warnings from the main process go to `~/Library/Logs/sandtable/main.log`, which you
+  can attach to a bug report. Past 1 MB it moves to `main.old.log` and starts over.
 - Sandtable reopens where you left it: the same window size and place on the same display,
   maximized or full screen if it was, and the sidebar shown or hidden at the same width.
 - It also reopens the same project, ticket, and **Conversation**, **Details**, or **Changes** tab,
