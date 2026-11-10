@@ -47,7 +47,7 @@ import { chip } from './TicketCard'
 
 /** The values another view hands the editor for a new routine, with the source of a copy. */
 export type RoutineDraft = Pick<RoutineInput, 'repo' | 'worktree' | 'message'> &
-  Partial<Pick<RoutineInput, 'name' | 'allow' | 'schedule' | 'on' | 'dailyCap' | 'model'>> & {
+  Partial<Pick<RoutineInput, 'name' | 'allow' | 'schedule' | 'on' | 'dailyCap' | 'model' | 'effort'>> & {
     copiedFrom?: RoutineSource
   }
 

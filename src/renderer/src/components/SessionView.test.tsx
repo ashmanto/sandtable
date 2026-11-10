@@ -281,7 +281,8 @@ describe('SessionView', () => {
       repo: 'octo/shop-web',
       worktree: true,
       message: 'Find the leak',
-      model: 'sonnet'
+      model: 'sonnet',
+      effort: null
     })
   })
 
@@ -296,6 +297,24 @@ describe('SessionView', () => {
       expect.objectContaining({ model: null })
     )
   })
+
+  it.each([
+    [undefined, null],
+    ['low', 'low']
+  ] as const)(
+    'saves a session with effort %s as a routine with effort %s',
+    async (effort, saved) => {
+      const onRoutine = vi.fn()
+      renderView({ ...adhoc(worktree), effort }, vi.fn(), Infinity, onRoutine)
+      await userEvent.click(screen.getByRole('button', { name: 'More actions' }))
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Save as routine' }))
+      expect(onRoutine).toHaveBeenCalledWith(
+        project,
+        undefined,
+        expect.objectContaining({ effort: saved })
+      )
+    }
+  )
 
   it('offers no Save as routine for a ticket session', () => {
     renderView(adhoc({ ticketKey: 'octo/shop#1' }))

@@ -10,14 +10,22 @@ import {
 } from '@/components/ui/dialog'
 import { useWorktreeSetup } from '@/hooks/useWorktreeSetup'
 import { errorMessage } from '@/lib/utils'
-import { MODEL_CHOICES, modelLabel, type Model, type Project } from '../../../shared/types'
+import {
+  EFFORT_CHOICES,
+  MODEL_CHOICES,
+  effortLabel,
+  modelLabel,
+  type Effort,
+  type Model,
+  type Project
+} from '../../../shared/types'
 import { SETUP_CANCELLED, SETUP_FAILED } from '../../../shared/worktreeSetup'
 import { FieldHeading, MessageField, RepoPicker, WherePicker } from './RadioBox'
 import { Segmented } from './Segmented'
 import { SetupBlock } from './SetupBlock'
 import type { OpenRoutine } from './RoutineEditor'
 
-type Created = [string, string, boolean, undefined, string, Model | null, string]
+type Created = [string, string, boolean, undefined, string, Model | null, string, Effort | null]
 
 /** Picks a repo and where a session without a ticket runs, starts it, and hands back its ID. */
 export function NewSessionDialog({
@@ -35,6 +43,7 @@ export function NewSessionDialog({
   const [worktree, setWorktree] = useState(false)
   const [message, setMessage] = useState('')
   const [model, setModel] = useState<Model | 'default'>(project.model ?? 'default')
+  const [effort, setEffort] = useState<Effort | 'default'>(project.effort ?? 'default')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [failed, setFailed] = useState<Created | null>(null)
@@ -52,7 +61,8 @@ export function NewSessionDialog({
       undefined,
       message,
       model === 'default' ? null : model,
-      setupId
+      setupId,
+      effort === 'default' ? null : effort
     ],
     setup?: false
   ): Promise<void> => {
@@ -61,7 +71,10 @@ export function NewSessionDialog({
     setFailed(null)
     setSent(true)
     try {
-      onCreated(await window.sandtable.sessions.create(...args, setup))
+      const [id, repo, wt, draft, first, m, sid, e] = args
+      onCreated(
+        await window.sandtable.sessions.create(id, repo, wt, draft, first, m, sid, setup, e)
+      )
     } catch (err) {
       const reason = errorMessage(err)
       if (reason.startsWith(SETUP_FAILED)) setFailed(args)
@@ -110,6 +123,16 @@ export function NewSessionDialog({
             className="auto-cols-auto"
           />
         </div>
+        <div className="flex flex-col gap-1.5">
+          <FieldHeading id="session-effort">Effort</FieldHeading>
+          <Segmented
+            options={EFFORT_CHOICES.map((e): [Effort | 'default', string] => [e, effortLabel(e)])}
+            value={effort}
+            onChange={setEffort}
+            aria-labelledby="session-effort"
+            className="auto-cols-auto"
+          />
+        </div>
         <MessageField
           id="session-message"
           placeholder="Optional"
@@ -135,7 +158,8 @@ export function NewSessionDialog({
                 repo: github,
                 worktree,
                 message,
-                model: model === 'default' ? null : model
+                model: model === 'default' ? null : model,
+                effort: effort === 'default' ? null : effort
               })
               close()
             }}
