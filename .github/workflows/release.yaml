@@ -25,6 +25,7 @@ jobs:
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
       - run: brew install tmux && brew install --cask claude-code
       - run: npm ci
+      - run: npm run lint && npm test
       - run: npm run build:mac
       - run: npx playwright test
         env:

@@ -880,7 +880,7 @@ test('names a missing tool and its install command', async () => {
 })
 
 test.describe('packaged app', () => {
-  test.skip(!existsSync(packaged), 'run npm run build:mac first')
+  test.skip(!existsSync(packaged) && !process.env.CI, 'run npm run build:mac first')
 
   test('finds tmux, claude, and gh from a Dock-like PATH and sets a UTF-8 LANG', async () => {
     const app = await launch(

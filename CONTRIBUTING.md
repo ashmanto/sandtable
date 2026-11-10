@@ -35,7 +35,9 @@ when you click **Start**, so use a throwaway project.
    npm run build && npx playwright test
    ```
 
-5. Open a pull request that says why the change is needed and how you tested it.
+5. Open a pull request that says why the change is needed and how you tested it. It can merge
+   only after the `ci` workflow passes, and that workflow also builds the packaged app and runs its
+   tests.
 
 `CLAUDE.md` holds the architecture, the invariants that every change must keep, and the code
 style. Read it before your first change. `.claude/docs/workflow.md` covers commit messages.
@@ -50,9 +52,9 @@ local build. To release a version, follow these steps:
 2. Create a release on GitHub with a tag of `v` and that version, such as `v1.2.0`, on `master`,
    and publish it.
 
-   The workflow stops if the tag doesn't match `package.json`. It runs the end-to-end tests
-   against the packaged app, including the check that the app bundles only `out/` and
-   `package.json`, and a failure stops it before the upload.
+   The workflow stops if the tag doesn't match `package.json`. It runs lint and the unit tests,
+   then the end-to-end tests against the packaged app, including the check that the app bundles
+   only `out/` and `package.json`. A failure stops it before the upload.
 
 3. The workflow attaches `Sandtable-<version>-arm64.dmg` to the release and opens a pull request
    in `ashmanto/homebrew-tap` with the cask's `version` and `sha256`. Merge that pull request.
