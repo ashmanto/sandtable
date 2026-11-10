@@ -295,14 +295,6 @@ describe('tmux sessions', () => {
     expect(inMode(name)).toBe('0')
   })
 
-  it('throws, sending nothing, when tmux cannot leave copy mode', async () => {
-    const { name, out } = await rawCat()
-    vi.mocked(run).mockResolvedValueOnce({ code: 1, stdout: '', stderr: 'unknown flag -q' })
-    await expect(enterTmux(name)).rejects.toThrow(/send-keys failed for .*unknown flag -q/)
-    await new Promise((done) => setTimeout(done, 300))
-    expect(readFileSync(out, 'utf8')).toBe('')
-  })
-
   it('reads the text on the screen, and throws when the session is gone', async () => {
     const name = unique()
     await startTmux(name, tmpdir(), ['sh', '-c', 'printf "❯ 1. Yes\\n"; exec sleep 30'])

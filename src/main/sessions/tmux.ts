@@ -56,7 +56,16 @@ const step = async (name: string, args: string[]): Promise<void> => {
 
 /** Runs a step that types into the pane in the same tmux call that leaves copy mode, where tmux would take the keys itself. */
 const send = async (name: string, args: string[]): Promise<void> => {
-  const res = await tmux(['copy-mode', '-q', '-t', `=${name}:`, ';', ...args])
+  const target = `=${name}:`
+  const leave = [
+    'if-shell',
+    '-F',
+    '-t',
+    target,
+    '#{pane_in_mode}',
+    `send-keys -X -t ${target} cancel`
+  ]
+  const res = await tmux([...leave, ';', ...args])
   if (res.code !== 0) throw failure(name, args[0], res)
 }
 
