@@ -6,11 +6,11 @@ install:
 	npm install
 	npm run build:mac
 	.githooks/pre-push
-	npx electron-builder --mac dir -c.electronFuses.enableNodeCliInspectArguments=false
+	npx electron-builder --mac dir -c.electronFuses.enableNodeCliInspectArguments=false -c.directories.output=dist/install
 	osascript -e 'if application "Sandtable" is running then tell application "Sandtable" to quit'
 	while pgrep -xq Sandtable; do sleep 1; done
 	rm -rf $(APP)
-	cp -R dist/mac-arm64/Sandtable.app $(APP)
+	cp -R dist/install/mac-arm64/Sandtable.app $(APP)
 	open $(APP)
 
 dmg:
