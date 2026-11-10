@@ -43,6 +43,26 @@ const outFile = (): string => {
   temps.push(dir)
   return join(dir, 'out')
 }
+const copyMode = (name: string): void => {
+  execFileSync('tmux', [...tmuxBaseArgs(), 'copy-mode', '-t', `=${name}:`])
+}
+const inMode = (name: string): string =>
+  execFileSync('tmux', [...tmuxBaseArgs(), 'display', '-p', '-t', `=${name}:`, '#{pane_in_mode}'], {
+    encoding: 'utf8'
+  }).trim()
+const rawCat = async (bracketed = false): Promise<{ name: string; out: string }> => {
+  const out = outFile()
+  const name = unique()
+  const paste = bracketed ? 'printf "\\033[?2004h"; ' : ''
+  await startTmux(name, tmpdir(), [
+    'sh',
+    '-c',
+    `${paste}stty raw -echo; : > "$0.ready"; exec cat > "$0"`,
+    out
+  ])
+  await vi.waitFor(() => readFileSync(`${out}.ready`), { timeout: 5000 })
+  return { name, out }
+}
 
 beforeAll(() => setTmuxSocket(SOCKET))
 afterAll(() => {
@@ -228,15 +248,7 @@ describe('tmux sessions', () => {
   })
 
   it('pastes multi-line text as one bracketed paste, then presses Enter', async () => {
-    const out = outFile()
-    const name = unique()
-    await startTmux(name, tmpdir(), [
-      'sh',
-      '-c',
-      'printf "\\033[?2004h"; stty raw -echo; : > "$0.ready"; exec cat > "$0"',
-      out
-    ])
-    await vi.waitFor(() => readFileSync(`${out}.ready`), { timeout: 5000 })
+    const { name, out } = await rawCat(true)
     await pasteTmux(name, 'first line\nsecond line')
     await enterTmux(name)
     await vi.waitFor(
@@ -248,19 +260,39 @@ describe('tmux sessions', () => {
   })
 
   it('sends each key in turn, and text literally even when it starts with a dash', async () => {
-    const out = outFile()
-    const name = unique()
-    await startTmux(name, tmpdir(), [
-      'sh',
-      '-c',
-      'stty raw -echo; : > "$0.ready"; exec cat > "$0"',
-      out
-    ])
-    await vi.waitFor(() => readFileSync(`${out}.ready`), { timeout: 5000 })
+    const { name, out } = await rawCat()
     await keysTmux(name, ['2', 'Down', { text: '-n Enter;' }, 'Enter'])
     await vi.waitFor(() => expect(readFileSync(out, 'utf8')).toBe('2\x1b[B-n Enter;\r'), {
       timeout: 5000
     })
+  })
+
+  it('leaves copy mode before pasting and before pressing Enter', async () => {
+    const { name, out } = await rawCat(true)
+    copyMode(name)
+    await pasteTmux(name, 'hello')
+    copyMode(name)
+    await enterTmux(name)
+    await vi.waitFor(() => expect(readFileSync(out, 'utf8')).toBe('\x1b[200~hello\x1b[201~\r'), {
+      timeout: 5000
+    })
+    expect(inMode(name)).toBe('0')
+  })
+
+  it('leaves copy mode before each key', async () => {
+    const { name, out } = await rawCat()
+    copyMode(name)
+    await keysTmux(name, ['2', 'Down', 'Enter'])
+    await vi.waitFor(() => expect(readFileSync(out, 'utf8')).toBe('2\x1b[B\r'), { timeout: 5000 })
+    expect(inMode(name)).toBe('0')
+  })
+
+  it('leaves copy mode before pressing Escape', async () => {
+    const { name, out } = await rawCat()
+    copyMode(name)
+    await escapeTmux(name)
+    await vi.waitFor(() => expect(readFileSync(out, 'utf8')).toBe('\x1b'), { timeout: 5000 })
+    expect(inMode(name)).toBe('0')
   })
 
   it('reads the text on the screen, and throws when the session is gone', async () => {
@@ -310,15 +342,7 @@ describe('tmux sessions', () => {
   })
 
   it('presses Escape in the session', async () => {
-    const out = outFile()
-    const name = unique()
-    await startTmux(name, tmpdir(), [
-      'sh',
-      '-c',
-      'stty raw -echo; : > "$0.ready"; exec cat > "$0"',
-      out
-    ])
-    await vi.waitFor(() => readFileSync(`${out}.ready`), { timeout: 5000 })
+    const { name, out } = await rawCat()
     await escapeTmux(name)
     await vi.waitFor(() => expect(readFileSync(out, 'utf8')).toBe('\x1b'), { timeout: 5000 })
   })

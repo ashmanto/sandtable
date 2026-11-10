@@ -54,6 +54,21 @@ const step = async (name: string, args: string[]): Promise<void> => {
   if (res.code !== 0) throw failure(name, args[0], res)
 }
 
+/** Runs a step that types into the pane in the same tmux call that leaves copy mode, where tmux would take the keys itself. */
+const send = async (name: string, args: string[]): Promise<void> => {
+  const target = `=${name}:`
+  const leave = [
+    'if-shell',
+    '-F',
+    '-t',
+    target,
+    '#{pane_in_mode}',
+    `send-keys -X -t ${target} cancel`
+  ]
+  const res = await tmux([...leave, ';', ...args])
+  if (res.code !== 0) throw failure(name, args[0], res)
+}
+
 /** Pastes `text` into the session as one bracketed paste; throws when a step fails. */
 export async function pasteTmux(name: string, text: string): Promise<void> {
   const dir = await mkdtemp(join(tmpdir(), 'st-paste-'))
@@ -62,7 +77,7 @@ export async function pasteTmux(name: string, text: string): Promise<void> {
   try {
     await writeFile(file, text)
     await step(name, ['load-buffer', '-b', buffer, file])
-    await step(name, ['paste-buffer', '-p', '-d', '-b', buffer, '-t', `=${name}:`]).catch(
+    await send(name, ['paste-buffer', '-p', '-d', '-b', buffer, '-t', `=${name}:`]).catch(
       async (err) => {
         await tmux(['delete-buffer', '-b', buffer])
         throw err
@@ -75,7 +90,7 @@ export async function pasteTmux(name: string, text: string): Promise<void> {
 
 /** Presses Enter in the session; throws when tmux can't. */
 export const enterTmux = (name: string): Promise<void> =>
-  step(name, ['send-keys', '-t', `=${name}:`, 'Enter'])
+  send(name, ['send-keys', '-t', `=${name}:`, 'Enter'])
 
 /** Pastes `text` into the session through `tmux`, runs `pasted`, then presses Enter; throws when either step fails. */
 export async function typeIntoTmux(
@@ -96,13 +111,13 @@ export async function typeIntoTmux(
 
 /** Presses Escape in the session, which interrupts Claude's turn; throws when tmux can't. */
 export const escapeTmux = (name: string): Promise<void> =>
-  step(name, ['send-keys', '-t', `=${name}:`, 'Escape'])
+  send(name, ['send-keys', '-t', `=${name}:`, 'Escape'])
 
 /** Sends each key to the session in its own tmux call, 100 ms apart, typing a `{ text }` as it is; throws when one fails. */
 export async function keysTmux(name: string, keys: (string | { text: string })[]): Promise<void> {
   for (const key of keys) {
     const sent = typeof key === 'string' ? [key] : ['-l', '--', key.text.replace(/;$/, '\\;')]
-    await step(name, ['send-keys', '-t', `=${name}:`, ...sent])
+    await send(name, ['send-keys', '-t', `=${name}:`, ...sent])
     await new Promise((done) => setTimeout(done, 100))
   }
 }
