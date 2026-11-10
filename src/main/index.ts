@@ -87,6 +87,7 @@ import {
   saveSettings
 } from './settings'
 import { createWindowState, MIN_WIDTH, placeWindow, type WindowStateStore } from './windowState'
+import { logToFile } from './log'
 
 let win: BrowserWindow | null = null
 let pendingOpen: LastView | 'settings' | null = null
@@ -190,6 +191,11 @@ const toFront = (w: BrowserWindow): void => {
 }
 const primary = app.requestSingleInstanceLock()
 if (!primary) app.quit()
+else {
+  if (app.commandLine.hasSwitch('user-data-dir'))
+    app.setAppLogsPath(join(app.getPath('userData'), 'logs'))
+  logToFile(app.getPath('logs'))
+}
 
 async function start(): Promise<void> {
   if (!primary) return

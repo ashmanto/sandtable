@@ -41,6 +41,6 @@ body:
     id: what-happened
     attributes:
       label: What happened
-      description: What you saw, what you expected instead, and any error text.
+      description: What you saw, what you expected instead, and any error text. For an error, attach `~/Library/Logs/sandtable/main.log` after checking it for anything private, such as folder or repo names.
     validations:
       required: true
