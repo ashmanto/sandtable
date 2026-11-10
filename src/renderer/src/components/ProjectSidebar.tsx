@@ -492,7 +492,11 @@ export function ProjectSidebar({
           key={state}
           label={[
             countLabel[state](n),
-            ...mine.filter((s) => stateOf(s) === state).map((s) => s.name)
+            ...mine
+              .filter(
+                (s) => stateOf(s) === state || (state === 'needsYou' && stateOf(s) === 'apiError')
+              )
+              .map((s) => s.name)
           ].join('\n')}
           aria-label={undefined}
         >
