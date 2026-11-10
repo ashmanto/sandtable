@@ -131,6 +131,19 @@ describe('parseConversation', () => {
     ])
   })
 
+  it('marks an interrupt as stopped', () => {
+    const lines = [
+      user('[Request interrupted by user]'),
+      user([{ type: 'text', text: '[Request interrupted by user for tool use]' }]),
+      user('Fix it')
+    ]
+    expect(parseConversation(lines.map((l) => JSON.stringify(l)).join('\n'))).toEqual([
+      { kind: 'user', text: '[Request interrupted by user]', stopped: true },
+      { kind: 'user', text: '[Request interrupted by user for tool use]', stopped: true },
+      { kind: 'user', text: 'Fix it' }
+    ])
+  })
+
   it('keeps a message that mixes tags and text, quickly', () => {
     const list = '<li>x</li>\n'.repeat(1000) + 'done'
     const mixed = '<b>hi</b> what does this do? <i>x</i>'

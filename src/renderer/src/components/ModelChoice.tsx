@@ -7,7 +7,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { useStartModel } from '@/hooks/useOverlapCheck'
+import { useStartModel } from '@/hooks/startFlow'
 import { cn, stop } from '@/lib/utils'
 import { MODEL_CHOICES, modelLabel, type Model, type Project } from '../../../shared/types'
 

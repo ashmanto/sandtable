@@ -1,10 +1,8 @@
 import { findRepo, sameRepo, serviceOf } from '../../../shared/repo'
 import type { Project } from '../../../shared/types'
-import { loadFilter, passesFilter, saveSaved, type SavedFilter } from './utils'
+import { passesFilter, savedFilter, type SavedFilter } from './utils'
 
 type RepoFilter = SavedFilter<'repos'>
-
-const key = (projectId: string): string => `repoFilter:${projectId}`
 
 /** Whether the filter lets the ticket show. */
 export const passesRepo = (f: RepoFilter, t: { repo: string }): boolean =>
@@ -24,9 +22,5 @@ export const filterRepos = (
     : [])
 ]
 
-/** The filter saved for the project, or no filter. */
-export const loadRepoFilter = (projectId: string): RepoFilter => loadFilter(key(projectId), 'repos')
-
-/** Saves the project's filter for the next launch. */
-export const saveRepoFilter = (projectId: string, f: RepoFilter): void =>
-  saveSaved(key(projectId), f)
+/** The filter saved for the project, or no filter, and saving it for the next launch. */
+export const { load: loadRepoFilter, save: saveRepoFilter } = savedFilter('repoFilter', 'repos')

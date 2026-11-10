@@ -1,6 +1,6 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import type { OverlapRun } from '@/hooks/useOverlapCheck'
+import type { OverlapRun } from '@/hooks/startFlow'
 import { cn } from '@/lib/utils'
 import { ticketLabel } from '../../../shared/repo'
 import { Spinner } from './StepFlow'

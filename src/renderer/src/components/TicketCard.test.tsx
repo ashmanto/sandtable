@@ -7,7 +7,7 @@ import type { ModelUsage, SessionRecord, SetupProgress, Ticket } from '../../../
 import { SETUP_CANCELLED, SETUP_FAILED } from '../../../shared/worktreeSetup'
 import { fakeSandtable, project, session, ticket } from '../test/fixtures'
 import type { DragHandle } from '@/hooks/useTicketDrag'
-import { setStartFailures } from '@/hooks/useOverlapCheck'
+import { setStartFailures } from '@/hooks/startFlow'
 import { TicketCard } from './TicketCard'
 
 type StartFailure = Extract<CouldntStart, { kind: 'ticket' }>

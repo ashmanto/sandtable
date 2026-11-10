@@ -17,12 +17,18 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { FieldHeading, RadioBox } from './RadioBox'
+import { RadioBox } from './RadioBox'
 import { useSteps } from '../hooks/useSteps'
 import { Problem, Spinner, StepFlow } from './StepFlow'
 import { EmojiPicker } from './EmojiPicker'
 import { ProjectTile } from './ProjectTile'
 import { InstructionsField } from './InstructionsField'
+import { BoardColumns, BoardReview, BoardStep } from './BoardStep'
+import { JiraReview, JiraStep } from './JiraStep'
+import { useBoardSource } from '../hooks/useBoardSource'
+import { LinearReview, LinearStep } from './LinearStep'
+import { useJiraSource } from '../hooks/useJiraSource'
+import { useLinearSource } from '../hooks/useLinearSource'
 import { insetClass } from './Activity'
 import { linkClass } from './SetupHint'
 import {
@@ -33,7 +39,6 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { cn, errorMessage, home, onEnter, plural } from '@/lib/utils'
-import { parseBoardUrl } from '../../../shared/boardUrl'
 import { IN_PROGRESS_LABEL } from '../../../shared/columns'
 import {
   instructionsBytes,
@@ -47,17 +52,7 @@ import { AUTO_REVIEW_ROUNDS, MODEL_CHOICES, modelLabel } from '../../../shared/t
 import { DEFAULT_KEEP_DONE_DAYS, KEEP_DONE_DAYS } from '../../../shared/visibleTickets'
 import { TOKEN_CAPS } from '../../../shared/pricing'
 import { compact } from '@/lib/usage'
-import type {
-  Account,
-  JiraAccount,
-  LinearTeam,
-  LinearWorkspace,
-  Model,
-  Project,
-  ProjectRepo,
-  SetupSuggestion,
-  StatusMap
-} from '../../../shared/types'
+import type { Account, Model, Project, ProjectRepo, SetupSuggestion } from '../../../shared/types'
 
 type Source = 'board' | 'issues' | 'linear' | 'jira'
 type Picked = { path: string; repos: string[] }
@@ -88,11 +83,6 @@ const setupSummary = (setup: Entry['setup']): string => {
 
 const STEPS = ['Name', 'Tickets from', 'Repos', 'Review']
 const HEADINGS = ['Name the project', 'Where tickets come from', 'Repos and folders', 'Review']
-const STATUS_FIELDS: { key: keyof StatusMap; label: string; usual: string }[] = [
-  { key: 'todo', label: 'To do', usual: 'Todo' },
-  { key: 'inProgress', label: 'In progress', usual: 'In Progress' },
-  { key: 'done', label: 'Done', usual: 'Done' }
-]
 const SOURCES: { value: Source; title: string; help: string }[] = [
   {
     value: 'board',
@@ -124,106 +114,6 @@ const REMOTE: { value: boolean | undefined; title: string; help: string }[] = [
   { value: true, title: 'On', help: "This project's sessions start with Remote Control on." },
   { value: false, title: 'Off', help: "This project's sessions start with Remote Control off." }
 ]
-
-const boardName = (url: string): string | null => {
-  try {
-    const { owner, number } = parseBoardUrl(url)
-    return `${owner}/projects/${number}`
-  } catch {
-    return null
-  }
-}
-
-function LoadState({
-  loading,
-  text,
-  failed,
-  onRetry,
-  children
-}: {
-  loading: boolean
-  text: string
-  failed: { title: string; detail: string } | null
-  onRetry: () => void
-  children?: React.ReactNode
-}): React.ReactNode {
-  if (loading)
-    return (
-      <p role="status" className="flex items-center gap-1.5 text-fg-2">
-        <Spinner />
-        {text}
-      </p>
-    )
-  if (!failed) return children
-  return (
-    <Problem title={failed.title} detail={failed.detail}>
-      <Button variant="ghost" size="xs" className="text-danger" onClick={onRetry}>
-        Try again
-      </Button>
-    </Problem>
-  )
-}
-
-function LabeledSelect({
-  id,
-  label,
-  small,
-  value,
-  onChange,
-  options
-}: {
-  id: string
-  label: string
-  small?: boolean
-  value: string
-  onChange: (value: string) => void
-  options: { value: string; label: string }[]
-}): React.JSX.Element {
-  return (
-    <div className="flex flex-col gap-2">
-      <Label htmlFor={id} className={cn(small && 'text-xs text-fg-2')}>
-        {label}
-      </Label>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger id={id} className="w-full">
-          <SelectValue placeholder="Choose" />
-        </SelectTrigger>
-        <SelectContent>
-          {options.map((o) => (
-            <SelectItem key={o.value} value={o.value}>
-              {o.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  )
-}
-
-const NO_ACCOUNT = { site: '', email: '', token: '' }
-
-type Board = { id: number; name: string }
-
-/** Runs `load` so that only the latest call through `counter` sets its result, error, and loading flag. */
-async function latestLoad<T>(
-  counter: { current: number },
-  setLoading: (on: boolean) => void,
-  setError: (message: string | null) => void,
-  load: () => Promise<T>,
-  apply: (loaded: T) => void
-): Promise<void> {
-  const id = ++counter.current
-  setError(null)
-  setLoading(true)
-  try {
-    const loaded = await load()
-    if (counter.current === id) apply(loaded)
-  } catch (err) {
-    if (counter.current === id) setError(errorMessage(err))
-  } finally {
-    if (counter.current === id) setLoading(false)
-  }
-}
 
 /** The add-project flow: name, tickets from, repos, and review; prefilled to edit. */
 export function AddProject({
@@ -260,53 +150,6 @@ export function AddProject({
             : 'issues'
       : null
   )
-  const workspacesLoad = useRef(0)
-  const [workspaces, setWorkspaces] = useState<LinearWorkspace[] | null>(null)
-  const [workspacesLoading, setWorkspacesLoading] = useState(false)
-  const [workspacesError, setWorkspacesError] = useState<string | null>(null)
-  const [workspace, setWorkspace] = useState(project?.linear?.workspace ?? '')
-  const teamsLoad = useRef(0)
-  const [teams, setTeams] = useState<LinearTeam[] | null>(null)
-  const [teamsLoading, setTeamsLoading] = useState(false)
-  const [teamsError, setTeamsError] = useState<string | null>(null)
-  const [team, setTeam] = useState(project?.linear?.team ?? '')
-  const [linearProjects, setLinearProjects] = useState(project?.linear?.projects ?? [])
-  const jiraAccountsLoad = useRef(0)
-  const [jiraAccounts, setJiraAccounts] = useState<JiraAccount[] | null>(null)
-  const [jiraAccountsError, setJiraAccountsError] = useState<string | null>(null)
-  const [jiraAccountsLoading, setJiraAccountsLoading] = useState(false)
-  const jiraFilterRef = useRef<HTMLInputElement>(null)
-  const focusFilter = useRef(false)
-  const [jiraSite, setJiraSite] = useState(project?.jira?.site ?? '')
-  const [adding, setAdding] = useState<{ site: string; email: string; token: string } | null>(null)
-  const [signingIn, setSigningIn] = useState(false)
-  const [signInError, setSignInError] = useState<string | null>(null)
-  const jiraLoad = useRef(0)
-  const [jiraList, setJiraList] = useState<{ key: string; name: string }[] | null>(null)
-  const [jiraLoading, setJiraLoading] = useState(false)
-  const [jiraError, setJiraError] = useState<string | null>(null)
-  const [jiraKey, setJiraKey] = useState(project?.jira?.project ?? '')
-  const [jiraName, setJiraName] = useState(project?.jira?.name ?? '')
-  const boardsLoad = useRef(0)
-  const [jiraBoards, setJiraBoards] = useState<Board[] | null>(null)
-  const [boardsLoading, setBoardsLoading] = useState(false)
-  const [boardsError, setBoardsError] = useState<string | null>(null)
-  const [jiraBoard, setJiraBoard] = useState<Board | null | undefined>(
-    project?.jira ? (project.jira.board ?? null) : undefined
-  )
-  const [jiraFilter, setJiraFilter] = useState('')
-  const [url, setUrl] = useState(board0?.source.url ?? '')
-  const [loaded, setLoaded] = useState(
-    board0 && {
-      url: board0.source.url,
-      options: [...new Set(Object.values(board0.statusMap))],
-      repos: project?.repos.map((r) => r.github) ?? []
-    }
-  )
-  const boardLoad = useRef(0)
-  const [loading, setLoading] = useState(false)
-  const [boardError, setBoardError] = useState<'url' | { message: string } | null>(null)
-  const [statusMap, setStatusMap] = useState<Partial<StatusMap>>(board0?.statusMap ?? {})
   const [entries, setEntries] = useState<Entry[]>(
     project?.repos.map((r) => ({ ...r, include: true })) ?? []
   )
@@ -326,6 +169,23 @@ export function AddProject({
   const [typedError, setTypedError] = useState<string | null>(null)
   const [folderError, setFolderError] = useState<{ title: string; path?: string } | null>(null)
   const [choosing, setChoosing] = useState<Picked | null>(null)
+  const boardSource = useBoardSource(project, {
+    loaded: (repos) =>
+      setEntries((es) => [
+        ...repos.map(
+          (github) =>
+            es.find((e) => sameRepo(e.github, github)) ?? { github, path: null, include: false }
+        ),
+        ...es.filter((e) => e.include && !repos.some((r) => sameRepo(r, e.github)))
+      ]),
+    cleared: () => {
+      setEntries((es) => es.filter((e) => e.include && e.path))
+      setFolderError(null)
+      setChoosing(null)
+    }
+  })
+  const linear = useLinearSource(project)
+  const jira = useJiraSource(project)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [suggested, setSuggested] = useState<Record<string, SetupSuggestion | null>>({})
@@ -347,70 +207,19 @@ export function AddProject({
   }, [entries])
 
   useEffect(() => {
-    if (project?.linear) void loadWorkspaces()
-    if (project?.jira) {
-      void loadJiraAccounts()
-      void loadJiraProjects(project.jira.site, project.jira.project)
-      void loadJiraBoards(project.jira.site, project.jira.project, project.jira.board ?? null)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- loads the saved project's lists once; later picks load their own
-  }, [])
-
-  useEffect(() => {
-    if (!jiraList || !focusFilter.current) return
-    focusFilter.current = false
-    jiraFilterRef.current?.focus()
-  }, [jiraList])
-
-  useEffect(() => {
     if (!settingsOpen) void window.sandtable.accounts.list().then(setAccounts)
   }, [settingsOpen])
 
-  const board = source === 'board' && loaded?.url === url.trim() ? loaded : null
+  const board = source === 'board' ? boardSource.board : null
   const included = entries.filter((e) => e.include)
-  const teamInfo = teams?.find((t) => t.key === team)
-  const workspaceInfo = workspaces?.find((w) => w.slug === workspace)
-  const shownJira = jiraList?.filter((p) =>
-    `${p.key} ${p.name}`.toLowerCase().includes(jiraFilter.trim().toLowerCase())
-  )
-
   function issue(i: number): string | null {
     if (i === 0) return name.trim() ? null : 'Enter a name'
     if (i === 1) {
       if (!source) return 'Choose where tickets come from'
       if (source === 'issues') return null
-      if (source === 'jira')
-        return jiraKey
-          ? jiraBoard !== undefined
-            ? null
-            : boardsLoading
-              ? 'Loading Jira boards…'
-              : boardsError
-                ? 'Load the Jira boards'
-                : 'Choose a Jira board'
-          : !jiraSite
-            ? 'Choose a Jira account'
-            : jiraLoading
-              ? 'Loading Jira projects…'
-              : jiraList
-                ? 'Choose a Jira project'
-                : 'Load the Jira projects'
-      if (source === 'linear')
-        return team
-          ? null
-          : workspacesLoading
-            ? 'Loading workspaces…'
-            : workspacesError
-              ? 'Load the Linear workspaces'
-              : teamsLoading
-                ? 'Loading teams…'
-                : teams
-                  ? 'Choose a team'
-                  : 'Load the Linear teams'
-      if (loading) return 'Loading the board…'
-      if (!board) return 'Load the board'
-      const missing = STATUS_FIELDS.find((f) => !statusMap[f.key])
-      return missing ? `Choose a board status for ${missing.label}` : null
+      if (source === 'jira') return jira.issue
+      if (source === 'linear') return linear.issue
+      return boardSource.issue
     }
     if (i === 2) {
       if (source === 'board' && !board) return 'Load the board first'
@@ -437,204 +246,14 @@ export function AddProject({
     else go(step + 1)
   }
 
-  function loadBoard(): void {
-    if (!boardName(url)) return setBoardError('url')
-    const target = url.trim()
-    void latestLoad(
-      boardLoad,
-      setLoading,
-      (message) => setBoardError(message === null ? null : { message }),
-      () =>
-        Promise.all([
-          window.sandtable.projects.statusOptions(target),
-          window.sandtable.projects.boardRepos(target)
-        ]),
-      ([options, repos]) => {
-        setLoaded({ url: target, options, repos })
-        setStatusMap((m) =>
-          Object.fromEntries(
-            STATUS_FIELDS.map(({ key, usual }) => {
-              const kept = m[key]
-              return [
-                key,
-                kept && options.includes(kept) ? kept : options.includes(usual) ? usual : undefined
-              ]
-            })
-          )
-        )
-        setEntries((es) => [
-          ...repos.map(
-            (github) =>
-              es.find((e) => sameRepo(e.github, github)) ?? { github, path: null, include: false }
-          ),
-          ...es.filter((e) => e.include && !repos.some((r) => sameRepo(r, e.github)))
-        ])
-      }
-    )
-  }
-
-  function loadWorkspaces(): Promise<void> {
-    return latestLoad(
-      workspacesLoad,
-      setWorkspacesLoading,
-      setWorkspacesError,
-      () => window.sandtable.projects.linearWorkspaces(),
-      (loaded) => {
-        setWorkspaces(loaded)
-        const picked = (
-          loaded.find((w) => w.slug === workspace) ??
-          loaded.find((w) => w.default) ??
-          loaded[0]
-        )?.slug
-        if (!picked) throw new Error('Run `linear auth login`.')
-        if (workspace && picked !== workspace) return changeWorkspace(picked)
-        setWorkspace(picked)
-        void loadTeams(picked, team)
-      }
-    )
-  }
-
-  function changeWorkspace(value: string): void {
-    setWorkspace(value)
-    setTeams(null)
-    setTeam('')
-    setLinearProjects([])
-    void loadTeams(value, '')
-  }
-
-  function loadTeams(ws: string, keep: string): Promise<void> {
-    return latestLoad(
-      teamsLoad,
-      setTeamsLoading,
-      setTeamsError,
-      () => window.sandtable.projects.linearTeams(ws),
-      (loaded) => {
-        const kept = loaded.find((t) => t.key === keep)
-        setTeams(loaded)
-        setTeam(kept ? keep : '')
-        setLinearProjects((ps) => kept?.projects.filter((k) => ps.some((p) => p.id === k.id)) ?? [])
-      }
-    )
-  }
-
-  function loadJiraAccounts(): Promise<void> {
-    return latestLoad(
-      jiraAccountsLoad,
-      setJiraAccountsLoading,
-      setJiraAccountsError,
-      () => window.sandtable.projects.jiraAccounts(),
-      (loaded) => {
-        setJiraAccounts(loaded)
-        if (!loaded.length) setAdding(NO_ACCOUNT)
-      }
-    )
-  }
-
-  function loadJiraProjects(site: string, keep: string): Promise<void> {
-    return latestLoad(
-      jiraLoad,
-      setJiraLoading,
-      setJiraError,
-      () => window.sandtable.projects.jiraProjects(site),
-      (loaded) => {
-        const kept = loaded.find((p) => p.key === keep)
-        setJiraList(loaded)
-        setJiraKey(kept ? keep : '')
-        if (kept) setJiraName(kept.name)
-      }
-    )
-  }
-
-  function loadJiraBoards(
-    site: string,
-    key: string,
-    keep: Board | null | undefined
-  ): Promise<void> {
-    return latestLoad(
-      boardsLoad,
-      setBoardsLoading,
-      setBoardsError,
-      () => window.sandtable.projects.jiraBoards(site, key),
-      (loaded) => {
-        setJiraBoards(loaded)
-        setJiraBoard(
-          loaded.length === 0 || keep === null
-            ? null
-            : (loaded.find((b) => b.id === keep?.id) ??
-                (loaded.length === 1 ? loaded[0] : undefined))
-        )
-      }
-    )
-  }
-
-  function pickJiraProject(p: { key: string; name: string }): void {
-    setJiraKey(p.key)
-    setJiraName(p.name)
-    setJiraBoards(null)
-    setJiraBoard(undefined)
-    void loadJiraBoards(jiraSite, p.key, undefined)
-  }
-
-  function pickJiraAccount(site: string): void {
-    ++boardsLoad.current
-    setBoardsLoading(false)
-    setJiraBoards(null)
-    setJiraBoard(undefined)
-    setJiraSite(site)
-    setJiraList(null)
-    setJiraKey('')
-    setJiraFilter('')
-    void loadJiraProjects(site, '')
-  }
-
-  async function addJiraAccount(): Promise<void> {
-    if (!adding || signingIn || !adding.site.trim() || !adding.email.trim() || !adding.token.trim())
-      return
-    setSigningIn(true)
-    setSignInError(null)
-    try {
-      const added = await window.sandtable.projects.jiraSignIn(
-        adding.site.trim(),
-        adding.email.trim(),
-        adding.token
-      )
-      setJiraAccounts((as) => [...(as ?? []).filter((a) => a.site !== added.site), added])
-      setAdding(null)
-      focusFilter.current = true
-      pickJiraAccount(added.site)
-    } catch (err) {
-      setSignInError(errorMessage(err))
-    } finally {
-      setSigningIn(false)
-    }
-  }
-
-  function changeUrl(value: string): void {
-    setUrl(value)
-    setBoardError(null)
-    boardLoad.current++
-    setLoading(false)
-    if (loaded) {
-      setLoaded(undefined)
-      setEntries((es) => es.filter((e) => e.include && e.path))
-      setFolderError(null)
-      setChoosing(null)
-    }
-  }
-
   function chooseSource(value: Source): void {
     if (value === source) return
     setSource(value)
-    setLoaded(undefined)
-    setTeam('')
-    setLinearProjects([])
-    if (value === 'linear' && !workspaces && !workspacesLoading) void loadWorkspaces()
-    if (value === 'jira' && !jiraAccounts && !jiraAccountsLoading) void loadJiraAccounts()
-    if (value === 'jira' && jiraAccounts?.length === 0) setAdding(NO_ACCOUNT)
-    if (value !== 'jira') {
-      setAdding(null)
-      setSignInError(null)
-    }
+    boardSource.reset()
+    linear.reset()
+    if (value === 'linear') linear.activate()
+    if (value === 'jira') jira.activate()
+    else jira.reset()
     setEntries((es) => es.filter((e) => e.include))
     setFolderError(null)
     setTypedError(null)
@@ -747,20 +366,9 @@ export function AddProject({
         const setup = keptSetup(e.setup)
         return e.path ? [{ github: e.github, path: e.path, ...(setup && { setup }) }] : []
       }),
-      ...(source === 'board' && {
-        board: { source: parseBoardUrl(url), statusMap: statusMap as StatusMap }
-      }),
-      ...(source === 'linear' && {
-        linear: { team, projects: linearProjects, ...(workspace && { workspace }) }
-      }),
-      ...(source === 'jira' && {
-        jira: {
-          site: jiraSite,
-          project: jiraKey,
-          name: jiraName,
-          ...(jiraBoard && { board: jiraBoard })
-        }
-      }),
+      ...(source === 'board' && boardSource.saved && { board: boardSource.saved }),
+      ...(source === 'linear' && linear.saved && { linear: linear.saved }),
+      ...(source === 'jira' && jira.saved && { jira: jira.saved }),
       ...(remoteControl !== undefined && { remoteControl }),
       ...(claudeDir !== undefined && { claudeDir }),
       ...(keepDoneDays !== DEFAULT_KEEP_DONE_DAYS && { keepDoneDays }),
@@ -800,11 +408,11 @@ export function AddProject({
     if (i === 0) return name.trim()
     if (i === 1)
       return source === 'board'
-        ? 'Board, statuses chosen'
+        ? boardSource.summary
         : source === 'linear'
-          ? `Linear team ${team}`
+          ? linear.summary
           : source === 'jira'
-            ? `Jira project ${jiraKey}`
+            ? jira.summary
             : 'Repo issues'
     return plural(included.length, 'repo')
   }
@@ -1002,356 +610,9 @@ export function AddProject({
           />
         ))}
       </div>
-      {source === 'board' && (
-        <div className="mt-4 flex flex-col gap-3">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="board-url">Board URL</Label>
-            <div className="flex gap-2">
-              <Input
-                id="board-url"
-                autoFocus
-                autoComplete="off"
-                spellCheck={false}
-                className="font-mono"
-                placeholder="https://github.com/users/you/projects/1"
-                value={url}
-                onChange={(e) => changeUrl(e.target.value)}
-                onKeyDown={onEnter(() => !loading && loadBoard())}
-              />
-              <Button
-                variant="outline"
-                size="lg"
-                disabled={loading || !url.trim()}
-                onClick={() => loadBoard()}
-              >
-                {board ? 'Reload' : 'Load board'}
-              </Button>
-            </div>
-          </div>
-          {boardError === 'url' ? (
-            <Problem title="Enter a board URL such as https://github.com/users/you/projects/1" />
-          ) : (
-            <LoadState
-              loading={loading}
-              text="Loading board…"
-              failed={
-                boardError && {
-                  title: "Couldn't load the board.",
-                  detail: boardError.message
-                }
-              }
-              onRetry={loadBoard}
-            >
-              {board && (
-                <p role="status" className="flex items-center gap-1.5 text-fg-2">
-                  <Check className="size-3.5" />
-                  Board loaded: tickets from {plural(board.repos.length, 'repo')}
-                </p>
-              )}
-            </LoadState>
-          )}
-          {board && (
-            <fieldset className="flex flex-col gap-2">
-              <legend className="mb-2 font-medium">Board status for each column</legend>
-              <div className="grid grid-cols-3 gap-3">
-                {STATUS_FIELDS.map((f) => (
-                  <LabeledSelect
-                    key={f.key}
-                    id={`status-${f.key}`}
-                    label={f.label}
-                    small
-                    value={statusMap[f.key] ?? ''}
-                    onChange={(v) => setStatusMap((m) => ({ ...m, [f.key]: v }))}
-                    options={board.options.map((o) => ({ value: o, label: o }))}
-                  />
-                ))}
-              </div>
-            </fieldset>
-          )}
-        </div>
-      )}
-      {source === 'linear' && (
-        <div className="mt-4 flex flex-col gap-3">
-          <LoadState
-            loading={workspacesLoading}
-            text="Loading workspaces…"
-            failed={
-              workspacesError
-                ? { title: "Couldn't load the Linear workspaces.", detail: workspacesError }
-                : null
-            }
-            onRetry={() => void loadWorkspaces()}
-          />
-          {workspaces && workspaces.length > 0 && (
-            <LabeledSelect
-              id="linear-workspace"
-              label="Workspace"
-              value={workspace}
-              onChange={changeWorkspace}
-              options={workspaces.map((w) => ({
-                value: w.slug,
-                label: `${w.organization} (${w.slug})`
-              }))}
-            />
-          )}
-          <LoadState
-            loading={teamsLoading}
-            text="Loading teams…"
-            failed={
-              teamsError ? { title: "Couldn't load the Linear teams.", detail: teamsError } : null
-            }
-            onRetry={() => void loadTeams(workspace, team)}
-          />
-          {teams && (
-            <LabeledSelect
-              id="linear-team"
-              label="Team"
-              value={team}
-              onChange={(v) => {
-                setTeam(v)
-                setLinearProjects([])
-              }}
-              options={teams.map((t) => ({ value: t.key, label: `${t.name} (${t.key})` }))}
-            />
-          )}
-          {teamInfo && teamInfo.projects.length > 0 && (
-            <fieldset className="flex flex-col gap-2">
-              <legend className="mb-2 font-medium">Linear projects (optional)</legend>
-              {teamInfo.projects.map((lp) => (
-                <Label key={lp.id} className="gap-2.5 font-normal">
-                  <Checkbox
-                    checked={linearProjects.some((p) => p.id === lp.id)}
-                    onCheckedChange={(on) =>
-                      setLinearProjects((ps) =>
-                        teamInfo.projects.filter((p) =>
-                          p.id === lp.id ? on === true : ps.some((x) => x.id === p.id)
-                        )
-                      )
-                    }
-                  />
-                  {lp.name}
-                </Label>
-              ))}
-              <p className="text-xs text-fg-2">Leave all unchecked to show the whole team.</p>
-            </fieldset>
-          )}
-        </div>
-      )}
-      {source === 'jira' && (
-        <div className="mt-4 flex flex-col gap-3">
-          <div className="flex flex-col gap-2">
-            <FieldHeading id="jira-account">Jira account</FieldHeading>
-            <LoadState
-              loading={jiraAccountsLoading}
-              text="Loading Jira accounts…"
-              failed={
-                jiraAccountsError
-                  ? { title: "Couldn't read the saved Jira accounts.", detail: jiraAccountsError }
-                  : null
-              }
-              onRetry={() => void loadJiraAccounts()}
-            />
-            {jiraAccounts && jiraAccounts.length > 0 && (
-              <div role="radiogroup" aria-labelledby="jira-account" className="flex flex-col gap-2">
-                {jiraAccounts.map((a) => (
-                  <RadioBox
-                    key={a.site}
-                    name="jira-account"
-                    checked={jiraSite === a.site}
-                    title={<span className="font-mono">{a.site}</span>}
-                    help={`${a.email} · token encrypted on this Mac`}
-                    disabled={signingIn}
-                    onChange={() => pickJiraAccount(a.site)}
-                  />
-                ))}
-              </div>
-            )}
-            {adding ? (
-              <div
-                role="group"
-                aria-label="Add a Jira account"
-                className="flex flex-col gap-3 rounded-card bg-card p-3"
-              >
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="jira-site">Jira site</Label>
-                    <Input
-                      id="jira-site"
-                      autoFocus
-                      autoComplete="off"
-                      spellCheck={false}
-                      className="font-mono"
-                      placeholder="yourteam.atlassian.net"
-                      value={adding.site}
-                      onChange={(e) => setAdding({ ...adding, site: e.target.value })}
-                      onKeyDown={onEnter(() => void addJiraAccount())}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="jira-email">Atlassian email</Label>
-                    <Input
-                      id="jira-email"
-                      autoComplete="off"
-                      spellCheck={false}
-                      placeholder="you@company.com"
-                      value={adding.email}
-                      onChange={(e) => setAdding({ ...adding, email: e.target.value })}
-                      onKeyDown={onEnter(() => void addJiraAccount())}
-                    />
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="jira-token">API token</Label>
-                  <Input
-                    id="jira-token"
-                    type="password"
-                    autoComplete="off"
-                    spellCheck={false}
-                    className="font-mono"
-                    placeholder="Paste a token from id.atlassian.com"
-                    aria-describedby="jira-token-help"
-                    value={adding.token}
-                    onChange={(e) => setAdding({ ...adding, token: e.target.value })}
-                    onKeyDown={onEnter(() => void addJiraAccount())}
-                  />
-                  <p id="jira-token-help" className="text-xs text-fg-2">
-                    Sandtable keeps it encrypted with a key from your macOS Keychain and reuses it
-                    for every project on this site.
-                  </p>
-                </div>
-                {signInError && <Problem title={signInError} />}
-                <div className="flex gap-2">
-                  <Button
-                    disabled={
-                      signingIn ||
-                      !adding.site.trim() ||
-                      !adding.email.trim() ||
-                      !adding.token.trim()
-                    }
-                    onClick={() => void addJiraAccount()}
-                  >
-                    {signingIn ? 'Signing in…' : 'Add account'}
-                  </Button>
-                  {!!jiraAccounts?.length && (
-                    <Button
-                      variant="ghost"
-                      onClick={() => {
-                        setAdding(null)
-                        setSignInError(null)
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  )}
-                </div>
-              </div>
-            ) : (
-              jiraAccounts && (
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  className="self-start"
-                  onClick={() => setAdding(NO_ACCOUNT)}
-                >
-                  Add a Jira account…
-                </Button>
-              )
-            )}
-          </div>
-          <LoadState
-            loading={jiraLoading}
-            text="Loading Jira projects…"
-            failed={
-              jiraError ? { title: "Couldn't load the Jira projects.", detail: jiraError } : null
-            }
-            onRetry={() => void loadJiraProjects(jiraSite, jiraKey)}
-          />
-          {jiraList?.length === 0 && <p className="text-xs text-fg-2">No projects on this site.</p>}
-          {shownJira && jiraList?.length !== 0 && (
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="jira-filter">Filter projects</Label>
-              <Input
-                ref={jiraFilterRef}
-                id="jira-filter"
-                autoComplete="off"
-                spellCheck={false}
-                placeholder={`Filter ${plural(jiraList!.length, 'project')}`}
-                value={jiraFilter}
-                onChange={(e) => setJiraFilter(e.target.value)}
-              />
-              {shownJira.length === 0 ? (
-                <p className="text-xs text-fg-2">No project matches.</p>
-              ) : (
-                <div
-                  role="radiogroup"
-                  aria-label="Jira project"
-                  className="flex max-h-72 flex-col gap-2 overflow-y-auto"
-                >
-                  {shownJira.map((p) => (
-                    <RadioBox
-                      key={p.key}
-                      name="jira-project"
-                      checked={jiraKey === p.key}
-                      title={p.name}
-                      help={p.key}
-                      onChange={() => pickJiraProject(p)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          {jiraKey && (
-            <LoadState
-              loading={boardsLoading}
-              text="Loading Jira boards…"
-              failed={
-                boardsError
-                  ? { title: "Couldn't load the Jira boards.", detail: boardsError }
-                  : null
-              }
-              onRetry={() => void loadJiraBoards(jiraSite, jiraKey, jiraBoard)}
-            >
-              {jiraBoards?.length === 0 && (
-                <p className="text-xs text-fg-2">
-                  This project has no board, so Sandtable shows every issue.
-                </p>
-              )}
-              {!!jiraBoards?.length && (
-                <div className="flex flex-col gap-2">
-                  <FieldHeading id="jira-board">Jira board</FieldHeading>
-                  <p id="jira-board-help" className="text-xs text-fg-2">
-                    Sandtable shows what the board shows: its active sprints, or, on a board without
-                    sprints, everything outside its backlog.
-                  </p>
-                  <div
-                    role="radiogroup"
-                    aria-labelledby="jira-board"
-                    aria-describedby="jira-board-help"
-                    className="flex max-h-72 flex-col gap-2 overflow-y-auto"
-                  >
-                    {jiraBoards.map((b) => (
-                      <RadioBox
-                        key={b.id}
-                        name="jira-board"
-                        checked={jiraBoard?.id === b.id}
-                        title={b.name}
-                        onChange={() => setJiraBoard(b)}
-                      />
-                    ))}
-                    <RadioBox
-                      name="jira-board"
-                      checked={jiraBoard === null}
-                      title="No board (show every issue)"
-                      onChange={() => setJiraBoard(null)}
-                    />
-                  </div>
-                </div>
-              )}
-            </LoadState>
-          )}
-        </div>
-      )}
+      {source === 'board' && <BoardStep source={boardSource} />}
+      {source === 'linear' && <LinearStep source={linear} />}
+      {source === 'jira' && <JiraStep source={jira} />}
     </>
   )
 
@@ -1526,34 +787,11 @@ export function AddProject({
           'Tickets from',
           1,
           source === 'board' ? (
-            <>
-              <span>GitHub Projects board</span>
-              <span className="truncate font-mono text-xs text-fg-2">{url.trim()}</span>
-            </>
+            <BoardReview source={boardSource} />
           ) : source === 'jira' ? (
-            <>
-              <span>{`Jira project ${jiraName} (${jiraKey}) on ${jiraSite}`}</span>
-              <span className="text-xs text-fg-2">
-                {jiraBoard ? `On board ${jiraBoard.name}` : 'No board, so every issue shows'}
-              </span>
-            </>
+            <JiraReview source={jira} />
           ) : source === 'linear' ? (
-            <>
-              <span>Linear team</span>
-              {workspace && (
-                <span className="text-xs text-fg-2">
-                  {workspaceInfo ? `${workspaceInfo.organization} (${workspace})` : workspace}
-                </span>
-              )}
-              <span className="text-xs text-fg-2">
-                {teamInfo ? `${teamInfo.name} (${team})` : team}
-              </span>
-              {linearProjects.length > 0 && (
-                <span className="text-xs text-fg-2">
-                  {linearProjects.map((p) => p.name).join(', ')}
-                </span>
-              )}
-            </>
+            <LinearReview source={linear} />
           ) : (
             'Repo issues'
           )
@@ -1562,16 +800,11 @@ export function AddProject({
           'Columns',
           1,
           source === 'board' ? (
-            STATUS_FIELDS.map((f) => (
-              <span key={f.key} className="flex gap-2">
-                <span className="text-fg-2">{f.label}</span>
-                <span>{statusMap[f.key]}</span>
-              </span>
-            ))
+            <BoardColumns source={boardSource} />
           ) : source === 'jira' ? (
             <span>
               Issues in the To Do category are To do; In Progress, In progress; Done, Done.
-              {jiraBoard &&
+              {jira.jiraBoard &&
                 " Only the board's issues show: those in its active sprints, or, on a board without sprints, those outside its backlog."}
             </span>
           ) : source === 'linear' ? (
@@ -1811,9 +1044,11 @@ export function AddProject({
                   Added to{' '}
                   {new Intl.ListFormat('en').format(
                     sandboxDomains({
-                      ...(source === 'linear' && { linear: { team, projects: [] } }),
+                      ...(source === 'linear' && { linear: { team: linear.team, projects: [] } }),
                       ...(source === 'jira' &&
-                        jiraSite && { jira: { site: jiraSite, project: jiraKey, name: jiraName } })
+                        jira.jiraSite && {
+                          jira: { site: jira.jiraSite, project: jira.jiraKey, name: jira.jiraName }
+                        })
                     })
                   )}
                   , which sessions always reach.

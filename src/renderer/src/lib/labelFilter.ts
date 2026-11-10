@@ -1,12 +1,10 @@
 import { IN_PROGRESS_LABEL } from '../../../shared/columns'
-import { loadFilter, passesFilter, saveSaved, type SavedFilter } from './utils'
+import { passesFilter, savedFilter, type SavedFilter } from './utils'
 
 /** Which labels the board filters on, and whether it shows only those tickets or hides them. */
 export type LabelFilter = SavedFilter<'labels'>
 
 type Labeled = { labels: { name: string; color: string }[] }
-
-const key = (projectId: string): string => `labelFilter:${projectId}`
 
 /** Whether `names` holds `name`, ignoring case as GitHub does. */
 export const hasLabel = (names: string[], name: string): boolean =>
@@ -34,10 +32,5 @@ export function boardLabels(
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
-/** The filter saved for the project, or no filter. */
-export const loadLabelFilter = (projectId: string): LabelFilter =>
-  loadFilter(key(projectId), 'labels')
-
-/** Saves the project's filter for the next launch. */
-export const saveLabelFilter = (projectId: string, f: LabelFilter): void =>
-  saveSaved(key(projectId), f)
+/** The filter saved for the project, or no filter, and saving it for the next launch. */
+export const { load: loadLabelFilter, save: saveLabelFilter } = savedFilter('labelFilter', 'labels')

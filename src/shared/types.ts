@@ -474,7 +474,7 @@ export type ComposerDraft = { text: string; images: DraftImage[] }
 
 /** One step of a Claude Code conversation, as the Conversation tab shows it. */
 export type ConversationEntry =
-  | { kind: 'user' | 'assistant'; text: string }
+  | { kind: 'user' | 'assistant'; text: string; stopped?: true }
   | {
       kind: 'tool'
       name: string

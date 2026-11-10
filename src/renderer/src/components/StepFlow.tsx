@@ -1,6 +1,14 @@
 import { Check, LoaderCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
 import { ViewHeader } from './ViewHeader'
 
 /** A 12 px spinner that stands still with reduced motion. */
@@ -139,6 +147,74 @@ export function StepFlow({
           </footer>
         </section>
       </div>
+    </div>
+  )
+}
+
+/** A list's loading line, or its error with Try again, or its children once loaded. */
+export function LoadState({
+  loading,
+  text,
+  failed,
+  onRetry,
+  children
+}: {
+  loading: boolean
+  text: string
+  failed: { title: string; detail: string } | null
+  onRetry: () => void
+  children?: React.ReactNode
+}): React.ReactNode {
+  if (loading)
+    return (
+      <p role="status" className="flex items-center gap-1.5 text-fg-2">
+        <Spinner />
+        {text}
+      </p>
+    )
+  if (!failed) return children
+  return (
+    <Problem title={failed.title} detail={failed.detail}>
+      <Button variant="ghost" size="xs" className="text-danger" onClick={onRetry}>
+        Try again
+      </Button>
+    </Problem>
+  )
+}
+
+/** A labeled select of `options`. */
+export function LabeledSelect({
+  id,
+  label,
+  small,
+  value,
+  onChange,
+  options
+}: {
+  id: string
+  label: string
+  small?: boolean
+  value: string
+  onChange: (value: string) => void
+  options: { value: string; label: string }[]
+}): React.JSX.Element {
+  return (
+    <div className="flex flex-col gap-2">
+      <Label htmlFor={id} className={cn(small && 'text-xs text-fg-2')}>
+        {label}
+      </Label>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger id={id} className="w-full">
+          <SelectValue placeholder="Choose" />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((o) => (
+            <SelectItem key={o.value} value={o.value}>
+              {o.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   )
 }

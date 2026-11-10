@@ -18,7 +18,7 @@ import {
 import { cardClass, opensIn, prLook, stateLook, shownLabels, stageLook } from '@/lib/card'
 import { cleanUp, type Line } from '@/lib/cleanUp'
 import { jumpToCard, useRiseOnChange } from '@/hooks/useRiseOnChange'
-import { chooseFolder, failureText, useStartFailure } from '@/hooks/useOverlapCheck'
+import { chooseFolder, failureText, useStartFailure } from '@/hooks/startFlow'
 import { useTicketStart } from '@/hooks/useTicketStart'
 import { useRun } from '@/hooks/useRun'
 import { useLiveUsage } from '@/hooks/useLiveUsage'

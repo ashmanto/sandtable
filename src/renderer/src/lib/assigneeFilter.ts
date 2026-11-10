@@ -1,13 +1,11 @@
 import { hasLabel } from './labelFilter'
-import { loadFilter, passesFilter, saveSaved, type SavedFilter } from './utils'
+import { passesFilter, savedFilter, type SavedFilter } from './utils'
 
 /** Whose tickets the board filters on, with `@me` and `@none` for the signed-in user and no one. */
 export type AssigneeFilter = SavedFilter<'people'>
 
 type Person = { login: string; name: string | null }
 type Assigned = { assignees: Person[] }
-
-const key = (projectId: string): string => `assigneeFilter:${projectId}`
 
 /** The filter value and lane ID of tickets with no assignee. */
 export const NO_ASSIGNEE = '@none'
@@ -40,10 +38,8 @@ export function boardPeople(
   return [...byLogin.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
-/** The filter saved for the project, or no filter. */
-export const loadAssigneeFilter = (projectId: string): AssigneeFilter =>
-  loadFilter(key(projectId), 'people')
-
-/** Saves the project's filter for the next launch. */
-export const saveAssigneeFilter = (projectId: string, f: AssigneeFilter): void =>
-  saveSaved(key(projectId), f)
+/** The filter saved for the project, or no filter, and saving it for the next launch. */
+export const { load: loadAssigneeFilter, save: saveAssigneeFilter } = savedFilter(
+  'assigneeFilter',
+  'people'
+)

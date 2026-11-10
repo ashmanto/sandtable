@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { actionLabels } from '../../../shared/sessions'
-import { startTicket, useOverlapCheck, useTicketSetup } from './useOverlapCheck'
+import { startTicket, useOverlapCheck, useTicketSetup } from './startFlow'
 import { checkSetupHint } from './useSetupHint'
 import { useStartNote } from './useStartNote'
 import type { useRun } from './useRun'
