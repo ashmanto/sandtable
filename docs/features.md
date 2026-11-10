@@ -1057,8 +1057,10 @@ refusal, a notification title, or a format example.
 
 - **Remove worktree** for a finished session refuses a worktree with uncommitted changes,
   including untracked files, or unpushed commits.
+- Commits whose changes are already on the default branch, such as after a squash merge, count
+  as pushed.
 - It refuses with **Upstream not found** when the branch's upstream can't be found, for example
-  after it was deleted from GitHub.
+  after it was deleted from GitHub, and its changes aren't on the default branch.
 - Gitignored files, such as a local `.env`, are removed with the worktree.
 - It checks every repo's worktree before it removes any.
 - It refuses with "Another session uses this worktree" while another session, from any project, is
