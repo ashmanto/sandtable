@@ -37,6 +37,7 @@ describe('RoutineEditor', () => {
       screen.getByRole('textbox', { name: 'Name' }),
       screen.getByRole('radiogroup', { name: 'Repo' }),
       screen.getByRole('radiogroup', { name: 'Where it runs' }),
+      screen.getByRole('radiogroup', { name: 'Model' }),
       screen.getByRole('textbox', { name: 'First message' }),
       screen.getByRole('textbox', { name: 'Allowed without asking' }),
       screen.getByRole('switch', { name: 'Run on a schedule' })
@@ -110,6 +111,61 @@ describe('RoutineEditor', () => {
     })
     expect(api.routines.start).not.toHaveBeenCalled()
     expect(onClose).toHaveBeenCalled()
+  })
+
+  describe('model', () => {
+    const fill = async (): Promise<void> => {
+      await userEvent.type(screen.getByRole('textbox', { name: 'Name' }), 'nightly')
+      await userEvent.type(screen.getByRole('textbox', { name: 'First message' }), 'Run it')
+    }
+    const model = (name: string): HTMLElement =>
+      within(screen.getByRole('radiogroup', { name: 'Model' })).getByRole('radio', { name })
+
+    it("offers the project's model first and saves no model for it", async () => {
+      render(<RoutineEditor project={{ ...project, model: 'opus' }} onClose={vi.fn()} />)
+      const choices = within(screen.getByRole('radiogroup', { name: 'Model' })).getAllByRole(
+        'radio'
+      )
+      expect(choices.map((c) => c.textContent)).toEqual([
+        'Project (Opus)',
+        'Account default',
+        'Fable',
+        'Opus',
+        'Sonnet',
+        'Haiku'
+      ])
+      expect(model('Project (Opus)')).toBeChecked()
+      await fill()
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(vi.mocked(api.routines.save).mock.calls[0][0]).not.toHaveProperty('model')
+    })
+
+    it('saves a picked model', async () => {
+      render(<RoutineEditor project={project} onClose={vi.fn()} />)
+      await fill()
+      await userEvent.click(model('Haiku'))
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(api.routines.save).toHaveBeenCalledWith(expect.objectContaining({ model: 'haiku' }))
+    })
+
+    it('saves Account default as null', async () => {
+      render(<RoutineEditor project={{ ...project, model: 'opus' }} onClose={vi.fn()} />)
+      await fill()
+      await userEvent.click(model('Account default'))
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(api.routines.save).toHaveBeenCalledWith(expect.objectContaining({ model: null }))
+    })
+
+    it('opens a routine on its saved model', () => {
+      render(
+        <RoutineEditor
+          project={project}
+          routine={{ ...triage, model: 'sonnet' }}
+          onClose={vi.fn()}
+        />
+      )
+      expect(model('Sonnet')).toBeChecked()
+    })
   })
 
   it('saves a trigger label, failing checks, and a daily cap', async () => {

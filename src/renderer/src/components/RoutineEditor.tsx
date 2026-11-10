@@ -30,20 +30,24 @@ import {
   rulesProblem,
   scheduleLabel
 } from '../../../shared/routines'
-import type {
-  Project,
-  Routine,
-  RoutineInput,
-  RoutineProposal,
-  RoutineSource
+import {
+  MODEL_CHOICES,
+  modelLabel,
+  type Model,
+  type Project,
+  type Routine,
+  type RoutineInput,
+  type RoutineProposal,
+  type RoutineSource
 } from '../../../shared/types'
 import { FieldHeading, MessageField, RepoPicker, WherePicker } from './RadioBox'
 import { RoutineChat } from './RoutineChat'
+import { Segmented } from './Segmented'
 import { chip } from './TicketCard'
 
 /** The values another view hands the editor for a new routine, with the source of a copy. */
 export type RoutineDraft = Pick<RoutineInput, 'repo' | 'worktree' | 'message'> &
-  Partial<Pick<RoutineInput, 'name' | 'allow' | 'schedule' | 'on' | 'dailyCap'>> & {
+  Partial<Pick<RoutineInput, 'name' | 'allow' | 'schedule' | 'on' | 'dailyCap' | 'model'>> & {
     copiedFrom?: RoutineSource
   }
 
@@ -144,6 +148,9 @@ export function RoutineEditor({
       (draft?.copiedFrom && project.repos.length > 1 ? '' : (project.repos[0]?.github ?? ''))
   )
   const [worktree, setWorktree] = useState(from?.worktree ?? false)
+  const [model, setModel] = useState<Model | 'default' | 'project'>(
+    from?.model === undefined ? 'project' : (from.model ?? 'default')
+  )
   const [message, setMessage] = useState(from?.message ?? '')
   const [allow, setAllow] = useState(from?.allow?.join('\n') ?? '')
   const [scheduled, setScheduled] = useState(!!from?.schedule)
@@ -265,6 +272,7 @@ export function RoutineEditor({
           repo: github,
           worktree,
           message,
+          ...(model !== 'project' && { model: model === 'default' ? null : model }),
           ...(rules.length > 0 && { allow: rules }),
           ...(form.schedule && { schedule: form.schedule }),
           ...(triggered && { on, dailyCap: Number(dailyCap) })
@@ -338,6 +346,19 @@ export function RoutineEditor({
             >
               {offer('worktree')}
             </WherePicker>
+            <div className="flex flex-col gap-1.5">
+              <FieldHeading id="routine-model">Model</FieldHeading>
+              <Segmented
+                options={[
+                  ['project', `Project (${modelLabel(project.model)})`],
+                  ...MODEL_CHOICES.map((m): [Model | 'default', string] => [m, modelLabel(m)])
+                ]}
+                value={model}
+                onChange={setModel}
+                aria-labelledby="routine-model"
+                className="auto-cols-auto"
+              />
+            </div>
             <MessageField
               id="routine-message"
               value={message}

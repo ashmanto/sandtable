@@ -1811,7 +1811,9 @@ them through Tailwind classes and never name a raw color.
   session without a ticket with this first message, in one click, on a schedule, or when a ticket
   gets a label or its checks fail." Its fields,
   in order: **Name**; **Repo**, with more than one repo; **Where it runs**, the same two radio
-  boxes and help as New session's **Where**; **First message**, a textarea up to 240 px tall;
+  boxes and help as New session's **Where**; **Model**, New session's **Model** group with
+  **Project (<model>)** first, which follows the project's model and is picked on a new routine;
+  **First message**, a textarea up to 240 px tall;
   **Allowed without asking**, a two-row monospace textarea up to 160 px tall with the placeholder
   "Bash(npm outdated)" and "One permission rule per line, such as Bash(npm audit:*). Only this
   routine's sessions you start or schedule use them without asking." in 11 px `fg-2` under it; and

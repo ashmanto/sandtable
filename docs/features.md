@@ -1141,8 +1141,8 @@ refusal, a notification title, or a format example.
   the project.
 - The session saves its model, and **Resume** and turning Remote Control off start it again on the
   same model.
-- A routine's runs use the project's model, and **Save as routine** in **New session** doesn't
-  carry a picked model over.
+- A routine's editor has the same **Model** choices, after **Project**, which follows the project's
+  model and is the choice for a routine saved without one. Each run starts on the routine's model.
 - A ticket's card and the **Sessions** strip card show the model before the state chip, and nothing
   for **Account default**.
 - The side panel's **Model** row names the model until Claude Code reports the model it runs.
