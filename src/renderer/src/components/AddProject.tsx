@@ -48,11 +48,24 @@ import {
 import { sameRepo } from '../../../shared/repo'
 import { isSandboxDomain, sandboxDomains } from '../../../shared/sandbox'
 import { appName, isApp } from '../../../shared/editors'
-import { AUTO_REVIEW_ROUNDS, MODEL_CHOICES, modelLabel } from '../../../shared/types'
+import {
+  AUTO_REVIEW_ROUNDS,
+  EFFORT_CHOICES,
+  MODEL_CHOICES,
+  effortLabel,
+  modelLabel
+} from '../../../shared/types'
 import { DEFAULT_KEEP_DONE_DAYS, KEEP_DONE_DAYS } from '../../../shared/visibleTickets'
 import { TOKEN_CAPS } from '../../../shared/pricing'
 import { compact } from '@/lib/usage'
-import type { Account, Model, Project, ProjectRepo, SetupSuggestion } from '../../../shared/types'
+import type {
+  Account,
+  Effort,
+  Model,
+  Project,
+  ProjectRepo,
+  SetupSuggestion
+} from '../../../shared/types'
 
 type Source = 'board' | 'issues' | 'linear' | 'jira'
 type Picked = { path: string; repos: string[] }
@@ -159,6 +172,7 @@ export function AddProject({
   const [keepDoneDays, setKeepDoneDays] = useState(project?.keepDoneDays ?? DEFAULT_KEEP_DONE_DAYS)
   const [tokenCap, setTokenCap] = useState(project?.tokenCap ?? 0)
   const [model, setModel] = useState(project?.model)
+  const [effort, setEffort] = useState(project?.effort)
   const [editor, setEditor] = useState(isApp(project?.editor) ? project.editor : undefined)
   const [readyCheck, setReadyCheck] = useState(project?.readyCheck !== false)
   const [autoReview, setAutoReview] = useState(!!project?.autoReview)
@@ -373,6 +387,7 @@ export function AddProject({
       ...(claudeDir !== undefined && { claudeDir }),
       ...(keepDoneDays !== DEFAULT_KEEP_DONE_DAYS && { keepDoneDays }),
       ...(model && { model }),
+      ...(effort && { effort }),
       ...(editor && { editor }),
       ...(tokenCap > 0 && { tokenCap }),
       ...(!readyCheck && { readyCheck: false as const }),
@@ -896,6 +911,34 @@ export function AddProject({
             </Select>
             <span id="model-help" className="text-xs text-fg-2">
               The model sessions run on. Start and New session can pick another for one session.
+            </span>
+          </div>
+        )}
+        {row(
+          'Effort',
+          null,
+          <div className="flex items-center gap-3">
+            <Select
+              value={effort ?? 'default'}
+              onValueChange={(v) => setEffort(v === 'default' ? undefined : (v as Effort))}
+            >
+              <SelectTrigger
+                aria-label="Effort"
+                aria-describedby="effort-help"
+                className="w-40 shrink-0"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {EFFORT_CHOICES.map((e) => (
+                  <SelectItem key={e} value={e}>
+                    {effortLabel(e)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span id="effort-help" className="text-xs text-fg-2">
+              The effort sessions run at. New session can pick another for one session.
             </span>
           </div>
         )}

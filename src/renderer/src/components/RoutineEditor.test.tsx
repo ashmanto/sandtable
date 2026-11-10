@@ -169,6 +169,42 @@ describe('RoutineEditor', () => {
     })
   })
 
+  describe('effort', () => {
+    const fill = async (): Promise<void> => {
+      await userEvent.type(screen.getByRole('textbox', { name: 'Name' }), 'nightly')
+      await userEvent.type(screen.getByRole('textbox', { name: 'First message' }), 'Run it')
+    }
+    const effort = (name: string): HTMLElement =>
+      within(screen.getByRole('radiogroup', { name: 'Effort' })).getByRole('radio', { name })
+
+    it("offers the project's effort first and saves no effort for it", async () => {
+      render(<RoutineEditor project={{ ...project, effort: 'high' }} onClose={vi.fn()} />)
+      expect(effort('Project (High)')).toBeChecked()
+      expect(screen.getByText("Project follows the project's effort, High.")).toBeInTheDocument()
+      await fill()
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(vi.mocked(api.routines.save).mock.calls[0][0]).not.toHaveProperty('effort')
+    })
+
+    it.each([
+      ['Max', 'max'],
+      ['Account default', null]
+    ] as const)('saves %s as %s', async (name, saved) => {
+      render(<RoutineEditor project={{ ...project, effort: 'high' }} onClose={vi.fn()} />)
+      await fill()
+      await userEvent.click(effort(name))
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(api.routines.save).toHaveBeenCalledWith(expect.objectContaining({ effort: saved }))
+    })
+
+    it('opens a routine at its saved effort', () => {
+      render(
+        <RoutineEditor project={project} routine={{ ...triage, effort: 'low' }} onClose={vi.fn()} />
+      )
+      expect(effort('Low')).toBeChecked()
+    })
+  })
+
   it('saves a trigger label, failing checks, and a daily cap', async () => {
     render(<RoutineEditor project={project} onClose={vi.fn()} />)
     await userEvent.type(screen.getByRole('textbox', { name: 'Name' }), 'triage')
