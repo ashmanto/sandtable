@@ -1,7 +1,7 @@
 import { renderHook } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { boardView, fakeSandtable } from '../test/fixtures'
-import { useStartFailure } from './useOverlapCheck'
+import { useStartFailure } from './startFlow'
 import { useBoard } from './useBoard'
 
 let state: DocumentVisibilityState

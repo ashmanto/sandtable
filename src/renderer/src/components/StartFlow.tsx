@@ -13,7 +13,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { sameRepo, ticketLabel } from '../../../shared/repo'
 import { previousExtras } from '../../../shared/sessions'
-import type { Pass } from '@/hooks/useOverlapCheck'
+import type { Pass } from '@/hooks/startFlow'
 import type { Project, ProjectRepo, SessionRecord, Ticket } from '../../../shared/types'
 import { RepoPicker } from './RadioBox'
 import { StartCheckDialog } from './StartCheckDialog'

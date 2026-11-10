@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import type { SetupRun } from '@/hooks/useOverlapCheck'
+import type { SetupRun } from '@/hooks/startFlow'
 import { runOf, spoken } from '@/lib/activity'
 import { cn, stop } from '@/lib/utils'
 import { findRepo } from '../../../shared/repo'

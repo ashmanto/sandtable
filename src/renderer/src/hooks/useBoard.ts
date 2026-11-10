@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { BoardView } from '../../../shared/api'
-import { setStartFailures } from './useOverlapCheck'
+import { setStartFailures } from './startFlow'
 
 /** The board of a project, reloaded whenever the main process reports a change. */
 export function useBoard(projectId: string | null): {

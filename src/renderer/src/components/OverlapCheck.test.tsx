@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { OverlapRun } from '@/hooks/useOverlapCheck'
+import type { OverlapRun } from '@/hooks/startFlow'
 import { OverlapCheck } from './OverlapCheck'
 
 const show = (check: OverlapRun['check'], cancel = vi.fn()): ReturnType<typeof vi.fn> => {

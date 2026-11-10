@@ -40,7 +40,7 @@ import {
 } from '../../../shared/sessions'
 import { cleanUp } from '@/lib/cleanUp'
 import { GAUGES_WIDTH, HeaderFrame, NARROW_WIDTH, headerTitle } from '@/lib/headerFrame'
-import { chooseFolder, failureText, usePendingAsk, useStartFailure } from '@/hooks/useOverlapCheck'
+import { chooseFolder, failureText, usePendingAsk, useStartFailure } from '@/hooks/startFlow'
 import { useTicketStart } from '@/hooks/useTicketStart'
 import { useLoad } from '@/hooks/useLoad'
 import { useRun } from '@/hooks/useRun'

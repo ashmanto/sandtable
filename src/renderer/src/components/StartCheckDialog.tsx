@@ -11,7 +11,7 @@ import {
 import { errorMessage } from '@/lib/utils'
 import { serviceOf, ticketLabel, type Service } from '../../../shared/repo'
 import { APPLIED_BUT } from '../../../shared/areas'
-import type { Pass } from '@/hooks/useOverlapCheck'
+import type { Pass } from '@/hooks/startFlow'
 import type { Project, Ticket, Triage } from '../../../shared/types'
 
 type Step =

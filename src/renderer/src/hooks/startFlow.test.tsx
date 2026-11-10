@@ -11,7 +11,7 @@ import {
   usePendingAsk,
   useTicketSetup,
   type OverlapRun
-} from './useOverlapCheck'
+} from './startFlow'
 import { SETUP_FAILED } from '../../../shared/worktreeSetup'
 
 const busy = [{ key: 'octo/shop#67', number: 67, title: 'Sort cards' }]
