@@ -1,4 +1,8 @@
+import { execFileSync } from 'node:child_process'
+import { existsSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { checkRemovable, removeWorktree, worktreePath } from '../git/worktree'
 import type { SessionRecord } from '../../shared/types'
 import { project, session, settle, setup, tempDir, ticket } from '../test/orchestrator'
 
@@ -307,5 +311,63 @@ describe('leftover sessions', () => {
     launched()
     await created
     expect(await t.orch.leftovers()).toEqual([])
+  })
+})
+
+describe('leftover sessions of a deleted project, with real git', () => {
+  const git = (cwd: string, ...args: string[]): string =>
+    execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe' })
+  const branch = '147-dark-mode-toggle'
+  let wt: string
+  let t: ReturnType<typeof setup>
+
+  beforeEach(async () => {
+    const root = tempDir('st-git-')
+    const repo = path.join(root, 'shop')
+    git(root, 'init', '-b', 'main', repo)
+    git(repo, 'config', 'user.name', 'Test')
+    git(repo, 'config', 'user.email', 'test@example.com')
+    writeFileSync(path.join(repo, 'a.txt'), 'a\n')
+    git(repo, 'add', '.')
+    git(repo, 'commit', '-m', 'init')
+    git(root, 'clone', '--bare', repo, path.join(root, 'origin.git'))
+    git(repo, 'remote', 'add', 'origin', path.join(root, 'origin.git'))
+    wt = worktreePath(repo, branch)
+    git(repo, 'worktree', 'add', '-b', branch, wt, 'main')
+    git(wt, 'push', '-u', 'origin', branch)
+    t = setup({
+      projects: [{ ...project, repos: [{ ...project.repos[0], path: repo }] }],
+      sessions: [session({ state: 'finished', worktrees: [wt] })]
+    })
+    t.deps.git.checkRemovable.mockImplementation(checkRemovable)
+    t.deps.git.removeWorktree.mockImplementation(removeWorktree)
+    await t.orch.reconnect()
+    await t.orch.removeProject('p1')
+  })
+
+  it('removes a clean, pushed worktree of a deleted project', async () => {
+    expect(await t.orch.removeWorktree('s1')).toEqual({ removed: true })
+    expect(existsSync(wt)).toBe(false)
+    expect(await t.orch.leftovers()).toEqual([])
+  })
+
+  it("refuses a deleted project's worktree with uncommitted changes", async () => {
+    writeFileSync(path.join(wt, 'b.txt'), 'b\n')
+    expect(await t.orch.removeWorktree('s1')).toEqual({
+      removed: false,
+      reason: 'Uncommitted changes'
+    })
+    expect(existsSync(wt)).toBe(true)
+  })
+
+  it("refuses a deleted project's worktree with unpushed commits", async () => {
+    writeFileSync(path.join(wt, 'b.txt'), 'b\n')
+    git(wt, 'add', '.')
+    git(wt, 'commit', '-m', 'local')
+    expect(await t.orch.removeWorktree('s1')).toEqual({
+      removed: false,
+      reason: 'Commits not pushed'
+    })
+    expect(existsSync(wt)).toBe(true)
   })
 })
