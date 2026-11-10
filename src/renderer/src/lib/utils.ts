@@ -72,6 +72,18 @@ export const loadFilter = <F extends string>(key: string, field: F): SavedFilter
       : null
   })
 
+/** A project's saved filter on `field`, kept under `prefix:<project ID>`. */
+export const savedFilter = <F extends string>(
+  prefix: string,
+  field: F
+): {
+  load: (projectId: string) => SavedFilter<F>
+  save: (projectId: string, f: SavedFilter<F>) => void
+} => ({
+  load: (projectId) => loadFilter(`${prefix}:${projectId}`, field),
+  save: (projectId, f) => saveSaved(`${prefix}:${projectId}`, f)
+})
+
 /** The JSON saved under `key`, as `read` makes of it, or `fallback` if it's missing or bad. */
 export function loadSaved<T>(
   key: string,
