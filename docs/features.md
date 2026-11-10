@@ -1159,6 +1159,21 @@ refusal, a notification title, or a format example.
 - Sandtable's own `claude -p` runs, such as the chat, the summary, the review, and the triage,
   overlap, and readiness checks, keep the account's default model.
 
+### Effort
+
+- **Effort** is set per project on the **Review** step. **Account default** passes no `--effort`,
+  so `claude` uses the account's default effort.
+- **Low**, **Medium**, **High**, **Extra high**, and **Max** start `claude` with `--effort low`,
+  `medium`, `high`, `xhigh`, or `max`, on any model.
+- **New session** has an **Effort** group after **Model**. A pick changes only that session.
+  **Start** uses the project's effort.
+- The session saves its effort, and **Resume** and turning Remote Control off start it again at the
+  same effort.
+- A routine's editor has the same **Effort** choices after **Project**, which follows the project's
+  effort at each run and is the choice for a routine saved without one.
+- The side panel's **Model** row shows the effort Claude Code reports, such as "high effort".
+- Sandtable's own `claude -p` runs keep the account's default effort.
+
 ### Token cap
 
 - **Token cap** is set per project on the **Review** step, off by default.
@@ -1320,14 +1335,14 @@ refusal, a notification title, or a format example.
 - You make a routine with **New routine** at the end of that row, or with **New routine…** in a
   project's **More > Routines** menu, which also lists its routines to edit or delete.
 - **Save as routine**, in the **New session** dialog or in the **More actions** menu of a session
-  without a ticket, fills in its repo, place, first message, and model.
+  without a ticket, fills in its repo, place, first message, model, and effort.
 - A first message is at most 10,000 bytes, and a name at most 200 characters.
 
 ### Copy to project
 
 - **Copy to project…** lists every project, the routine's own included, and opens the picked
   project's **New routine** form with the routine's name, place, first message, allowed rules,
-  schedule, and model.
+  schedule, model, and effort.
 - The copy takes the routine's repo when that project has it or has only one repo; otherwise you
   pick a repo.
 - The copy has no run history, saves as a separate routine only when you click **Save**, and in the
