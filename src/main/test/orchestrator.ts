@@ -321,12 +321,10 @@ export function setup(
       }))
     },
     events: {
-      watchEvents: vi.fn(
-        (_dir: string, cb: (id: string, s: SessionState | null, asking: boolean) => void) => {
-          onEvent = cb
-          return () => undefined
-        }
-      ),
+      watchEvents: vi.fn<OrchestratorDeps['events']['watchEvents']>((_dir, cb) => {
+        onEvent = cb
+        return () => undefined
+      }),
       readLastState: vi.fn(async (file: string) => lastState.get(file) ?? null),
       readAsking: vi.fn(async (file: string) => askingFiles.has(file)),
       readBackground: vi.fn<OrchestratorDeps['events']['readBackground']>(async () => []),

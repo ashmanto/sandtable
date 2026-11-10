@@ -302,7 +302,8 @@ export type OrchestratorDeps = {
   events: {
     watchEvents(
       dir: string,
-      onChange: (sessionId: string, state: SessionState | null, asking: boolean) => void
+      onChange: (sessionId: string, state: SessionState | null, asking: boolean) => void,
+      ids: { seed: string[]; live: () => string[] }
     ): () => void
     readLastState(file: string): Promise<SessionState | null>
     readAsking(file: string): Promise<boolean>
@@ -2119,7 +2120,12 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       const c = cache[p.id]
       if (c) synced.set(p.id, { tickets: c.tickets, syncedAt: c.syncedAt, error: null })
     }
-    stoppers.push(deps.events.watchEvents(eventsDir, onEvent))
+    stoppers.push(
+      deps.events.watchEvents(eventsDir, onEvent, {
+        seed: sessions.filter((s) => !s.removedAt).map((s) => s.id),
+        live: () => sessions.filter(isLive).map((s) => s.id)
+      })
+    )
     if (tmuxAvailable)
       for (const s of sessions.filter(isLive)) {
         const alive = await deps.tmux.hasTmux(s.tmuxName).catch(() => null)
