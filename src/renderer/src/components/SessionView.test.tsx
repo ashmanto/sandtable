@@ -273,15 +273,28 @@ describe('SessionView', () => {
   it('saves the session as a routine from More actions', async () => {
     const onRoutine = vi.fn()
     vi.mocked(api.sessions.firstMessage).mockResolvedValue('Find the leak')
-    renderView(adhoc(worktree), vi.fn(), Infinity, onRoutine)
+    renderView(adhoc({ ...worktree, model: 'sonnet' }), vi.fn(), Infinity, onRoutine)
     await userEvent.click(screen.getByRole('button', { name: 'More actions' }))
     await userEvent.click(screen.getByRole('menuitem', { name: 'Save as routine' }))
     expect(api.sessions.firstMessage).toHaveBeenCalledWith('a1')
     expect(onRoutine).toHaveBeenCalledWith(project, undefined, {
       repo: 'octo/shop-web',
       worktree: true,
-      message: 'Find the leak'
+      message: 'Find the leak',
+      model: 'sonnet'
     })
+  })
+
+  it('saves a session that ran with no model as an Account default routine', async () => {
+    const onRoutine = vi.fn()
+    renderView(adhoc(worktree), vi.fn(), Infinity, onRoutine)
+    await userEvent.click(screen.getByRole('button', { name: 'More actions' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Save as routine' }))
+    expect(onRoutine).toHaveBeenCalledWith(
+      project,
+      undefined,
+      expect.objectContaining({ model: null })
+    )
   })
 
   it('offers no Save as routine for a ticket session', () => {

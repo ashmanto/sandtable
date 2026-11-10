@@ -285,12 +285,22 @@ export type Routine = {
   scheduledThrough?: string
   on?: RoutineEvents
   dailyCap?: number
+  model?: Model | null
 }
 
 /** A routine as the form saves it, with no `id` when it is new. */
 export type RoutineInput = Pick<
   Routine,
-  'projectId' | 'name' | 'repo' | 'worktree' | 'message' | 'allow' | 'schedule' | 'on' | 'dailyCap'
+  | 'projectId'
+  | 'name'
+  | 'repo'
+  | 'worktree'
+  | 'message'
+  | 'allow'
+  | 'schedule'
+  | 'on'
+  | 'dailyCap'
+  | 'model'
 > & {
   id?: string
 }

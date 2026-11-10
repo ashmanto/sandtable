@@ -67,7 +67,7 @@ export function SessionView({
     run(async () => {
       const message = await window.sandtable.sessions.firstMessage(id)
       const repo = sessionRepos(project.repos, session)[0]?.github ?? ''
-      onRoutine(project, undefined, { repo, worktree, message })
+      onRoutine(project, undefined, { repo, worktree, message, model: session.model ?? null })
     })
 
   const rename = async (name: string): Promise<void> => {

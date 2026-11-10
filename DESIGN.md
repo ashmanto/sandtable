@@ -1701,7 +1701,7 @@ them through Tailwind classes and never name a raw color.
   checkout) or **Remove worktree** (worktree) once it's finished;
   nothing once it's removed. Last comes, for a session without a ticket that isn't removed, **More
   actions** with **Save as routine**, which opens the
-  [routine editor](#routine-editor) with the session's repo, place, and first message; at narrow
+  [routine editor](#routine-editor) with the session's repo, place, first message, and model; at narrow
   widths the outline actions fold into the same menu (see **Narrow widths**). Buttons are 28 px, **Rename session** included, except the 20 px
   **Clear Needs you** and **Raise cap**. While one
   of them works, all of them are disabled.
@@ -1734,7 +1734,7 @@ them through Tailwind classes and never name a raw color.
   and Haiku, each segment as wide as its name with the spare width shared out, set to the project's model. The choice applies only to this session.
   Group headings are 11 px, weight 500, in `fg-2`.
 - The footer has a ghost **Save as routine** on the left, which closes the dialog and opens the
-  [routine editor](#routine-editor) with its repo, place, and message, then **Cancel** (outline)
+  [routine editor](#routine-editor) with its repo, place, message, and model, then **Cancel** (outline)
   and **Start**. While it works, **Start** reads "Starting",
   every button is disabled, and Escape or a click outside doesn't close the dialog.
 - A **New worktree** start with a [worktree setup](#worktree-setup) shows its block above the
@@ -1811,7 +1811,10 @@ them through Tailwind classes and never name a raw color.
   session without a ticket with this first message, in one click, on a schedule, or when a ticket
   gets a label or its checks fail." Its fields,
   in order: **Name**; **Repo**, with more than one repo; **Where it runs**, the same two radio
-  boxes and help as New session's **Where**; **First message**, a textarea up to 240 px tall;
+  boxes and help as New session's **Where**; **Model**, New session's **Model** group with
+  **Project** first, named "Project (<model>)", which follows the project's model and is picked on
+  a new routine, with "Project follows the project's model, <model>." under it;
+  **First message**, a textarea up to 240 px tall;
   **Allowed without asking**, a two-row monospace textarea up to 160 px tall with the placeholder
   "Bash(npm outdated)" and "One permission rule per line, such as Bash(npm audit:*). Only this
   routine's sessions you start or schedule use them without asking." in 11 px `fg-2` under it; and

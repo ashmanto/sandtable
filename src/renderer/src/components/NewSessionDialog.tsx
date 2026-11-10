@@ -131,7 +131,12 @@ export function NewSessionDialog({
             disabled={busy}
             className="sm:mr-auto"
             onClick={() => {
-              onRoutine(project, undefined, { repo: github, worktree, message })
+              onRoutine(project, undefined, {
+                repo: github,
+                worktree,
+                message,
+                model: model === 'default' ? null : model
+              })
               close()
             }}
           >

@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto'
+import { MODELS } from '../../shared/types'
 import type {
   ConversationEntry,
+  Model,
   Project,
   ProjectRepo,
   Routine,
@@ -71,6 +73,7 @@ export function createRoutines(ctx: {
       allow?: string[]
       scheduled?: boolean
       trigger?: RunTrigger
+      model?: Model | null
     }
   ) => Promise<string>
 }): RoutinesApi & {
@@ -115,6 +118,7 @@ export function createRoutines(ctx: {
         routineId: r.id,
         allow: opts.trigger ? undefined : r.allow,
         scheduled: opts.scheduled,
+        model: r.model,
         ...(opts.trigger && { trigger: opts.trigger })
       })
     } finally {
@@ -267,6 +271,8 @@ export function createRoutines(ctx: {
       const others = ctx.routines().filter((r) => r.projectId === project.id)
       const problem = routineProblem(input, others, project.name)
       if (problem) throw new Error(problem)
+      const { model } = input
+      if (model != null && !MODELS.includes(model)) throw new Error('Not a model')
       const repo = repoOf(project, input.repo)
       const old = input.id === undefined ? undefined : others.find((r) => r.id === input.id)
       if (input.id !== undefined && !old) throw new Error('Unknown routine')
@@ -284,6 +290,7 @@ export function createRoutines(ctx: {
         repo: repo.github,
         worktree,
         message,
+        ...(model !== undefined && { model }),
         ...(allow.length > 0 && { allow }),
         ...(schedule && { schedule: { days: [...schedule.days], time: schedule.time } }),
         ...(triggered && { on }),

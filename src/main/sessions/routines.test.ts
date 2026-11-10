@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import type { Routine, SessionRecord, Ticket } from '../../shared/types'
+import type { Model, Routine, SessionRecord, Ticket } from '../../shared/types'
 import { shortTime } from '../../shared/time'
 import {
   expectSettingsUntouched,
@@ -137,6 +137,55 @@ describe('routines', () => {
     expect(t.deps.repoIssues.setColumn).not.toHaveBeenCalled()
     expect(t.deps.repoIssues.create).not.toHaveBeenCalled()
     expect(t.deps.repoIssues.reopen).not.toHaveBeenCalled()
+  })
+
+  describe('model', () => {
+    const modelArg = (t: ReturnType<typeof setup>): string | undefined => {
+      const args: string[] = t.deps.tmux.startTmux.mock.calls[0][2]
+      return args.includes('--model') ? args[args.indexOf('--model') + 1] : undefined
+    }
+
+    it('runs a routine on its own model', async () => {
+      const t = setup({ projects: [{ ...project, model: 'sonnet' }] })
+      await t.orch.reconnect()
+      const { id } = await t.orch.saveRoutine({ ...input, model: 'haiku' })
+      const sessionId = await t.orch.startRoutine(id)
+      expect(modelArg(t)).toBe('haiku')
+      expect(t.orch.session(sessionId)?.model).toBe('haiku')
+    })
+
+    it("runs a routine with no model on the project's model", async () => {
+      const t = setup({ projects: [{ ...project, model: 'sonnet' }] })
+      await t.orch.reconnect()
+      const { id } = await t.orch.saveRoutine(input)
+      await t.orch.startRoutine(id)
+      expect(modelArg(t)).toBe('sonnet')
+    })
+
+    it('runs an Account default routine without a model flag', async () => {
+      const t = setup({ projects: [{ ...project, model: 'sonnet' }] })
+      await t.orch.reconnect()
+      const { id } = await t.orch.saveRoutine({ ...input, model: null })
+      expect(t.saved().routines[0].model).toBeNull()
+      await t.orch.startRoutine(id)
+      expect(modelArg(t)).toBeUndefined()
+    })
+
+    it("refuses a routine model that isn't a model", async () => {
+      const t = setup()
+      await t.orch.reconnect()
+      await expect(t.orch.saveRoutine({ ...input, model: 'gpt' as Model })).rejects.toThrow(
+        'Not a model'
+      )
+    })
+
+    it("drops the model when a routine goes back to the project's model", async () => {
+      const t = setup()
+      await t.orch.reconnect()
+      const { id } = await t.orch.saveRoutine({ ...input, model: 'opus' })
+      await t.orch.saveRoutine({ ...input, id })
+      expect((await t.orch.listRoutines('p1'))[0]).not.toHaveProperty('model')
+    })
   })
 
   it("lets only the routine's sessions use its allowed rules, and leaves the repo's settings", async () => {
