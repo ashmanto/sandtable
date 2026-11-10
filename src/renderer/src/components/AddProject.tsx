@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { FieldHeading, RadioBox } from './RadioBox'
+import { useLatestLoad } from '../hooks/useLatestLoad'
 import { useSteps } from '../hooks/useSteps'
 import { Problem, Spinner, StepFlow } from './StepFlow'
 import { EmojiPicker } from './EmojiPicker'
@@ -205,26 +206,6 @@ const NO_ACCOUNT = { site: '', email: '', token: '' }
 type Board = { id: number; name: string }
 
 /** Runs `load` so that only the latest call through `counter` sets its result, error, and loading flag. */
-async function latestLoad<T>(
-  counter: { current: number },
-  setLoading: (on: boolean) => void,
-  setError: (message: string | null) => void,
-  load: () => Promise<T>,
-  apply: (loaded: T) => void
-): Promise<void> {
-  const id = ++counter.current
-  setError(null)
-  setLoading(true)
-  try {
-    const loaded = await load()
-    if (counter.current === id) apply(loaded)
-  } catch (err) {
-    if (counter.current === id) setError(errorMessage(err))
-  } finally {
-    if (counter.current === id) setLoading(false)
-  }
-}
-
 /** The add-project flow: name, tickets from, repos, and review; prefilled to edit. */
 export function AddProject({
   project,
@@ -260,52 +241,47 @@ export function AddProject({
             : 'issues'
       : null
   )
-  const workspacesLoad = useRef(0)
-  const [workspaces, setWorkspaces] = useState<LinearWorkspace[] | null>(null)
-  const [workspacesLoading, setWorkspacesLoading] = useState(false)
-  const [workspacesError, setWorkspacesError] = useState<string | null>(null)
+  const workspacesLoad = useLatestLoad<LinearWorkspace[]>()
+  const { data: workspaces, loading: workspacesLoading, error: workspacesError } = workspacesLoad
   const [workspace, setWorkspace] = useState(project?.linear?.workspace ?? '')
-  const teamsLoad = useRef(0)
-  const [teams, setTeams] = useState<LinearTeam[] | null>(null)
-  const [teamsLoading, setTeamsLoading] = useState(false)
-  const [teamsError, setTeamsError] = useState<string | null>(null)
+  const teamsLoad = useLatestLoad<LinearTeam[]>()
+  const { data: teams, loading: teamsLoading, error: teamsError } = teamsLoad
   const [team, setTeam] = useState(project?.linear?.team ?? '')
   const [linearProjects, setLinearProjects] = useState(project?.linear?.projects ?? [])
-  const jiraAccountsLoad = useRef(0)
-  const [jiraAccounts, setJiraAccounts] = useState<JiraAccount[] | null>(null)
-  const [jiraAccountsError, setJiraAccountsError] = useState<string | null>(null)
-  const [jiraAccountsLoading, setJiraAccountsLoading] = useState(false)
+  const jiraAccountsLoad = useLatestLoad<JiraAccount[]>()
+  const {
+    data: jiraAccounts,
+    loading: jiraAccountsLoading,
+    error: jiraAccountsError
+  } = jiraAccountsLoad
   const jiraFilterRef = useRef<HTMLInputElement>(null)
   const focusFilter = useRef(false)
   const [jiraSite, setJiraSite] = useState(project?.jira?.site ?? '')
   const [adding, setAdding] = useState<{ site: string; email: string; token: string } | null>(null)
   const [signingIn, setSigningIn] = useState(false)
   const [signInError, setSignInError] = useState<string | null>(null)
-  const jiraLoad = useRef(0)
-  const [jiraList, setJiraList] = useState<{ key: string; name: string }[] | null>(null)
-  const [jiraLoading, setJiraLoading] = useState(false)
-  const [jiraError, setJiraError] = useState<string | null>(null)
+  const jiraLoad = useLatestLoad<{ key: string; name: string }[]>()
+  const { data: jiraList, loading: jiraLoading, error: jiraError } = jiraLoad
   const [jiraKey, setJiraKey] = useState(project?.jira?.project ?? '')
   const [jiraName, setJiraName] = useState(project?.jira?.name ?? '')
-  const boardsLoad = useRef(0)
-  const [jiraBoards, setJiraBoards] = useState<Board[] | null>(null)
-  const [boardsLoading, setBoardsLoading] = useState(false)
-  const [boardsError, setBoardsError] = useState<string | null>(null)
+  const boardsLoad = useLatestLoad<Board[]>()
+  const { data: jiraBoards, loading: boardsLoading, error: boardsError } = boardsLoad
   const [jiraBoard, setJiraBoard] = useState<Board | null | undefined>(
     project?.jira ? (project.jira.board ?? null) : undefined
   )
   const [jiraFilter, setJiraFilter] = useState('')
   const [url, setUrl] = useState(board0?.source.url ?? '')
-  const [loaded, setLoaded] = useState(
-    board0 && {
-      url: board0.source.url,
-      options: [...new Set(Object.values(board0.statusMap))],
-      repos: project?.repos.map((r) => r.github) ?? []
-    }
+  const boardLoad = useLatestLoad(
+    board0
+      ? {
+          url: board0.source.url,
+          options: [...new Set(Object.values(board0.statusMap))],
+          repos: project?.repos.map((r) => r.github) ?? []
+        }
+      : null
   )
-  const boardLoad = useRef(0)
-  const [loading, setLoading] = useState(false)
-  const [boardError, setBoardError] = useState<'url' | { message: string } | null>(null)
+  const { data: loaded, loading, error: boardError } = boardLoad
+  const [badUrl, setBadUrl] = useState(false)
   const [statusMap, setStatusMap] = useState<Partial<StatusMap>>(board0?.statusMap ?? {})
   const [entries, setEntries] = useState<Entry[]>(
     project?.repos.map((r) => ({ ...r, include: true })) ?? []
@@ -438,19 +414,17 @@ export function AddProject({
   }
 
   function loadBoard(): void {
-    if (!boardName(url)) return setBoardError('url')
+    if (!boardName(url)) return setBadUrl(true)
     const target = url.trim()
-    void latestLoad(
-      boardLoad,
-      setLoading,
-      (message) => setBoardError(message === null ? null : { message }),
-      () =>
-        Promise.all([
+    void boardLoad.load(
+      async () => {
+        const [options, repos] = await Promise.all([
           window.sandtable.projects.statusOptions(target),
           window.sandtable.projects.boardRepos(target)
-        ]),
-      ([options, repos]) => {
-        setLoaded({ url: target, options, repos })
+        ])
+        return { url: target, options, repos }
+      },
+      ({ options, repos }) => {
         setStatusMap((m) =>
           Object.fromEntries(
             STATUS_FIELDS.map(({ key, usual }) => {
@@ -474,13 +448,9 @@ export function AddProject({
   }
 
   function loadWorkspaces(): Promise<void> {
-    return latestLoad(
-      workspacesLoad,
-      setWorkspacesLoading,
-      setWorkspacesError,
+    return workspacesLoad.load(
       () => window.sandtable.projects.linearWorkspaces(),
       (loaded) => {
-        setWorkspaces(loaded)
         const picked = (
           loaded.find((w) => w.slug === workspace) ??
           loaded.find((w) => w.default) ??
@@ -496,21 +466,17 @@ export function AddProject({
 
   function changeWorkspace(value: string): void {
     setWorkspace(value)
-    setTeams(null)
+    teamsLoad.set(null)
     setTeam('')
     setLinearProjects([])
     void loadTeams(value, '')
   }
 
   function loadTeams(ws: string, keep: string): Promise<void> {
-    return latestLoad(
-      teamsLoad,
-      setTeamsLoading,
-      setTeamsError,
+    return teamsLoad.load(
       () => window.sandtable.projects.linearTeams(ws),
       (loaded) => {
         const kept = loaded.find((t) => t.key === keep)
-        setTeams(loaded)
         setTeam(kept ? keep : '')
         setLinearProjects((ps) => kept?.projects.filter((k) => ps.some((p) => p.id === k.id)) ?? [])
       }
@@ -518,27 +484,19 @@ export function AddProject({
   }
 
   function loadJiraAccounts(): Promise<void> {
-    return latestLoad(
-      jiraAccountsLoad,
-      setJiraAccountsLoading,
-      setJiraAccountsError,
+    return jiraAccountsLoad.load(
       () => window.sandtable.projects.jiraAccounts(),
       (loaded) => {
-        setJiraAccounts(loaded)
         if (!loaded.length) setAdding(NO_ACCOUNT)
       }
     )
   }
 
   function loadJiraProjects(site: string, keep: string): Promise<void> {
-    return latestLoad(
-      jiraLoad,
-      setJiraLoading,
-      setJiraError,
+    return jiraLoad.load(
       () => window.sandtable.projects.jiraProjects(site),
       (loaded) => {
         const kept = loaded.find((p) => p.key === keep)
-        setJiraList(loaded)
         setJiraKey(kept ? keep : '')
         if (kept) setJiraName(kept.name)
       }
@@ -550,13 +508,9 @@ export function AddProject({
     key: string,
     keep: Board | null | undefined
   ): Promise<void> {
-    return latestLoad(
-      boardsLoad,
-      setBoardsLoading,
-      setBoardsError,
+    return boardsLoad.load(
       () => window.sandtable.projects.jiraBoards(site, key),
       (loaded) => {
-        setJiraBoards(loaded)
         setJiraBoard(
           loaded.length === 0 || keep === null
             ? null
@@ -570,18 +524,17 @@ export function AddProject({
   function pickJiraProject(p: { key: string; name: string }): void {
     setJiraKey(p.key)
     setJiraName(p.name)
-    setJiraBoards(null)
+    boardsLoad.set(null)
     setJiraBoard(undefined)
     void loadJiraBoards(jiraSite, p.key, undefined)
   }
 
   function pickJiraAccount(site: string): void {
-    ++boardsLoad.current
-    setBoardsLoading(false)
-    setJiraBoards(null)
+    boardsLoad.cancel()
+    boardsLoad.set(null)
     setJiraBoard(undefined)
     setJiraSite(site)
-    setJiraList(null)
+    jiraLoad.set(null)
     setJiraKey('')
     setJiraFilter('')
     void loadJiraProjects(site, '')
@@ -598,7 +551,7 @@ export function AddProject({
         adding.email.trim(),
         adding.token
       )
-      setJiraAccounts((as) => [...(as ?? []).filter((a) => a.site !== added.site), added])
+      jiraAccountsLoad.set((as) => [...(as ?? []).filter((a) => a.site !== added.site), added])
       setAdding(null)
       focusFilter.current = true
       pickJiraAccount(added.site)
@@ -611,11 +564,10 @@ export function AddProject({
 
   function changeUrl(value: string): void {
     setUrl(value)
-    setBoardError(null)
-    boardLoad.current++
-    setLoading(false)
+    setBadUrl(false)
+    boardLoad.cancel()
     if (loaded) {
-      setLoaded(undefined)
+      boardLoad.set(null)
       setEntries((es) => es.filter((e) => e.include && e.path))
       setFolderError(null)
       setChoosing(null)
@@ -625,7 +577,7 @@ export function AddProject({
   function chooseSource(value: Source): void {
     if (value === source) return
     setSource(value)
-    setLoaded(undefined)
+    boardLoad.set(null)
     setTeam('')
     setLinearProjects([])
     if (value === 'linear' && !workspaces && !workspacesLoading) void loadWorkspaces()
@@ -1028,18 +980,13 @@ export function AddProject({
               </Button>
             </div>
           </div>
-          {boardError === 'url' ? (
+          {badUrl ? (
             <Problem title="Enter a board URL such as https://github.com/users/you/projects/1" />
           ) : (
             <LoadState
               loading={loading}
               text="Loading board…"
-              failed={
-                boardError && {
-                  title: "Couldn't load the board.",
-                  detail: boardError.message
-                }
-              }
+              failed={boardError ? { title: "Couldn't load the board.", detail: boardError } : null}
               onRetry={loadBoard}
             >
               {board && (
