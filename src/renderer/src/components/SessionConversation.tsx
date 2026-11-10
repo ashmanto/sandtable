@@ -178,9 +178,7 @@ function ToolGroup({
   )
 }
 
-const INTERRUPTED = /^\[Request interrupted by user( for tool use)?\]$/
-const stopped = (entry: ConversationEntry): boolean =>
-  entry.kind === 'user' && INTERRUPTED.test(entry.text)
+const stopped = (entry: ConversationEntry): boolean => entry.kind === 'user' && !!entry.stopped
 
 type Row =
   | { at: number; entry: Exclude<ConversationEntry, Tool> }

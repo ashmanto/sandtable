@@ -72,6 +72,13 @@ const todosOf = (input: unknown): Todo[] =>
       : []
   )
 
+const INTERRUPTED = /^\[Request interrupted by user( for tool use)?\]$/
+const userEntry = (text: string): ConversationEntry => ({
+  kind: 'user',
+  text,
+  ...(INTERRUPTED.test(text) && { stopped: true as const })
+})
+
 /** A parser that takes a Claude Code conversation file's text in pieces, as it grows. */
 export function conversationParser(): {
   add(text: string): number
@@ -133,16 +140,15 @@ export function conversationParser(): {
       a.isMeta !== true &&
       typed(a.prompt)
     )
-      entries.push({ kind: 'user', text: a.prompt })
+      entries.push(userEntry(a.prompt))
     if (!isRow(row.message)) return
     const content = row.message.content
     if (row.type === 'user') {
       const meta = row.isMeta === true || row.isCompactSummary === true
-      if (!meta && typed(content)) entries.push({ kind: 'user', text: content })
+      if (!meta && typed(content)) entries.push(userEntry(content))
       else if (!meta && typeof content === 'string') addCommand(content)
       for (const b of blocks(content)) {
-        if (b.type === 'text' && !meta && typed(b.text))
-          entries.push({ kind: 'user', text: b.text })
+        if (b.type === 'text' && !meta && typed(b.text)) entries.push(userEntry(b.text))
         const tool = b.type === 'tool_result' && tools.get(b.tool_use_id as string)
         if (!tool) continue
         tool.entry.output = cut(resultText(b.content))

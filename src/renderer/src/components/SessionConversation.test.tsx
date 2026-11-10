@@ -832,8 +832,8 @@ describe('SessionConversation', () => {
 
   it('shows an interrupt as a note, not your message', async () => {
     loaded([
-      { kind: 'user', text: '[Request interrupted by user]' },
-      { kind: 'user', text: '[Request interrupted by user for tool use]' }
+      { kind: 'user', text: '[Request interrupted by user]', stopped: true },
+      { kind: 'user', text: '[Request interrupted by user for tool use]', stopped: true }
     ])
     show(idle)
     expect(await screen.findAllByText('You stopped Claude.')).toHaveLength(2)
@@ -920,7 +920,7 @@ describe('SessionConversation', () => {
     { kind: 'user', text: 'Fix the board scroll' },
     tool('Read', 'a.ts'),
     { kind: 'assistant', text: 'Fixed' },
-    { kind: 'user', text: '[Request interrupted by user]' },
+    { kind: 'user', text: '[Request interrupted by user]', stopped: true },
     { kind: 'user', text: 'Fix the drag flicker\nIt jumps.' },
     { kind: 'user', text: '@"/data/images/s1/a.png" @"/data/images/s1/b.png"' },
     { kind: 'user', text: 'Write the PR body' }
@@ -1065,7 +1065,7 @@ describe('SessionConversation', () => {
         entries={[
           { kind: 'user', text: 'Thank you' },
           tool('Read', 'a.ts', null),
-          { kind: 'user', text: '[Request interrupted by user]' },
+          { kind: 'user', text: '[Request interrupted by user]', stopped: true },
           { kind: 'compact', at: '2026-10-30T14:05:00', trigger: 'auto' },
           { kind: 'assistant', text: 'Sure' }
         ]}
