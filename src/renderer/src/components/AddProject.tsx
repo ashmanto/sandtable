@@ -18,13 +18,14 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { RadioBox } from './RadioBox'
-import { useLatestLoad } from '../hooks/useLatestLoad'
 import { useSteps } from '../hooks/useSteps'
-import { LabeledSelect, LoadState, Problem, Spinner, StepFlow } from './StepFlow'
+import { Problem, Spinner, StepFlow } from './StepFlow'
 import { EmojiPicker } from './EmojiPicker'
 import { ProjectTile } from './ProjectTile'
 import { InstructionsField } from './InstructionsField'
+import { BoardColumns, BoardReview, BoardStep } from './BoardStep'
 import { JiraReview, JiraStep } from './JiraStep'
+import { useBoardSource } from '../hooks/useBoardSource'
 import { LinearReview, LinearStep } from './LinearStep'
 import { useJiraSource } from '../hooks/useJiraSource'
 import { useLinearSource } from '../hooks/useLinearSource'
@@ -38,7 +39,6 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { cn, errorMessage, home, onEnter, plural } from '@/lib/utils'
-import { parseBoardUrl } from '../../../shared/boardUrl'
 import { IN_PROGRESS_LABEL } from '../../../shared/columns'
 import {
   instructionsBytes,
@@ -52,14 +52,7 @@ import { AUTO_REVIEW_ROUNDS, MODEL_CHOICES, modelLabel } from '../../../shared/t
 import { DEFAULT_KEEP_DONE_DAYS, KEEP_DONE_DAYS } from '../../../shared/visibleTickets'
 import { TOKEN_CAPS } from '../../../shared/pricing'
 import { compact } from '@/lib/usage'
-import type {
-  Account,
-  Model,
-  Project,
-  ProjectRepo,
-  SetupSuggestion,
-  StatusMap
-} from '../../../shared/types'
+import type { Account, Model, Project, ProjectRepo, SetupSuggestion } from '../../../shared/types'
 
 type Source = 'board' | 'issues' | 'linear' | 'jira'
 type Picked = { path: string; repos: string[] }
@@ -90,11 +83,6 @@ const setupSummary = (setup: Entry['setup']): string => {
 
 const STEPS = ['Name', 'Tickets from', 'Repos', 'Review']
 const HEADINGS = ['Name the project', 'Where tickets come from', 'Repos and folders', 'Review']
-const STATUS_FIELDS: { key: keyof StatusMap; label: string; usual: string }[] = [
-  { key: 'todo', label: 'To do', usual: 'Todo' },
-  { key: 'inProgress', label: 'In progress', usual: 'In Progress' },
-  { key: 'done', label: 'Done', usual: 'Done' }
-]
 const SOURCES: { value: Source; title: string; help: string }[] = [
   {
     value: 'board',
@@ -126,15 +114,6 @@ const REMOTE: { value: boolean | undefined; title: string; help: string }[] = [
   { value: true, title: 'On', help: "This project's sessions start with Remote Control on." },
   { value: false, title: 'Off', help: "This project's sessions start with Remote Control off." }
 ]
-
-const boardName = (url: string): string | null => {
-  try {
-    const { owner, number } = parseBoardUrl(url)
-    return `${owner}/projects/${number}`
-  } catch {
-    return null
-  }
-}
 
 /** The add-project flow: name, tickets from, repos, and review; prefilled to edit. */
 export function AddProject({
@@ -171,21 +150,6 @@ export function AddProject({
             : 'issues'
       : null
   )
-  const linear = useLinearSource(project)
-  const jira = useJiraSource(project)
-  const [url, setUrl] = useState(board0?.source.url ?? '')
-  const boardLoad = useLatestLoad(
-    board0
-      ? {
-          url: board0.source.url,
-          options: [...new Set(Object.values(board0.statusMap))],
-          repos: project?.repos.map((r) => r.github) ?? []
-        }
-      : null
-  )
-  const { data: loaded, loading, error: boardError } = boardLoad
-  const [badUrl, setBadUrl] = useState(false)
-  const [statusMap, setStatusMap] = useState<Partial<StatusMap>>(board0?.statusMap ?? {})
   const [entries, setEntries] = useState<Entry[]>(
     project?.repos.map((r) => ({ ...r, include: true })) ?? []
   )
@@ -205,6 +169,23 @@ export function AddProject({
   const [typedError, setTypedError] = useState<string | null>(null)
   const [folderError, setFolderError] = useState<{ title: string; path?: string } | null>(null)
   const [choosing, setChoosing] = useState<Picked | null>(null)
+  const boardSource = useBoardSource(project, {
+    loaded: (repos) =>
+      setEntries((es) => [
+        ...repos.map(
+          (github) =>
+            es.find((e) => sameRepo(e.github, github)) ?? { github, path: null, include: false }
+        ),
+        ...es.filter((e) => e.include && !repos.some((r) => sameRepo(r, e.github)))
+      ]),
+    cleared: () => {
+      setEntries((es) => es.filter((e) => e.include && e.path))
+      setFolderError(null)
+      setChoosing(null)
+    }
+  })
+  const linear = useLinearSource(project)
+  const jira = useJiraSource(project)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [suggested, setSuggested] = useState<Record<string, SetupSuggestion | null>>({})
@@ -229,7 +210,7 @@ export function AddProject({
     if (!settingsOpen) void window.sandtable.accounts.list().then(setAccounts)
   }, [settingsOpen])
 
-  const board = source === 'board' && loaded?.url === url.trim() ? loaded : null
+  const board = source === 'board' ? boardSource.board : null
   const included = entries.filter((e) => e.include)
   function issue(i: number): string | null {
     if (i === 0) return name.trim() ? null : 'Enter a name'
@@ -238,10 +219,7 @@ export function AddProject({
       if (source === 'issues') return null
       if (source === 'jira') return jira.issue
       if (source === 'linear') return linear.issue
-      if (loading) return 'Loading the board…'
-      if (!board) return 'Load the board'
-      const missing = STATUS_FIELDS.find((f) => !statusMap[f.key])
-      return missing ? `Choose a board status for ${missing.label}` : null
+      return boardSource.issue
     }
     if (i === 2) {
       if (source === 'board' && !board) return 'Load the board first'
@@ -268,56 +246,10 @@ export function AddProject({
     else go(step + 1)
   }
 
-  function loadBoard(): void {
-    if (!boardName(url)) return setBadUrl(true)
-    const target = url.trim()
-    void boardLoad.load(
-      async () => {
-        const [options, repos] = await Promise.all([
-          window.sandtable.projects.statusOptions(target),
-          window.sandtable.projects.boardRepos(target)
-        ])
-        return { url: target, options, repos }
-      },
-      ({ options, repos }) => {
-        setStatusMap((m) =>
-          Object.fromEntries(
-            STATUS_FIELDS.map(({ key, usual }) => {
-              const kept = m[key]
-              return [
-                key,
-                kept && options.includes(kept) ? kept : options.includes(usual) ? usual : undefined
-              ]
-            })
-          )
-        )
-        setEntries((es) => [
-          ...repos.map(
-            (github) =>
-              es.find((e) => sameRepo(e.github, github)) ?? { github, path: null, include: false }
-          ),
-          ...es.filter((e) => e.include && !repos.some((r) => sameRepo(r, e.github)))
-        ])
-      }
-    )
-  }
-
-  function changeUrl(value: string): void {
-    setUrl(value)
-    setBadUrl(false)
-    boardLoad.cancel()
-    if (loaded) {
-      boardLoad.set(null)
-      setEntries((es) => es.filter((e) => e.include && e.path))
-      setFolderError(null)
-      setChoosing(null)
-    }
-  }
-
   function chooseSource(value: Source): void {
     if (value === source) return
     setSource(value)
-    boardLoad.set(null)
+    boardSource.reset()
     linear.reset()
     if (value === 'linear') linear.activate()
     if (value === 'jira') jira.activate()
@@ -434,9 +366,7 @@ export function AddProject({
         const setup = keptSetup(e.setup)
         return e.path ? [{ github: e.github, path: e.path, ...(setup && { setup }) }] : []
       }),
-      ...(source === 'board' && {
-        board: { source: parseBoardUrl(url), statusMap: statusMap as StatusMap }
-      }),
+      ...(source === 'board' && boardSource.saved && { board: boardSource.saved }),
       ...(source === 'linear' && linear.saved && { linear: linear.saved }),
       ...(source === 'jira' && jira.saved && { jira: jira.saved }),
       ...(remoteControl !== undefined && { remoteControl }),
@@ -478,7 +408,7 @@ export function AddProject({
     if (i === 0) return name.trim()
     if (i === 1)
       return source === 'board'
-        ? 'Board, statuses chosen'
+        ? boardSource.summary
         : source === 'linear'
           ? linear.summary
           : source === 'jira'
@@ -680,69 +610,7 @@ export function AddProject({
           />
         ))}
       </div>
-      {source === 'board' && (
-        <div className="mt-4 flex flex-col gap-3">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="board-url">Board URL</Label>
-            <div className="flex gap-2">
-              <Input
-                id="board-url"
-                autoFocus
-                autoComplete="off"
-                spellCheck={false}
-                className="font-mono"
-                placeholder="https://github.com/users/you/projects/1"
-                value={url}
-                onChange={(e) => changeUrl(e.target.value)}
-                onKeyDown={onEnter(() => !loading && loadBoard())}
-              />
-              <Button
-                variant="outline"
-                size="lg"
-                disabled={loading || !url.trim()}
-                onClick={() => loadBoard()}
-              >
-                {board ? 'Reload' : 'Load board'}
-              </Button>
-            </div>
-          </div>
-          {badUrl ? (
-            <Problem title="Enter a board URL such as https://github.com/users/you/projects/1" />
-          ) : (
-            <LoadState
-              loading={loading}
-              text="Loading board…"
-              failed={boardError ? { title: "Couldn't load the board.", detail: boardError } : null}
-              onRetry={loadBoard}
-            >
-              {board && (
-                <p role="status" className="flex items-center gap-1.5 text-fg-2">
-                  <Check className="size-3.5" />
-                  Board loaded: tickets from {plural(board.repos.length, 'repo')}
-                </p>
-              )}
-            </LoadState>
-          )}
-          {board && (
-            <fieldset className="flex flex-col gap-2">
-              <legend className="mb-2 font-medium">Board status for each column</legend>
-              <div className="grid grid-cols-3 gap-3">
-                {STATUS_FIELDS.map((f) => (
-                  <LabeledSelect
-                    key={f.key}
-                    id={`status-${f.key}`}
-                    label={f.label}
-                    small
-                    value={statusMap[f.key] ?? ''}
-                    onChange={(v) => setStatusMap((m) => ({ ...m, [f.key]: v }))}
-                    options={board.options.map((o) => ({ value: o, label: o }))}
-                  />
-                ))}
-              </div>
-            </fieldset>
-          )}
-        </div>
-      )}
+      {source === 'board' && <BoardStep source={boardSource} />}
       {source === 'linear' && <LinearStep source={linear} />}
       {source === 'jira' && <JiraStep source={jira} />}
     </>
@@ -919,10 +787,7 @@ export function AddProject({
           'Tickets from',
           1,
           source === 'board' ? (
-            <>
-              <span>GitHub Projects board</span>
-              <span className="truncate font-mono text-xs text-fg-2">{url.trim()}</span>
-            </>
+            <BoardReview source={boardSource} />
           ) : source === 'jira' ? (
             <JiraReview source={jira} />
           ) : source === 'linear' ? (
@@ -935,12 +800,7 @@ export function AddProject({
           'Columns',
           1,
           source === 'board' ? (
-            STATUS_FIELDS.map((f) => (
-              <span key={f.key} className="flex gap-2">
-                <span className="text-fg-2">{f.label}</span>
-                <span>{statusMap[f.key]}</span>
-              </span>
-            ))
+            <BoardColumns source={boardSource} />
           ) : source === 'jira' ? (
             <span>
               Issues in the To Do category are To do; In Progress, In progress; Done, Done.
