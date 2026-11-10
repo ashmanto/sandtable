@@ -241,13 +241,45 @@ describe('removeWorktree', () => {
 
   it('refuses when the upstream branch was deleted from the remote', async () => {
     const { path: wt } = await ensureWorktree(repo, '16-x')
-    git(wt, 'commit', '--allow-empty', '-m', 'more')
+    await fs.writeFile(path.join(wt, 'a.txt'), 'more\n')
+    git(wt, 'commit', '-am', 'more')
     git(wt, 'push', '-u', 'origin', '16-x')
     git(wt, 'push', 'origin', '--delete', '16-x')
     expect(await removeWorktree(wt, [repo])).toEqual({
       removed: false,
       reason: 'Upstream not found'
     })
+  })
+
+  it('removes a worktree squash-merged after its remote branch was pruned', async () => {
+    const { path: wt } = await ensureWorktree(repo, '18-x')
+    await fs.writeFile(path.join(wt, 'b.txt'), 'b\n')
+    git(wt, 'add', 'b.txt')
+    git(wt, 'commit', '-m', 'work')
+    git(wt, 'commit', '--allow-empty', '-m', 'more')
+    git(wt, 'push', '-u', 'origin', '18-x')
+    git(repo, 'merge', '--squash', '18-x')
+    git(repo, 'commit', '-m', 'squash')
+    git(repo, 'commit', '--allow-empty', '-m', 'later')
+    git(repo, 'push', 'origin', 'main')
+    git(repo, 'push', 'origin', '--delete', '18-x')
+    git(repo, 'fetch', '--prune', 'origin')
+    expect(await removeWorktree(wt, [repo])).toEqual({ removed: true })
+  })
+
+  it('removes a squash-merged worktree after the default branch changed its files again', async () => {
+    const { path: wt } = await ensureWorktree(repo, '19-x')
+    await fs.writeFile(path.join(wt, 'a.txt'), 'x\n')
+    git(wt, 'commit', '-am', 'work')
+    git(wt, 'push', '-u', 'origin', '19-x')
+    git(repo, 'merge', '--squash', '19-x')
+    git(repo, 'commit', '-m', 'squash')
+    await fs.writeFile(path.join(repo, 'a.txt'), 'y\n')
+    git(repo, 'commit', '-am', 'later')
+    git(repo, 'push', 'origin', 'main')
+    git(repo, 'push', 'origin', '--delete', '19-x')
+    git(repo, 'fetch', '--prune', 'origin')
+    expect(await removeWorktree(wt, [repo])).toEqual({ removed: true })
   })
 
   it('removes a worktree merged with a merge commit after its remote branch was pruned', async () => {
@@ -273,7 +305,8 @@ describe('removeWorktree', () => {
   it('refuses when commits are not on the upstream', async () => {
     const { path: wt } = await ensureWorktree(repo, '4-x')
     git(wt, 'push', '-u', 'origin', '4-x')
-    git(wt, 'commit', '--allow-empty', '-m', 'more')
+    await fs.writeFile(path.join(wt, 'a.txt'), 'more\n')
+    git(wt, 'commit', '-am', 'more')
     expect(await removeWorktree(wt, [repo])).toEqual({
       removed: false,
       reason: 'Commits not pushed'
@@ -282,7 +315,8 @@ describe('removeWorktree', () => {
 
   it('refuses when there is no upstream and commits are not on the default branch', async () => {
     const { path: wt } = await ensureWorktree(repo, '5-x')
-    git(wt, 'commit', '--allow-empty', '-m', 'more')
+    await fs.writeFile(path.join(wt, 'a.txt'), 'more\n')
+    git(wt, 'commit', '-am', 'more')
     expect(await removeWorktree(wt, [repo])).toEqual({
       removed: false,
       reason: 'Commits not pushed'

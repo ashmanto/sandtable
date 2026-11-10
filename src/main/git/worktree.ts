@@ -157,7 +157,34 @@ async function owned(
   return undefined
 }
 
-/** Says whether a worktree is clean and every commit is on a remote, and where its repo is. */
+/** Says whether a default-branch commit already holds every change on `HEAD`, as after a squash merge. */
+async function inDefaultBranch(wtPath: string): Promise<boolean> {
+  const head = await originHead(wtPath)
+  if (!head) return false
+  const base = await git(wtPath, 'merge-base', head, 'HEAD')
+  if (base.code !== 0) return false
+  const files = await gitOrThrow(wtPath, 'diff', '--name-only', base.stdout.trim(), 'HEAD')
+  const touching = await gitOrThrow(
+    wtPath,
+    'log',
+    '--first-parent',
+    '--format=%H',
+    '-n',
+    '50',
+    `${base.stdout.trim()}..${head}`,
+    '--',
+    ...files.split('\n').filter(Boolean)
+  )
+  for (const commit of [head, ...touching.split('\n').filter(Boolean)]) {
+    const merged = await git(wtPath, 'merge-tree', '--write-tree', commit, 'HEAD')
+    const tree = await git(wtPath, 'rev-parse', `${commit}^{tree}`)
+    if (merged.code === 0 && tree.code === 0 && merged.stdout.trim() === tree.stdout.trim())
+      return true
+  }
+  return false
+}
+
+/** Says whether a worktree is clean and all its work is on a remote, and where its repo is. */
 export async function checkRemovable(
   wtPath: string,
   repoPaths: string[]
@@ -171,7 +198,7 @@ export async function checkRemovable(
   const unpushed = hasUpstream
     ? await gitOrThrow(wtPath, 'rev-list', '@{u}..HEAD')
     : await gitOrThrow(wtPath, 'rev-list', 'HEAD', '--not', '--remotes')
-  if (unpushed.trim()) {
+  if (unpushed.trim() && !(await inDefaultBranch(wtPath))) {
     const branch = (await git(wtPath, 'symbolic-ref', '--short', 'HEAD')).stdout.trim()
     const tracked =
       !hasUpstream && branch && (await git(wtPath, 'config', `branch.${branch}.merge`)).code === 0
@@ -180,7 +207,7 @@ export async function checkRemovable(
   return { removable: true, repoPath }
 }
 
-/** Removes a worktree only if it is clean and every commit is on a remote. */
+/** Removes a worktree only if it is clean and all its work is on a remote. */
 export async function removeWorktree(wtPath: string, repoPaths: string[]): Promise<RemoveResult> {
   const check = await checkRemovable(wtPath, repoPaths)
   if (!('removable' in check)) return check
