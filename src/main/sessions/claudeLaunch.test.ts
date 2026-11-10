@@ -716,6 +716,12 @@ describe('claudeArgs', () => {
     expect(claudeArgs({ ...base, resume })).not.toContain('--model')
   })
 
+  it.each([false, true])('passes the effort, resume %s, and no --effort without one', (resume) => {
+    const args = claudeArgs({ ...base, addDirs: [], resume, effort: 'xhigh' })
+    expect(args[args.indexOf('--effort') + 1]).toBe('xhigh')
+    expect(claudeArgs({ ...base, resume })).not.toContain('--effort')
+  })
+
   it('omits add-dir when there are none', () => {
     expect(claudeArgs({ ...base, addDirs: [], prompt: 'hi' })).toEqual([
       '--session-id',
