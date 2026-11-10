@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Ticket } from '../../shared/types'
 import {
   agentSockets,
@@ -20,7 +20,8 @@ import {
   CHECKS_RULE,
   GATE_EVENT,
   GATE_REASON,
-  GATE_SCRIPT
+  GATE_SCRIPT,
+  fingerprintTrees
 } from './claudeLaunch'
 import { instructionsBytes, MAX_INSTRUCTIONS_BYTES } from '../../shared/instructions'
 import { tempDirs } from '../test/tempDirs'
@@ -1175,7 +1176,9 @@ describe('gate script', () => {
     'gh pr create>/dev/null',
     '\\gh pr create',
     '"gh" pr create',
-    'gh api repos/o/r/pulls -fhead=b'
+    'gh api repos/o/r/pulls -fhead=b',
+    "gh api graphql -f query='mutation($i:ID!){createPullRequest(input:{repositoryId:$i}){pullRequest{url}}}'",
+    'gh api graphql -f query=mutation{createPullRequest}'
   ])('denies %j while the gate is closed and records the denial', (command) => {
     const f = fixture()
     expect(JSON.parse(hook(f, command))).toEqual({
@@ -1195,6 +1198,7 @@ describe('gate script', () => {
     'gh api repos/o/r/pulls',
     'gh api repos/o/r/pulls/1/comments -f body=x',
     'gh api -X GET repos/o/r/pulls -f state=open',
+    "gh api graphql -f query='query{viewer{login}}'",
     'git log'
   ])('allows %j', (command) => {
     const f = fixture()
@@ -1307,6 +1311,21 @@ describe('gate script', () => {
     writeFileSync(join(f.dir, 's1.gate'), fingerprint(f.script, f.gd, f.wt))
     execFileSync('rm', ['-rf', f.wt])
     expect(JSON.parse(hook(f, 'gh pr create')).hookSpecificOutput.permissionDecision).toBe('deny')
+  })
+})
+
+describe('fingerprintTrees', () => {
+  it('gives the script two minutes and returns nothing when it fails', async () => {
+    const run = vi.fn().mockResolvedValueOnce({ stdout: 'h1\n', stderr: '', code: 0 })
+    expect(await fingerprintTrees(run, '/s.sh', [['/g', '/w']])).toBe('h1\n')
+    expect(run).toHaveBeenCalledWith(
+      '/bin/sh',
+      ['/s.sh', 'fingerprint', '/g', '/w'],
+      undefined,
+      120_000
+    )
+    run.mockResolvedValueOnce({ stdout: '', stderr: 'killed', code: -1 })
+    expect(await fingerprintTrees(run, '/s.sh', [['/g', '/w']])).toBe('')
   })
 })
 

@@ -6752,6 +6752,16 @@ describe('send and interrupt', () => {
     await first
   })
 
+  it('turning Remote Control on refuses a send that starts while it checks the session', async () => {
+    const t = await ready({ remoteControl: false })
+    const on = t.orch.setRemoteControl('s1', true)
+    const sent = t.orch.send('s1', 'hi')
+    await expect(on).rejects.toThrow('Already sending')
+    await sent
+    expect(t.deps.tmux.pasteTmux).toHaveBeenCalledTimes(1)
+    expect(t.deps.tmux.pasteTmux).toHaveBeenCalledWith(expect.any(String), 'hi')
+  })
+
   it('send refuses a second message while one is being typed', async () => {
     const t = await ready()
     const release = blockedPaste(t)

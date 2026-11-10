@@ -12,6 +12,7 @@ import { MAX_BODY_BYTES } from '../../shared/sessions'
 import { shellQuote } from '../../shared/shell'
 import { instructionsSection, type Instruction } from '../../shared/instructions'
 import type { Model, Project, Ticket } from '../../shared/types'
+import type { RunFn } from '../env/tools'
 
 /** The most of your start note a session keeps, in UTF-8 bytes. */
 export const MAX_NOTE_BYTES = 4000
@@ -307,6 +308,21 @@ cost=$(get cost.total_cost_usd); add=$(get cost.total_lines_added); del=$(get co
 printf '%s │ $%.2f │ +%s −%s\\n' "$out" "\${cost:-0}" "\${add:-0}" "\${del:-0}"
 `
 
+/** The tree hashes `GATE_SCRIPT` prints for these worktrees, or `''` when it fails or takes over two minutes. */
+export async function fingerprintTrees(
+  run: RunFn,
+  script: string,
+  trees: string[][]
+): Promise<string> {
+  const { stdout, code } = await run(
+    '/bin/sh',
+    [script, 'fingerprint', ...trees.flat()],
+    undefined,
+    120_000
+  )
+  return code === 0 ? stdout : ''
+}
+
 /** The events-file line the gate script appends when it denies a pull request command. */
 export const GATE_EVENT = JSON.stringify({ hook_event_name: 'SandtableGate' })
 
@@ -361,6 +377,8 @@ for s in $(printf '%s\n' "$cmd" | awk '{ if (sub(/\\$/, "")) printf "%s ", $0; e
   if printf '%s' "$s" | grep -Eiq -- '-X[[:space:]]*POST|--method[[:space:]=]+POST' ||
     printf '%s' "$s" | grep -Eq -- '(^|[[:space:]])(-[fF]|--field|--raw-field|--input)'; then hit=1; break; fi
 done
+if [ -z "$hit" ] && printf '%s' "$cmd" | grep -q createPullRequest &&
+  printf '%s' "$cmd" | grep -Eq '(^|[[:space:]/"'"'"'])gh[[:space:]]+api[[:space:]]+graphql'; then hit=1; fi
 [ -n "$hit" ] || exit 0
 want=$(cat "$gate" 2>/dev/null)
 [ "$want" = open ] && exit 0

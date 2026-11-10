@@ -83,10 +83,20 @@ async function existingWorktree(repoPath: string, branch: string): Promise<strin
   return undefined
 }
 
+const fetches = new Map<string, Promise<unknown>>()
+
 async function fetchDefault(repoPath: string, base: string): Promise<string | undefined> {
   const name = base.slice('origin/'.length)
   const refspec = `+refs/heads/${name}:refs/remotes/origin/${name}`
-  return gitNetwork(repoPath, 'git fetch', 'fetch', 'origin', refspec)
+  const fetch = (): Promise<string | undefined> =>
+    gitNetwork(repoPath, 'git fetch', 'fetch', 'origin', refspec)
+  const mine = (fetches.get(repoPath) ?? Promise.resolve()).then(fetch, fetch)
+  fetches.set(repoPath, mine)
+  try {
+    return await mine
+  } finally {
+    if (fetches.get(repoPath) === mine) fetches.delete(repoPath)
+  }
 }
 
 /** Returns the branch's worktree and whether this call created it. */

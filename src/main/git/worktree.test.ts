@@ -112,6 +112,26 @@ describe('ensureWorktree', () => {
     expect(git(result.path, 'rev-parse', 'HEAD')).toBe(ahead)
   })
 
+  it('runs one fetch at a time per repo', async () => {
+    const real = (await vi.importActual<typeof import('../env/tools')>('../env/tools')).run
+    let inFlight = 0
+    let most = 0
+    vi.mocked(run).mockImplementation(async (...a) => {
+      if (!a[1].includes('fetch')) return real(...a)
+      most = Math.max(most, ++inFlight)
+      await new Promise((r) => setTimeout(r, 50))
+      try {
+        return await real(...a)
+      } finally {
+        inFlight--
+      }
+    })
+    const results = await Promise.all([ensureWorktree(repo, '30-a'), ensureWorktree(repo, '31-b')])
+    vi.mocked(run).mockImplementation(real)
+    expect(results.map((r) => r.fetchError)).toEqual([undefined, undefined])
+    expect(most).toBe(1)
+  })
+
   it('creates the branch from the local copy and reports why when the fetch fails', async () => {
     git(repo, 'remote', 'set-url', 'origin', path.join(root, 'missing.git'))
     const result = await ensureWorktree(repo, '10-offline')

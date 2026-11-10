@@ -58,7 +58,7 @@ export function createCliCommands(ctx: {
   synced: Map<string, { tickets: Ticket[] }>
   projectById: (id: string) => Project
   statusMapOf: (p: Project) => StatusMap
-  transcriptOf: (s: SessionRecord) => Promise<ConversationEntry[] | null>
+  latestEntries: (s: SessionRecord) => Promise<ConversationEntry[]>
   chat: (projectId: string, ticketKey: string) => Promise<ChatState>
   pending: (sessionId: string) => boolean
   busy: (projectId: string, ticketKey: string) => boolean
@@ -222,7 +222,7 @@ export function createCliCommands(ctx: {
     }
     const { chat } = await ctx.chat(caller.projectId, found.key)
     const saved = chat?.summary && !isLive(s) ? chat.draft : undefined
-    const last = (await ctx.transcriptOf(s))?.findLast((e) => e.kind === 'assistant')
+    const last = (await ctx.latestEntries(s)).findLast((e) => e.kind === 'assistant')
     const text = saved ?? (last && 'text' in last ? last.text : undefined)
     return text ? { code: 0, text } : refuse(`${label} has no message yet`)
   }
