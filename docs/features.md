@@ -1311,14 +1311,14 @@ refusal, a notification title, or a format example.
 - You make a routine with **New routine** at the end of that row, or with **New routine…** in a
   project's **More > Routines** menu, which also lists its routines to edit or delete.
 - **Save as routine**, in the **New session** dialog or in the **More actions** menu of a session
-  without a ticket, fills in its repo, place, and first message.
+  without a ticket, fills in its repo, place, first message, and model.
 - A first message is at most 10,000 bytes, and a name at most 200 characters.
 
 ### Copy to project
 
 - **Copy to project…** lists every project, the routine's own included, and opens the picked
-  project's **New routine** form with the routine's name, place, first message, allowed rules, and
-  schedule.
+  project's **New routine** form with the routine's name, place, first message, allowed rules,
+  schedule, and model.
 - The copy takes the routine's repo when that project has it or has only one repo; otherwise you
   pick a repo.
 - The copy has no run history, saves as a separate routine only when you click **Save**, and in the

@@ -185,6 +185,7 @@ export function Routines({
                                 schedule: r.schedule,
                                 on: r.on,
                                 dailyCap: r.dailyCap,
+                                model: r.model,
                                 copiedFrom: { project: project.name, repo: r.repo }
                               })
                             )

@@ -252,7 +252,13 @@ describe('Routines', () => {
 
   it('copies a routine to any project, its own included, as a draft from its project and repo', async () => {
     const { onRoutine } = renderRoutines([
-      { ...nightly, allow: ['Bash(npm outdated)'], on: { label: 'deps' }, dailyCap: 2 }
+      {
+        ...nightly,
+        allow: ['Bash(npm outdated)'],
+        on: { label: 'deps' },
+        dailyCap: 2,
+        model: 'haiku'
+      }
     ])
     await userEvent.click(screen.getByRole('button', { name: 'More for Nightly' }))
     await userEvent.click(screen.getByRole('menuitem', { name: 'Copy to project…' }))
@@ -267,6 +273,7 @@ describe('Routines', () => {
       schedule: { days: [1, 2, 3, 4, 5], time: '02:00' },
       on: { label: 'deps' },
       dailyCap: 2,
+      model: 'haiku',
       copiedFrom: { project: 'Shop', repo: 'octo/shop' }
     })
   })

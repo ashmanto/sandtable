@@ -135,14 +135,35 @@ describe('NewSessionDialog', () => {
     await userEvent.click(screen.getByRole('radio', { name: 'octo/shop-web' }))
     await userEvent.click(screen.getByRole('radio', { name: /New worktree/ }))
     await userEvent.type(screen.getByRole('textbox', { name: 'First message' }), 'Nightly check')
+    await userEvent.click(screen.getByRole('radio', { name: 'Haiku' }))
     await userEvent.click(screen.getByRole('button', { name: 'Save as routine' }))
     expect(onRoutine).toHaveBeenCalledWith(project, undefined, {
       repo: 'octo/shop-web',
       worktree: true,
-      message: 'Nightly check'
+      message: 'Nightly check',
+      model: 'haiku'
     })
     expect(onClose).toHaveBeenCalled()
     expect(api.sessions.create).not.toHaveBeenCalled()
+  })
+
+  it('hands Account default to Save as routine as no model', async () => {
+    const onRoutine = vi.fn()
+    render(
+      <NewSessionDialog
+        project={{ ...project, model: 'opus' }}
+        onCreated={vi.fn()}
+        onClose={vi.fn()}
+        onRoutine={onRoutine}
+      />
+    )
+    await userEvent.click(screen.getByRole('radio', { name: 'Account default' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save as routine' }))
+    expect(onRoutine).toHaveBeenCalledWith(
+      expect.anything(),
+      undefined,
+      expect.objectContaining({ model: null })
+    )
   })
 
   it('moves between the Where choices with the arrow keys', async () => {
