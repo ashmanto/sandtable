@@ -378,7 +378,7 @@ for s in $(printf '%s\n' "$cmd" | awk '{ if (sub(/\\$/, "")) printf "%s ", $0; e
     printf '%s' "$s" | grep -Eq -- '(^|[[:space:]])(-[fF]|--field|--raw-field|--input)'; then hit=1; break; fi
 done
 if [ -z "$hit" ] && printf '%s' "$cmd" | grep -q createPullRequest &&
-  printf '%s' "$cmd" | grep -Eq '(^|[[:space:]/"'"'"'])gh[[:space:]]+api[[:space:]]+graphql'; then hit=1; fi
+  printf '%s' "$cmd" | grep -Eq '(^|[[:space:]/"'"'"'])gh[[:space:]]+api[[:space:]].*graphql'; then hit=1; fi
 [ -n "$hit" ] || exit 0
 want=$(cat "$gate" 2>/dev/null)
 [ "$want" = open ] && exit 0

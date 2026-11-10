@@ -1178,7 +1178,8 @@ describe('gate script', () => {
     '"gh" pr create',
     'gh api repos/o/r/pulls -fhead=b',
     "gh api graphql -f query='mutation($i:ID!){createPullRequest(input:{repositoryId:$i}){pullRequest{url}}}'",
-    'gh api graphql -f query=mutation{createPullRequest}'
+    'gh api graphql -f query=mutation{createPullRequest}',
+    'gh api --hostname h graphql -f query=mutation{createPullRequest}'
   ])('denies %j while the gate is closed and records the denial', (command) => {
     const f = fixture()
     expect(JSON.parse(hook(f, command))).toEqual({

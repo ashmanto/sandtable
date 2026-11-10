@@ -126,8 +126,10 @@ describe('ensureWorktree', () => {
         inFlight--
       }
     })
-    const results = await Promise.all([ensureWorktree(repo, '30-a'), ensureWorktree(repo, '31-b')])
-    vi.mocked(run).mockImplementation(real)
+    const results = await Promise.all([
+      ensureWorktree(repo, '30-a'),
+      ensureWorktree(repo, '31-b')
+    ]).finally(() => vi.mocked(run).mockImplementation(real))
     expect(results.map((r) => r.fetchError)).toEqual([undefined, undefined])
     expect(most).toBe(1)
   })
