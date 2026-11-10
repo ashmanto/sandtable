@@ -1406,6 +1406,31 @@ describe('AddProject', () => {
     expect(api.projects.save).toHaveBeenCalledWith(project)
   })
 
+  it('uses the account default effort unless you pick one, and saves the pick', async () => {
+    const { rerender } = render(<AddProject {...props} project={project} />)
+    await userEvent.click(screen.getByRole('button', { name: /Review/ }))
+    const effort = screen.getByRole('combobox', { name: 'Effort' })
+    expect(effort).toHaveTextContent('Account default')
+    await userEvent.click(effort)
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Account default',
+      'Low',
+      'Medium',
+      'High',
+      'Extra high',
+      'Max'
+    ])
+    await userEvent.click(screen.getByRole('option', { name: 'Low' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(api.projects.save).toHaveBeenCalledWith({ ...project, effort: 'low' })
+    rerender(<AddProject {...props} project={{ ...project, effort: 'low' }} key="again" />)
+    await userEvent.click(screen.getByRole('button', { name: /Review/ }))
+    await userEvent.click(screen.getByRole('combobox', { name: 'Effort' }))
+    await userEvent.click(screen.getByRole('option', { name: 'Account default' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    expect(api.projects.save).toHaveBeenLastCalledWith(project)
+  })
+
   it('uses the account default model unless you pick one, and saves the pick', async () => {
     const { rerender } = render(<AddProject {...props} project={project} />)
     await userEvent.click(screen.getByRole('button', { name: /Review/ }))

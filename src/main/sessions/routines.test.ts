@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import type { Model, Routine, SessionRecord, Ticket } from '../../shared/types'
+import type { Effort, Model, Routine, SessionRecord, Ticket } from '../../shared/types'
 import { shortTime } from '../../shared/time'
 import {
   expectSettingsUntouched,
@@ -185,6 +185,56 @@ describe('routines', () => {
       const { id } = await t.orch.saveRoutine({ ...input, model: 'opus' })
       await t.orch.saveRoutine({ ...input, id })
       expect((await t.orch.listRoutines('p1'))[0]).not.toHaveProperty('model')
+    })
+  })
+
+  describe('effort', () => {
+    const effortArg = (t: ReturnType<typeof setup>): string | undefined => {
+      const args: string[] = t.deps.tmux.startTmux.mock.calls[0][2]
+      return args.includes('--effort') ? args[args.indexOf('--effort') + 1] : undefined
+    }
+
+    it('runs a routine at its own effort', async () => {
+      const t = setup({ projects: [{ ...project, effort: 'medium' }] })
+      await t.orch.reconnect()
+      const { id } = await t.orch.saveRoutine({ ...input, effort: 'max' })
+      const sessionId = await t.orch.startRoutine(id)
+      expect(effortArg(t)).toBe('max')
+      expect(t.orch.session(sessionId)?.effort).toBe('max')
+    })
+
+    it("runs a routine with no effort at the project's effort when it runs", async () => {
+      const t = setup({ projects: [{ ...project, effort: 'medium' }] })
+      await t.orch.reconnect()
+      const { id } = await t.orch.saveRoutine(input)
+      await t.orch.saveProject({ ...project, effort: 'low' })
+      await t.orch.startRoutine(id)
+      expect(effortArg(t)).toBe('low')
+    })
+
+    it('runs an Account default routine without an effort flag', async () => {
+      const t = setup({ projects: [{ ...project, effort: 'medium' }] })
+      await t.orch.reconnect()
+      const { id } = await t.orch.saveRoutine({ ...input, effort: null })
+      expect(t.saved().routines[0].effort).toBeNull()
+      await t.orch.startRoutine(id)
+      expect(effortArg(t)).toBeUndefined()
+    })
+
+    it("refuses a routine effort that isn't an effort", async () => {
+      const t = setup()
+      await t.orch.reconnect()
+      await expect(t.orch.saveRoutine({ ...input, effort: 'turbo' as Effort })).rejects.toThrow(
+        'Not an effort'
+      )
+    })
+
+    it("drops the effort when a routine goes back to the project's effort", async () => {
+      const t = setup()
+      await t.orch.reconnect()
+      const { id } = await t.orch.saveRoutine({ ...input, effort: 'high' })
+      await t.orch.saveRoutine({ ...input, id })
+      expect((await t.orch.listRoutines('p1'))[0]).not.toHaveProperty('effort')
     })
   })
 

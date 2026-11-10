@@ -17,6 +17,7 @@ import type {
   LinearTeam,
   LinearWorkspace,
   Leftover,
+  Effort,
   Model,
   ModelUsage,
   UsageByWeek,
@@ -193,7 +194,8 @@ export type SandtableApi = {
       firstMessage?: string,
       model?: Model | null,
       setupId?: string,
-      setup?: false
+      setup?: false,
+      effort?: Effort | null
     ): Promise<string>
     /** The text of the session's first message, or '' without a transcript. */
     firstMessage(sessionId: string): Promise<string>

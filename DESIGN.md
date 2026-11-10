@@ -1701,7 +1701,7 @@ them through Tailwind classes and never name a raw color.
   checkout) or **Remove worktree** (worktree) once it's finished;
   nothing once it's removed. Last comes, for a session without a ticket that isn't removed, **More
   actions** with **Save as routine**, which opens the
-  [routine editor](#routine-editor) with the session's repo, place, first message, and model; at narrow
+  [routine editor](#routine-editor) with the session's repo, place, first message, model, and effort; at narrow
   widths the outline actions fold into the same menu (see **Narrow widths**). Buttons are 28 px, **Rename session** included, except the 20 px
   **Clear Needs you** and **Raise cap**. While one
   of them works, all of them are disabled.
@@ -1732,9 +1732,11 @@ them through Tailwind classes and never name a raw color.
   Between **Where** and **First message**, a **Model** group: a segmented control, the
   **Appearance** toggle's shape at the dialog's full width, with Account default, Fable, Opus, Sonnet,
   and Haiku, each segment as wide as its name with the spare width shared out, set to the project's model. The choice applies only to this session.
+  An **Effort** group follows in the same shape, with Account default, Low, Medium, High, Extra
+  high, and Max, set to the project's effort, and also applies only to this session.
   Group headings are 11 px, weight 500, in `fg-2`.
 - The footer has a ghost **Save as routine** on the left, which closes the dialog and opens the
-  [routine editor](#routine-editor) with its repo, place, message, and model, then **Cancel** (outline)
+  [routine editor](#routine-editor) with its repo, place, message, model, and effort, then **Cancel** (outline)
   and **Start**. While it works, **Start** reads "Starting",
   every button is disabled, and Escape or a click outside doesn't close the dialog.
 - A **New worktree** start with a [worktree setup](#worktree-setup) shows its block above the
@@ -1814,6 +1816,8 @@ them through Tailwind classes and never name a raw color.
   boxes and help as New session's **Where**; **Model**, New session's **Model** group with
   **Project** first, named "Project (<model>)", which follows the project's model and is picked on
   a new routine, with "Project follows the project's model, <model>." under it;
+  **Effort**, New session's **Effort** group with **Project** first in the same way, named
+  "Project (<effort>)", with "Project follows the project's effort, <effort>." under it;
   **First message**, a textarea up to 240 px tall;
   **Allowed without asking**, a two-row monospace textarea up to 160 px tall with the placeholder
   "Bash(npm outdated)" and "One permission rule per line, such as Bash(npm audit:*). Only this
@@ -2253,6 +2257,9 @@ them through Tailwind classes and never name a raw color.
   and Haiku, set to Account default unless the project saved a model, beside "The model sessions
   run on. Start and New session can pick another for one session." in 11 px `fg-2`, its
   description.
+  An **Effort** row follows in the same shape: a 160 px select with Account default, Low, Medium,
+  High, Extra high, and Max, set to Account default unless the project saved an effort, beside "The
+  effort sessions run at. New session can pick another for one session."
   An **Editor** row follows, always shown: the chosen app's name, or None in `fg-2`, in a 160 px
   span, then an outline small **Choose…** button and, while an app is chosen, a ghost small
   **Clear** button, beside "The editor a session's side panel opens its folders in." in 11 px

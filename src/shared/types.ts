@@ -41,9 +41,24 @@ export type Model = (typeof MODELS)[number]
 /** The model controls' choices, with `default` for Account default. */
 export const MODEL_CHOICES: (Model | 'default')[] = ['default', ...MODELS]
 
+const choiceLabel = (c: string | null | undefined): string =>
+  c && c !== 'default' ? c[0].toUpperCase() + c.slice(1) : 'Account default'
+
 /** A model's name, such as "Opus", or "Account default" for none. */
-export const modelLabel = (m: Model | 'default' | null | undefined): string =>
-  m && m !== 'default' ? m[0].toUpperCase() + m.slice(1) : 'Account default'
+export const modelLabel = (m: Model | 'default' | null | undefined): string => choiceLabel(m)
+
+/** The effort levels a project, session, or routine can choose, passed as `--effort`. */
+export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
+
+/** A Claude Code effort level. */
+export type Effort = (typeof EFFORTS)[number]
+
+/** The effort controls' choices, with `default` for Account default. */
+export const EFFORT_CHOICES: (Effort | 'default')[] = ['default', ...EFFORTS]
+
+/** An effort's name, such as "High" or "Extra high", or "Account default" for none. */
+export const effortLabel = (e: Effort | 'default' | null | undefined): string =>
+  e === 'xhigh' ? 'Extra high' : choiceLabel(e)
 
 /** A project: its repos, ticket source, and per-project session settings. */
 export type Project = {
@@ -56,6 +71,7 @@ export type Project = {
   remoteControl?: boolean
   claudeDir?: string
   model?: Model
+  effort?: Effort
   editor?: string
   group?: string
   icon?: string
@@ -218,6 +234,7 @@ export type SessionRecord = {
   remoteControl?: boolean
   claudeDir?: string
   model?: Model
+  effort?: Effort
   routineId?: string
   /** The session whose `sandtable start` started or last resumed this one. */
   startedBy?: string
@@ -286,6 +303,7 @@ export type Routine = {
   on?: RoutineEvents
   dailyCap?: number
   model?: Model | null
+  effort?: Effort | null
 }
 
 /** A routine as the form saves it, with no `id` when it is new. */
@@ -301,6 +319,7 @@ export type RoutineInput = Pick<
   | 'on'
   | 'dailyCap'
   | 'model'
+  | 'effort'
 > & {
   id?: string
 }

@@ -31,8 +31,11 @@ import {
   scheduleLabel
 } from '../../../shared/routines'
 import {
+  EFFORT_CHOICES,
   MODEL_CHOICES,
+  effortLabel,
   modelLabel,
+  type Effort,
   type Model,
   type Project,
   type Routine,
@@ -47,7 +50,9 @@ import { chip } from './TicketCard'
 
 /** The values another view hands the editor for a new routine, with the source of a copy. */
 export type RoutineDraft = Pick<RoutineInput, 'repo' | 'worktree' | 'message'> &
-  Partial<Pick<RoutineInput, 'name' | 'allow' | 'schedule' | 'on' | 'dailyCap' | 'model'>> & {
+  Partial<
+    Pick<RoutineInput, 'name' | 'allow' | 'schedule' | 'on' | 'dailyCap' | 'model' | 'effort'>
+  > & {
     copiedFrom?: RoutineSource
   }
 
@@ -150,6 +155,9 @@ export function RoutineEditor({
   const [worktree, setWorktree] = useState(from?.worktree ?? false)
   const [model, setModel] = useState<Model | 'default' | 'project'>(
     from?.model === undefined ? 'project' : (from.model ?? 'default')
+  )
+  const [effort, setEffort] = useState<Effort | 'default' | 'project'>(
+    from?.effort === undefined ? 'project' : (from.effort ?? 'default')
   )
   const [message, setMessage] = useState(from?.message ?? '')
   const [allow, setAllow] = useState(from?.allow?.join('\n') ?? '')
@@ -273,6 +281,7 @@ export function RoutineEditor({
           worktree,
           message,
           ...(model !== 'project' && { model: model === 'default' ? null : model }),
+          ...(effort !== 'project' && { effort: effort === 'default' ? null : effort }),
           ...(rules.length > 0 && { allow: rules }),
           ...(form.schedule && { schedule: form.schedule }),
           ...(triggered && { on, dailyCap: Number(dailyCap) })
@@ -361,6 +370,23 @@ export function RoutineEditor({
               />
               <p id="routine-model-help" className="text-xs text-fg-2">
                 Project follows the project&apos;s model, {modelLabel(project.model)}.
+              </p>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <FieldHeading id="routine-effort">Effort</FieldHeading>
+              <Segmented
+                options={[
+                  ['project', 'Project', `Project (${effortLabel(project.effort)})`],
+                  ...EFFORT_CHOICES.map((e): [Effort | 'default', string] => [e, effortLabel(e)])
+                ]}
+                value={effort}
+                onChange={setEffort}
+                aria-labelledby="routine-effort"
+                aria-describedby="routine-effort-help"
+                className="auto-cols-auto"
+              />
+              <p id="routine-effort-help" className="text-xs text-fg-2">
+                Project follows the project&apos;s effort, {effortLabel(project.effort)}.
               </p>
             </div>
             <MessageField

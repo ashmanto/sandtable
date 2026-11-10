@@ -39,7 +39,8 @@ describe('NewSessionDialog', () => {
       '',
       null,
       expect.stringMatching(UUID),
-      undefined
+      undefined,
+      null
     )
     expect(onCreated).toHaveBeenCalledWith('a1')
   })
@@ -65,7 +66,8 @@ describe('NewSessionDialog', () => {
       '',
       null,
       expect.stringMatching(UUID),
-      undefined
+      undefined,
+      null
     )
   })
 
@@ -94,7 +96,48 @@ describe('NewSessionDialog', () => {
       '',
       model,
       expect.stringMatching(UUID),
-      undefined
+      undefined,
+      null
+    )
+  })
+
+  it.each([
+    [null, 'high'],
+    ['Low', 'low'],
+    ['Account default', null]
+  ] as const)('on a High project, picking effort %s starts at %s', async (name, effort) => {
+    render(
+      <NewSessionDialog
+        project={{ ...project, effort: 'high' }}
+        onCreated={vi.fn()}
+        onClose={vi.fn()}
+        onRoutine={vi.fn()}
+      />
+    )
+    const group = screen.getByRole('radiogroup', { name: 'Effort' })
+    expect(within(group).getByRole('radio', { name: 'High' })).toBeChecked()
+    if (name) await userEvent.click(within(group).getByRole('radio', { name }))
+    await userEvent.click(screen.getByRole('button', { name: 'Start' }))
+    expect(vi.mocked(api.sessions.create).mock.calls[0][8]).toBe(effort)
+  })
+
+  it('hands Account default effort to Save as routine as no effort', async () => {
+    const onRoutine = vi.fn()
+    render(
+      <NewSessionDialog
+        project={{ ...project, effort: 'max' }}
+        onCreated={vi.fn()}
+        onClose={vi.fn()}
+        onRoutine={onRoutine}
+      />
+    )
+    const group = screen.getByRole('radiogroup', { name: 'Effort' })
+    await userEvent.click(within(group).getByRole('radio', { name: 'Account default' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save as routine' }))
+    expect(onRoutine).toHaveBeenCalledWith(
+      expect.anything(),
+      undefined,
+      expect.objectContaining({ effort: null })
     )
   })
 
@@ -117,7 +160,8 @@ describe('NewSessionDialog', () => {
       'Find the leak',
       null,
       expect.stringMatching(UUID),
-      undefined
+      undefined,
+      null
     )
   })
 
@@ -141,7 +185,8 @@ describe('NewSessionDialog', () => {
       repo: 'octo/shop-web',
       worktree: true,
       message: 'Nightly check',
-      model: 'haiku'
+      model: 'haiku',
+      effort: null
     })
     expect(onClose).toHaveBeenCalled()
     expect(api.sessions.create).not.toHaveBeenCalled()
@@ -157,7 +202,11 @@ describe('NewSessionDialog', () => {
         onRoutine={onRoutine}
       />
     )
-    await userEvent.click(screen.getByRole('radio', { name: 'Account default' }))
+    await userEvent.click(
+      within(screen.getByRole('radiogroup', { name: 'Model' })).getByRole('radio', {
+        name: 'Account default'
+      })
+    )
     await userEvent.click(screen.getByRole('button', { name: 'Save as routine' }))
     expect(onRoutine).toHaveBeenCalledWith(
       expect.anything(),
@@ -280,7 +329,8 @@ describe('NewSessionDialog', () => {
         '',
         null,
         setupId,
-        false
+        false,
+        null
       )
       await vi.waitFor(() => expect(onCreated).toHaveBeenCalledWith('a1'))
     })

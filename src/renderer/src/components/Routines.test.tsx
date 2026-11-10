@@ -257,7 +257,8 @@ describe('Routines', () => {
         allow: ['Bash(npm outdated)'],
         on: { label: 'deps' },
         dailyCap: 2,
-        model: 'haiku'
+        model: 'haiku',
+        effort: 'max'
       }
     ])
     await userEvent.click(screen.getByRole('button', { name: 'More for Nightly' }))
@@ -274,6 +275,7 @@ describe('Routines', () => {
       on: { label: 'deps' },
       dailyCap: 2,
       model: 'haiku',
+      effort: 'max',
       copiedFrom: { project: 'Shop', repo: 'octo/shop' }
     })
   })

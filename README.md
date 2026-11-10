@@ -52,8 +52,8 @@ The following list is an overview. For the full list, see [What works today](doc
   when a session finishes. Sandtable posts or applies nothing until you click.
 - Sessions without a ticket, and routines: saved session starts you can run by hand, on a
   schedule, or when a ticket gets a label or its pull request checks fail.
-- Per-project settings for the Claude Code account, model, token cap, automatic review, sandboxed
-  commands, worktree setup, and instructions for ticket sessions.
+- Per-project settings for the Claude Code account, model, effort, token cap, automatic review,
+  sandboxed commands, worktree setup, and instructions for ticket sessions.
 - A **Usage** page with token use, estimated API cost, and ticket throughput by week, and live
   token use for running sessions.
 - Remote Control, so you can use a session from claude.ai or the Claude app.
@@ -163,7 +163,9 @@ Click **Add project**, the plus beside the sidebar's **Projects** heading, then 
 4. **Review:** check the project, optionally pick an emoji as its icon from a searchable grid,
    choose whether its sessions start with Remote Control, which
    Claude Code account they use, which model they run on (**Model**: **Account default**, the
-   default, or **Fable**, **Opus**, **Sonnet**, or **Haiku**), which editor a session's folders
+   default, or **Fable**, **Opus**, **Sonnet**, or **Haiku**), at which effort (**Effort**:
+   **Account default**, the default, or **Low**, **Medium**, **High**, **Extra high**, or
+   **Max**), which editor a session's folders
    open in (**Editor**: an app you choose), how long done tickets stay on the board (**Keep done
    tickets**: 1, 3, 7, 14, or 30 days, 7 by default), how many tokens a session may use before
    Sandtable stops its tool calls (**Token cap**: 10M, 25M, 50M, 100M, or 250M, off by default), whether **Start** first checks that a

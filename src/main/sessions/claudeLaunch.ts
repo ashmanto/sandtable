@@ -11,7 +11,7 @@ import type { Service } from '../../shared/repo'
 import { MAX_BODY_BYTES } from '../../shared/sessions'
 import { shellQuote } from '../../shared/shell'
 import { instructionsSection, type Instruction } from '../../shared/instructions'
-import type { Model, Project, Ticket } from '../../shared/types'
+import type { Effort, Model, Project, Ticket } from '../../shared/types'
 import type { RunFn } from '../env/tools'
 
 /** The most of your start note a session keeps, in UTF-8 bytes. */
@@ -500,11 +500,13 @@ export function claudeArgs(opts: {
   resume?: boolean
   remoteControl?: boolean
   model?: Model
+  effort?: Effort
   permissionMode?: 'plan'
 }): string[] {
   const args = opts.addDirs.flatMap((d) => ['--add-dir', d])
   args.push(opts.resume ? '--resume' : '--session-id', opts.sessionId)
   if (opts.model) args.push('--model', opts.model)
+  if (opts.effort) args.push('--effort', opts.effort)
   if (!opts.resume && opts.permissionMode) args.push('--permission-mode', opts.permissionMode)
   args.push('--settings', opts.settingsFile, '-n', opts.name)
   if (opts.remoteControl) args.push(`--remote-control=${opts.name}`)
