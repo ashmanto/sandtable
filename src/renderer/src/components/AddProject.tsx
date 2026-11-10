@@ -20,10 +20,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { FieldHeading, RadioBox } from './RadioBox'
 import { useLatestLoad } from '../hooks/useLatestLoad'
 import { useSteps } from '../hooks/useSteps'
-import { Problem, Spinner, StepFlow } from './StepFlow'
+import { LabeledSelect, LoadState, Problem, Spinner, StepFlow } from './StepFlow'
 import { EmojiPicker } from './EmojiPicker'
 import { ProjectTile } from './ProjectTile'
 import { InstructionsField } from './InstructionsField'
+import { LinearReview, LinearStep } from './LinearStep'
+import { useLinearSource } from '../hooks/useLinearSource'
 import { insetClass } from './Activity'
 import { linkClass } from './SetupHint'
 import {
@@ -51,8 +53,6 @@ import { compact } from '@/lib/usage'
 import type {
   Account,
   JiraAccount,
-  LinearTeam,
-  LinearWorkspace,
   Model,
   Project,
   ProjectRepo,
@@ -135,72 +135,6 @@ const boardName = (url: string): string | null => {
   }
 }
 
-function LoadState({
-  loading,
-  text,
-  failed,
-  onRetry,
-  children
-}: {
-  loading: boolean
-  text: string
-  failed: { title: string; detail: string } | null
-  onRetry: () => void
-  children?: React.ReactNode
-}): React.ReactNode {
-  if (loading)
-    return (
-      <p role="status" className="flex items-center gap-1.5 text-fg-2">
-        <Spinner />
-        {text}
-      </p>
-    )
-  if (!failed) return children
-  return (
-    <Problem title={failed.title} detail={failed.detail}>
-      <Button variant="ghost" size="xs" className="text-danger" onClick={onRetry}>
-        Try again
-      </Button>
-    </Problem>
-  )
-}
-
-function LabeledSelect({
-  id,
-  label,
-  small,
-  value,
-  onChange,
-  options
-}: {
-  id: string
-  label: string
-  small?: boolean
-  value: string
-  onChange: (value: string) => void
-  options: { value: string; label: string }[]
-}): React.JSX.Element {
-  return (
-    <div className="flex flex-col gap-2">
-      <Label htmlFor={id} className={cn(small && 'text-xs text-fg-2')}>
-        {label}
-      </Label>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger id={id} className="w-full">
-          <SelectValue placeholder="Choose" />
-        </SelectTrigger>
-        <SelectContent>
-          {options.map((o) => (
-            <SelectItem key={o.value} value={o.value}>
-              {o.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  )
-}
-
 const NO_ACCOUNT = { site: '', email: '', token: '' }
 
 type Board = { id: number; name: string }
@@ -241,13 +175,7 @@ export function AddProject({
             : 'issues'
       : null
   )
-  const workspacesLoad = useLatestLoad<LinearWorkspace[]>()
-  const { data: workspaces, loading: workspacesLoading, error: workspacesError } = workspacesLoad
-  const [workspace, setWorkspace] = useState(project?.linear?.workspace ?? '')
-  const teamsLoad = useLatestLoad<LinearTeam[]>()
-  const { data: teams, loading: teamsLoading, error: teamsError } = teamsLoad
-  const [team, setTeam] = useState(project?.linear?.team ?? '')
-  const [linearProjects, setLinearProjects] = useState(project?.linear?.projects ?? [])
+  const linear = useLinearSource(project)
   const jiraAccountsLoad = useLatestLoad<JiraAccount[]>()
   const {
     data: jiraAccounts,
@@ -323,7 +251,6 @@ export function AddProject({
   }, [entries])
 
   useEffect(() => {
-    if (project?.linear) void loadWorkspaces()
     if (project?.jira) {
       void loadJiraAccounts()
       void loadJiraProjects(project.jira.site, project.jira.project)
@@ -344,8 +271,6 @@ export function AddProject({
 
   const board = source === 'board' && loaded?.url === url.trim() ? loaded : null
   const included = entries.filter((e) => e.include)
-  const teamInfo = teams?.find((t) => t.key === team)
-  const workspaceInfo = workspaces?.find((w) => w.slug === workspace)
   const shownJira = jiraList?.filter((p) =>
     `${p.key} ${p.name}`.toLowerCase().includes(jiraFilter.trim().toLowerCase())
   )
@@ -371,18 +296,7 @@ export function AddProject({
               : jiraList
                 ? 'Choose a Jira project'
                 : 'Load the Jira projects'
-      if (source === 'linear')
-        return team
-          ? null
-          : workspacesLoading
-            ? 'Loading workspaces…'
-            : workspacesError
-              ? 'Load the Linear workspaces'
-              : teamsLoading
-                ? 'Loading teams…'
-                : teams
-                  ? 'Choose a team'
-                  : 'Load the Linear teams'
+      if (source === 'linear') return linear.issue
       if (loading) return 'Loading the board…'
       if (!board) return 'Load the board'
       const missing = STATUS_FIELDS.find((f) => !statusMap[f.key])
@@ -443,42 +357,6 @@ export function AddProject({
           ),
           ...es.filter((e) => e.include && !repos.some((r) => sameRepo(r, e.github)))
         ])
-      }
-    )
-  }
-
-  function loadWorkspaces(): Promise<void> {
-    return workspacesLoad.load(
-      () => window.sandtable.projects.linearWorkspaces(),
-      (loaded) => {
-        const picked = (
-          loaded.find((w) => w.slug === workspace) ??
-          loaded.find((w) => w.default) ??
-          loaded[0]
-        )?.slug
-        if (!picked) throw new Error('Run `linear auth login`.')
-        if (workspace && picked !== workspace) return changeWorkspace(picked)
-        setWorkspace(picked)
-        void loadTeams(picked, team)
-      }
-    )
-  }
-
-  function changeWorkspace(value: string): void {
-    setWorkspace(value)
-    teamsLoad.set(null)
-    setTeam('')
-    setLinearProjects([])
-    void loadTeams(value, '')
-  }
-
-  function loadTeams(ws: string, keep: string): Promise<void> {
-    return teamsLoad.load(
-      () => window.sandtable.projects.linearTeams(ws),
-      (loaded) => {
-        const kept = loaded.find((t) => t.key === keep)
-        setTeam(kept ? keep : '')
-        setLinearProjects((ps) => kept?.projects.filter((k) => ps.some((p) => p.id === k.id)) ?? [])
       }
     )
   }
@@ -578,9 +456,8 @@ export function AddProject({
     if (value === source) return
     setSource(value)
     boardLoad.set(null)
-    setTeam('')
-    setLinearProjects([])
-    if (value === 'linear' && !workspaces && !workspacesLoading) void loadWorkspaces()
+    linear.reset()
+    if (value === 'linear') linear.activate()
     if (value === 'jira' && !jiraAccounts && !jiraAccountsLoading) void loadJiraAccounts()
     if (value === 'jira' && jiraAccounts?.length === 0) setAdding(NO_ACCOUNT)
     if (value !== 'jira') {
@@ -702,9 +579,7 @@ export function AddProject({
       ...(source === 'board' && {
         board: { source: parseBoardUrl(url), statusMap: statusMap as StatusMap }
       }),
-      ...(source === 'linear' && {
-        linear: { team, projects: linearProjects, ...(workspace && { workspace }) }
-      }),
+      ...(source === 'linear' && linear.saved && { linear: linear.saved }),
       ...(source === 'jira' && {
         jira: {
           site: jiraSite,
@@ -754,7 +629,7 @@ export function AddProject({
       return source === 'board'
         ? 'Board, statuses chosen'
         : source === 'linear'
-          ? `Linear team ${team}`
+          ? linear.summary
           : source === 'jira'
             ? `Jira project ${jiraKey}`
             : 'Repo issues'
@@ -1017,73 +892,7 @@ export function AddProject({
           )}
         </div>
       )}
-      {source === 'linear' && (
-        <div className="mt-4 flex flex-col gap-3">
-          <LoadState
-            loading={workspacesLoading}
-            text="Loading workspaces…"
-            failed={
-              workspacesError
-                ? { title: "Couldn't load the Linear workspaces.", detail: workspacesError }
-                : null
-            }
-            onRetry={() => void loadWorkspaces()}
-          />
-          {workspaces && workspaces.length > 0 && (
-            <LabeledSelect
-              id="linear-workspace"
-              label="Workspace"
-              value={workspace}
-              onChange={changeWorkspace}
-              options={workspaces.map((w) => ({
-                value: w.slug,
-                label: `${w.organization} (${w.slug})`
-              }))}
-            />
-          )}
-          <LoadState
-            loading={teamsLoading}
-            text="Loading teams…"
-            failed={
-              teamsError ? { title: "Couldn't load the Linear teams.", detail: teamsError } : null
-            }
-            onRetry={() => void loadTeams(workspace, team)}
-          />
-          {teams && (
-            <LabeledSelect
-              id="linear-team"
-              label="Team"
-              value={team}
-              onChange={(v) => {
-                setTeam(v)
-                setLinearProjects([])
-              }}
-              options={teams.map((t) => ({ value: t.key, label: `${t.name} (${t.key})` }))}
-            />
-          )}
-          {teamInfo && teamInfo.projects.length > 0 && (
-            <fieldset className="flex flex-col gap-2">
-              <legend className="mb-2 font-medium">Linear projects (optional)</legend>
-              {teamInfo.projects.map((lp) => (
-                <Label key={lp.id} className="gap-2.5 font-normal">
-                  <Checkbox
-                    checked={linearProjects.some((p) => p.id === lp.id)}
-                    onCheckedChange={(on) =>
-                      setLinearProjects((ps) =>
-                        teamInfo.projects.filter((p) =>
-                          p.id === lp.id ? on === true : ps.some((x) => x.id === p.id)
-                        )
-                      )
-                    }
-                  />
-                  {lp.name}
-                </Label>
-              ))}
-              <p className="text-xs text-fg-2">Leave all unchecked to show the whole team.</p>
-            </fieldset>
-          )}
-        </div>
-      )}
+      {source === 'linear' && <LinearStep source={linear} />}
       {source === 'jira' && (
         <div className="mt-4 flex flex-col gap-3">
           <div className="flex flex-col gap-2">
@@ -1485,22 +1294,7 @@ export function AddProject({
               </span>
             </>
           ) : source === 'linear' ? (
-            <>
-              <span>Linear team</span>
-              {workspace && (
-                <span className="text-xs text-fg-2">
-                  {workspaceInfo ? `${workspaceInfo.organization} (${workspace})` : workspace}
-                </span>
-              )}
-              <span className="text-xs text-fg-2">
-                {teamInfo ? `${teamInfo.name} (${team})` : team}
-              </span>
-              {linearProjects.length > 0 && (
-                <span className="text-xs text-fg-2">
-                  {linearProjects.map((p) => p.name).join(', ')}
-                </span>
-              )}
-            </>
+            <LinearReview source={linear} />
           ) : (
             'Repo issues'
           )
@@ -1758,7 +1552,7 @@ export function AddProject({
                   Added to{' '}
                   {new Intl.ListFormat('en').format(
                     sandboxDomains({
-                      ...(source === 'linear' && { linear: { team, projects: [] } }),
+                      ...(source === 'linear' && linear.saved && { linear: linear.saved }),
                       ...(source === 'jira' &&
                         jiraSite && { jira: { site: jiraSite, project: jiraKey, name: jiraName } })
                     })
