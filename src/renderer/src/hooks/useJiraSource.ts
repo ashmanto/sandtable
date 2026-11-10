@@ -4,7 +4,7 @@ import { useLatestLoad } from './useLatestLoad'
 import type { JiraAccount, Project } from '../../../shared/types'
 
 type Board = { id: number; name: string }
-type JiraProject = { key: string; name: string }
+type JiraListItem = { key: string; name: string }
 type Adding = { site: string; email: string; token: string }
 
 /** An empty Add a Jira account form. */
@@ -29,17 +29,17 @@ export type JiraSource = {
   signingIn: boolean
   signInError: string | null
   setSignInError: (error: string | null) => void
-  jiraList: JiraProject[] | null
+  jiraList: JiraListItem[] | null
   jiraLoading: boolean
   jiraError: string | null
   loadJiraProjects: (site: string, keep: string) => Promise<void>
   jiraKey: string
   jiraName: string
-  shownJira: JiraProject[] | undefined
+  shownJira: JiraListItem[] | undefined
   jiraFilterRef: React.RefObject<HTMLInputElement | null>
   jiraFilter: string
   setJiraFilter: (filter: string) => void
-  pickJiraProject: (p: JiraProject) => void
+  pickJiraProject: (p: JiraListItem) => void
   jiraBoards: Board[] | null
   boardsLoading: boolean
   boardsError: string | null
@@ -62,7 +62,7 @@ export function useJiraSource(project?: Project): JiraSource {
   const [adding, setAdding] = useState<Adding | null>(null)
   const [signingIn, setSigningIn] = useState(false)
   const [signInError, setSignInError] = useState<string | null>(null)
-  const jiraLoad = useLatestLoad<JiraProject[]>()
+  const jiraLoad = useLatestLoad<JiraListItem[]>()
   const { data: jiraList, loading: jiraLoading, error: jiraError } = jiraLoad
   const [jiraKey, setJiraKey] = useState(project?.jira?.project ?? '')
   const [jiraName, setJiraName] = useState(project?.jira?.name ?? '')
@@ -130,7 +130,7 @@ export function useJiraSource(project?: Project): JiraSource {
     )
   }
 
-  function pickJiraProject(p: { key: string; name: string }): void {
+  function pickJiraProject(p: JiraListItem): void {
     setJiraKey(p.key)
     setJiraName(p.name)
     boardsLoad.set(null)

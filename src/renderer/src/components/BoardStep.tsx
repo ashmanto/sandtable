@@ -3,11 +3,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { onEnter, plural } from '@/lib/utils'
-import { STATUS_FIELDS, type BoardSource } from '../hooks/useBoardSource'
+import { STATUS_FIELDS, type BoardStepState } from '../hooks/useBoardSource'
 import { LabeledSelect, LoadState, Problem } from './StepFlow'
 
 /** The GitHub Projects board step: URL, load, and a board status for each column. */
-export function BoardStep({ source }: { source: BoardSource }): React.JSX.Element {
+export function BoardStep({ source }: { source: BoardStepState }): React.JSX.Element {
   const { url, loading, board, statusMap } = source
   return (
     <div className="mt-4 flex flex-col gap-3">
@@ -75,7 +75,7 @@ export function BoardStep({ source }: { source: BoardSource }): React.JSX.Elemen
 }
 
 /** The board as the Review step's Tickets from row lists it. */
-export function BoardReview({ source }: { source: BoardSource }): React.JSX.Element {
+export function BoardReview({ source }: { source: BoardStepState }): React.JSX.Element {
   return (
     <>
       <span>GitHub Projects board</span>
@@ -85,7 +85,7 @@ export function BoardReview({ source }: { source: BoardSource }): React.JSX.Elem
 }
 
 /** The board status chosen for each column, as the Review step's Columns row lists them. */
-export function BoardColumns({ source }: { source: BoardSource }): React.JSX.Element {
+export function BoardColumns({ source }: { source: BoardStepState }): React.JSX.Element {
   return (
     <>
       {STATUS_FIELDS.map((f) => (

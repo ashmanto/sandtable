@@ -22,7 +22,7 @@ const boardName = (url: string): string | null => {
 }
 
 /** The GitHub Projects board a project's tickets come from: its URL, loaded statuses and repos, and status map. */
-export type BoardSource = {
+export type BoardStepState = {
   issue: string | null
   summary: string
   saved: NonNullable<Project['board']> | null
@@ -42,7 +42,7 @@ export type BoardSource = {
 export function useBoardSource(
   project: Project | undefined,
   on: { loaded: (repos: string[]) => void; cleared: () => void }
-): BoardSource {
+): BoardStepState {
   const board0 = project?.board
   const [url, setUrl] = useState(board0?.source.url ?? '')
   const boardLoad = useLatestLoad<Loaded>(
