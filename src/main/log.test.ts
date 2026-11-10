@@ -45,6 +45,15 @@ describe('logToFile', () => {
     expect((await fs.stat(file)).size).toBeLessThanOrEqual(200)
   })
 
+  it('recreates the folder when it is deleted while running', async () => {
+    const file = join(dir, 'logs', 'main.log')
+    logToFile(file)
+    console.error('before')
+    await fs.rm(join(dir, 'logs'), { recursive: true })
+    console.error('after')
+    expect(await fs.readFile(file, 'utf8')).toMatch(/ error after\n$/)
+  })
+
   it("keeps working when the file can't be written", async () => {
     const print = console.error
     await fs.writeFile(join(dir, 'a-file'), '')
