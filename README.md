@@ -52,8 +52,8 @@ The following list is an overview. For the full list, see [What works today](doc
   when a session finishes. Sandtable posts or applies nothing until you click.
 - Sessions without a ticket, and routines: saved session starts you can run by hand, on a
   schedule, or when a ticket gets a label or its pull request checks fail.
-- Per-project settings for the Claude Code account, model, token cap, automatic review, sandboxed
-  commands, worktree setup, and instructions for ticket sessions.
+- Per-project settings for the Claude Code account, model, effort, token cap, automatic review,
+  sandboxed commands, worktree setup, and instructions for ticket sessions.
 - A **Usage** page with token use, estimated API cost, and ticket throughput by week, and live
   token use for running sessions.
 - Remote Control, so you can use a session from claude.ai or the Claude app.
