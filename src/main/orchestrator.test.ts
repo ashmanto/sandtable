@@ -6752,6 +6752,27 @@ describe('send and interrupt', () => {
     await first
   })
 
+  it('turning Remote Control on refuses a send that starts while it checks the session', async () => {
+    const t = await ready({ remoteControl: false })
+    const on = t.orch.setRemoteControl('s1', true)
+    const sent = t.orch.send('s1', 'hi')
+    await expect(on).rejects.toThrow('Already sending')
+    await sent
+    expect(t.deps.tmux.pasteTmux).toHaveBeenCalledTimes(1)
+    expect(t.deps.tmux.pasteTmux).toHaveBeenCalledWith(expect.any(String), 'hi')
+  })
+
+  it('send refuses while /remote-control is being typed', async () => {
+    const t = await ready({ remoteControl: false })
+    const release = blockedPaste(t)
+    const on = t.orch.setRemoteControl('s1', true)
+    await vi.waitFor(() => expect(t.deps.tmux.pasteTmux).toHaveBeenCalledTimes(1))
+    await expect(t.orch.send('s1', 'hi')).rejects.toThrow('The session is still starting.')
+    release()
+    await on
+    expect(t.deps.tmux.pasteTmux).toHaveBeenCalledTimes(1)
+  })
+
   it('send refuses a second message while one is being typed', async () => {
     const t = await ready()
     const release = blockedPaste(t)
@@ -7775,6 +7796,23 @@ describe('sandtable start', () => {
     await t.orch.sync('p1')
     return { t, run: t.deps.cli!.mock.calls[0][0] }
   }
+
+  it("summary reads only the newest conversation's file", async () => {
+    const target = session({ id: 'w', ticketKey: 'octo/shop#147', eventsFile: clears('w2') })
+    const { t, run } = await ready({ sessions: [caller, target] })
+    const folder = join(t.claudeDir, 'projects', 'x')
+    mkdirSync(folder, { recursive: true })
+    const row = (type: 'user' | 'assistant', text: string): string =>
+      JSON.stringify({ type, message: { role: type, content: [{ type: 'text', text }] } }) + '\n'
+    writeFileSync(join(folder, 'w.jsonl'), row('assistant', 'before the clear'))
+    writeFileSync(join(folder, 'w2.jsonl'), row('user', 'after the clear'))
+    expect(await run('c1', 'summary', '#147')).toEqual({
+      code: 1,
+      text: '#147 has no message yet'
+    })
+    writeFileSync(join(folder, 'w2.jsonl'), row('assistant', 'newest words'), { flag: 'a' })
+    expect(await run('c1', 'summary', '#147')).toEqual({ code: 0, text: 'newest words' })
+  })
 
   it('start records startedBy on the new session', async () => {
     const { t, run } = await ready()

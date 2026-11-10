@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process'
-import { chmodSync, existsSync, mkdtempSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -13,12 +13,17 @@ const make = (handle: CliHandler): { dir: string; server: ReturnType<typeof crea
   servers.push(server)
   return { dir, server }
 }
-const run = (dir: string, socket: string, args: string[]): Promise<Ran> =>
+const run = (
+  dir: string,
+  socket: string,
+  args: string[],
+  env: NodeJS.ProcessEnv = {}
+): Promise<Ran> =>
   new Promise((resolve) =>
     execFile(
       'sh',
       [join(dir, 'sandtable'), ...args],
-      { env: { ...process.env, SANDTABLE_SOCKET: socket } },
+      { env: { ...process.env, SANDTABLE_SOCKET: socket, ...env } },
       (err, stdout, stderr) =>
         resolve({
           code: err ? ((err as { code?: number }).code ?? 1) : 0,
@@ -47,6 +52,26 @@ describe('sandtable CLI server', () => {
     const ran = await run(dir, await server.open('s1'), ['start', '#12'])
     expect(ran).toMatchObject({ code: 1, stdout: '' })
     expect(ran.stderr).toContain('Not ready')
+  })
+
+  it.each([
+    ['start', [], '1800'],
+    ['status', [], '900'],
+    ['wait', ['--timeout', '5'], '65']
+  ])('gives curl the time limit for %s', async (command, extra, limit) => {
+    const { dir, server } = make(async () => ({ code: 0, text: '' }))
+    const bin = mkdtempSync(join(tmpdir(), 'st-curl-'))
+    writeFileSync(
+      join(bin, 'curl'),
+      '#!/bin/sh\nwhile [ $# -gt 0 ]; do [ "$1" = --max-time ] && echo "$2" > "$OUT"; shift; done\necho 200\n'
+    )
+    chmodSync(join(bin, 'curl'), 0o755)
+    const out = join(bin, 'max')
+    await run(dir, await server.open('s1'), [command, '#12', ...extra], {
+      PATH: `${bin}:${process.env.PATH}`,
+      OUT: out
+    })
+    expect(readFileSync(out, 'utf8').trim()).toBe(limit)
   })
 
   it('exits 3 when wait times out', async () => {

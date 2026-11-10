@@ -900,8 +900,9 @@ refusal, a notification title, or a format example.
 ### Pull request gate
 
 - With **Automatic review** on, a ticket session can't open a pull request until the gate opens.
-  Sandtable denies `gh pr create`, drafts included, and a `gh api` POST to a `pulls` endpoint,
-  anywhere in a Bash command, from Claude or a subagent. `gh pr ready` isn't gated.
+  Sandtable denies `gh pr create`, drafts included, a `gh api` POST to a `pulls` endpoint, and a
+  `gh api graphql` call with `createPullRequest`, anywhere in a Bash command, from Claude or a
+  subagent. `gh pr ready` isn't gated.
 - The denial tells Claude to end its turn and wait, and a round runs at **Needs you** without an
   open pull request. For changed files, it starts over a round that stopped clean, never one
   stopped after 3 rounds.

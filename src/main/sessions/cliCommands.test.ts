@@ -14,7 +14,7 @@ const make = (
   sessions: SessionRecord[],
   tickets: Ticket[],
   extra: {
-    transcript?: ConversationEntry[] | null
+    transcript?: ConversationEntry[]
     chat?: ChatState['chat']
     pending?: () => boolean
     busy?: () => boolean
@@ -27,7 +27,7 @@ const make = (
     synced: new Map([['p1', { tickets }]]),
     projectById: () => project,
     statusMapOf,
-    transcriptOf: async () => extra.transcript ?? null,
+    latestEntries: async () => extra.transcript ?? [],
     chat: async () => ({ chat: extra.chat ?? null, answering: false }),
     pending: extra.pending ?? (() => false),
     busy: extra.busy ?? (() => false),

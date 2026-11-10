@@ -24,6 +24,7 @@ case "$timeout" in *[!0-9]*) usage ;; esac
 [ -z "$timeout" ] || [ "$timeout" -gt 0 ] || usage
 [ -n "$SANDTABLE_SOCKET" ] || { echo "sandtable: SANDTABLE_SOCKET isn't set" >&2; exit 1; }
 max=900
+[ "$cmd" = start ] && max=1800
 [ "$cmd" = wait ] && max=$(( \${timeout:-540} + 60 ))
 set -- --data-urlencode "ticket=$ticket"
 [ -n "$timeout" ] && set -- "$@" --data-urlencode "timeout=$timeout"

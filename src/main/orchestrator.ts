@@ -1783,14 +1783,17 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     return entries
   }
 
-  const promptNow = async (s: SessionRecord, pane?: string): Promise<SessionPrompt | null> => {
+  const latestEntries = async (s: SessionRecord): Promise<ConversationEntry[]> => {
     const latest = (await conversationFiles(s)).at(-1)
-    return pendingPrompt(
-      latest ? await readLastEntries(latest.file) : [],
+    return latest ? readLastEntries(latest.file) : []
+  }
+
+  const promptNow = async (s: SessionRecord, pane?: string): Promise<SessionPrompt | null> =>
+    pendingPrompt(
+      await latestEntries(s),
       pane ?? (await deps.tmux.captureTmux(s.tmuxName)),
       await readAgentRequests(s.eventsFile)
     )
-  }
 
   const liveView = createLiveView({
     statusDir: join(deps.dataDir, 'status'),
@@ -1829,7 +1832,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     synced,
     projectById,
     statusMapOf,
-    transcriptOf,
+    latestEntries,
     chat: ticketChat.chat,
     pending: (id) => reviewLoop.pending(id),
     busy: (projectId, ticketKey) =>
@@ -2915,6 +2918,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         if (sending.has(s.id)) throw new Error('Already sending')
         await assertSendable(s)
         if (!!s.remoteControl === on) return
+        if (sending.has(s.id)) throw new Error('Already sending')
         s.remoteControl = true
         resuming.add(s.id)
         let pasted = false

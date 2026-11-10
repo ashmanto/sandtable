@@ -56,6 +56,7 @@ import { createKeepAwake } from './keepAwake'
 import { warnNotificationsOffOnce } from './notifyOff'
 import { createOrchestrator } from './orchestrator'
 import { cliDir, createCliServer } from './sessions/cli'
+import { fingerprintTrees } from './sessions/claudeLaunch'
 import {
   countNeedsYou,
   readAsking,
@@ -371,10 +372,7 @@ async function start(): Promise<void> {
     githubStamp: (board, repos) => changeStamp(github.gql, board, repos),
     githubReposOf,
     pullRequests: (repo, branch) => fetchPullRequests(github.gql, repo, branch),
-    fingerprint: async (script, trees) => {
-      const { stdout, code } = await run('/bin/sh', [script, 'fingerprint', ...trees.flat()])
-      return code === 0 ? stdout : ''
-    },
+    fingerprint: (script, trees) => fingerprintTrees(run, script, trees),
     failedLog: (repo, jobId) => failedLog(run, tools.paths.gh ?? 'gh', repo, jobId),
     openFolder: (folder, app) => (app ? openInEditor(app, folder) : shell.openPath(folder)),
     git: { ensureWorktree, removeWorktree, checkRemovable, changes: worktreeChanges },
