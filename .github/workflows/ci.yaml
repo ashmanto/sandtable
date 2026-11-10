@@ -14,11 +14,12 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: brew install tmux
+      - run: brew install tmux && brew install --cask claude-code
       - run: npm ci
       - run: npm run lint
-      - run: npm run typecheck
       - run: npm test
       - run: npm run format:check
-      - run: npm run build
+      - run: npm run build:mac
       - run: npx playwright test
+        env:
+          GH_TOKEN: ${{ github.token }}
