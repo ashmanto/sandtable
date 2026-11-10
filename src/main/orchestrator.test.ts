@@ -44,6 +44,7 @@ import {
   untilStopped
 } from './test/orchestrator'
 import { shortTime } from '../shared/time'
+import { logToFile } from './log'
 import { folderError } from '../shared/repo'
 import { imagesOf } from '../shared/images'
 import {
@@ -7820,5 +7821,22 @@ describe('sandtable start', () => {
     })
     expect(t.deps.tmux.startTmux).toHaveBeenCalled()
     expect(t.saved().sessions.find((x) => x.id === 'w')?.startedBy).toBe('c1')
+  })
+})
+
+describe('a failed store save', () => {
+  it('leaves a line in the log file', async () => {
+    const { error, warn } = console
+    onTestFinished(() => void Object.assign(console, { error, warn }))
+    Object.assign(console, { error: vi.fn(), warn: vi.fn() })
+    const logs = tempDir('st-logs-')
+    logToFile(logs)
+    const t = setup()
+    await t.orch.reconnect()
+    t.deps.store.save.mockRejectedValueOnce(new Error('disk full'))
+    await expect(t.orch.addAccount({ name: 'Work', dir: '/a' })).rejects.toThrow('disk full')
+    expect(readFileSync(join(logs, 'main.log'), 'utf8')).toMatch(
+      / error Saving the store failed Error: disk full\n/
+    )
   })
 })
