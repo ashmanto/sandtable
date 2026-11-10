@@ -13,6 +13,7 @@ import {
 } from 'electron'
 import { sidebarWidth, type PushArgs, type PushChannel, type WindowFrame } from '../shared/api'
 import type { LastView, Theme } from '../shared/types'
+import { url as inspectorUrl } from 'inspector'
 import { homedir } from 'os'
 import { join } from 'path'
 import { spawn } from 'node-pty'
@@ -190,7 +191,15 @@ const toFront = (w: BrowserWindow): void => {
   w.show()
   w.focus()
 }
-const primary = app.requestSingleInstanceLock()
+// Shipped builds turn off the inspect fuse, so the inspector is never open there.
+const refused =
+  !inspectorUrl() &&
+  process.argv.slice(1).some((a) => a.startsWith('-') && !a.startsWith('--user-data-dir='))
+if (refused) {
+  console.error('Sandtable takes no command-line switches besides --user-data-dir.')
+  app.exit(1)
+}
+const primary = !refused && app.requestSingleInstanceLock()
 if (!primary) app.quit()
 else {
   if (app.commandLine.hasSwitch('user-data-dir'))

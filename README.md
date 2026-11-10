@@ -122,7 +122,9 @@ You can also download the DMG from the
 **Sandtable** to **Applications**.
 
 The app is signed ad hoc and isn't notarized, so if macOS refuses to open it, click **Open
-Anyway** in **System Settings > Privacy & Security**.
+Anyway** in **System Settings > Privacy & Security**. The app runs under the hardened runtime, so macOS
+ignores `DYLD_INSERT_LIBRARIES`, and it quits when started with any command-line switch besides
+`--user-data-dir`.
 
 ## Build from source
 

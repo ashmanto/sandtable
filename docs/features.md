@@ -1517,3 +1517,12 @@ refusal, a notification title, or a format example.
   asks again who's signed in for **Me**.
 - A GitHub or Linear call that fails also makes the next call read the token again.
 - On first run, the guide ends at **Add project**.
+
+## Packaged app
+
+- The app is signed ad hoc and runs under the hardened runtime, so macOS ignores
+  `DYLD_INSERT_LIBRARIES`, and other programs can't inject a library that way.
+- The app quits with status 1 when started with any command-line switch besides `--user-data-dir`,
+  such as `--remote-debugging-port` or `--gpu-launcher`.
+- A program that can write inside `Sandtable.app` can still replace a library the app loads. Only
+  a Developer ID signature with library validation closes that.
