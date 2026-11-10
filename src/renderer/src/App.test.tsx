@@ -295,7 +295,8 @@ describe('App', () => {
       '',
       null,
       expect.any(String),
-      undefined
+      undefined,
+      null
     )
     expect(api.app.saveView).toHaveBeenLastCalledWith({ projectId: project.id, sessionId: 'a1' })
   })
@@ -359,7 +360,8 @@ describe('App', () => {
         '',
         null,
         expect.any(String),
-        undefined
+        undefined,
+        null
       )
     })
 
