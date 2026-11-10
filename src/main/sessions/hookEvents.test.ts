@@ -1,4 +1,4 @@
-import { appendFileSync } from 'node:fs'
+import { appendFileSync, readdirSync } from 'node:fs'
 import { appendFile, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -388,6 +388,18 @@ describe('countNeedsYou', () => {
 })
 
 describe('watchEvents', () => {
+  const all = (folder = dir): { seed: string[]; live: () => string[] } => {
+    const ids = (): string[] => {
+      try {
+        return readdirSync(folder)
+          .filter((n) => n.endsWith('.jsonl'))
+          .map((n) => n.slice(0, -'.jsonl'.length))
+      } catch {
+        return []
+      }
+    }
+    return { seed: ids(), live: ids }
+  }
   const SLOW = { timeout: 6000, interval: 25 }
   const collect = (): {
     calls: [string, SessionState][]
@@ -406,7 +418,7 @@ describe('watchEvents', () => {
 
   it('reports every state event, including repeats', async () => {
     const { calls, cb } = collect()
-    stop = watchEvents(dir, cb)
+    stop = watchEvents(dir, cb, all())
     await live(calls)
     calls.length = 0
     const file = join(dir, 's1.jsonl')
@@ -435,13 +447,17 @@ describe('watchEvents', () => {
     const { calls, cb } = collect()
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     let thrown = false
-    stop = watchEvents(dir, (id, s) => {
-      if (id === 's1' && !thrown) {
-        thrown = true
-        throw new Error('listener broke')
-      }
-      cb(id, s)
-    })
+    stop = watchEvents(
+      dir,
+      (id, s) => {
+        if (id === 's1' && !thrown) {
+          thrown = true
+          throw new Error('listener broke')
+        }
+        cb(id, s)
+      },
+      all()
+    )
     try {
       await live(calls)
       calls.length = 0
@@ -458,7 +474,7 @@ describe('watchEvents', () => {
 
   it('keeps a clear through idle_prompt until a real Needs you event', async () => {
     const { calls, cb } = collect()
-    stop = watchEvents(dir, cb)
+    stop = watchEvents(dir, cb, all())
     await live(calls)
     calls.length = 0
     const file = join(dir, 'c.jsonl')
@@ -486,7 +502,7 @@ describe('watchEvents', () => {
 
   it('needs you again at a Stop after a cleared idle_prompt', async () => {
     const { calls, cb } = collect()
-    stop = watchEvents(dir, cb)
+    stop = watchEvents(dir, cb, all())
     await live(calls)
     calls.length = 0
     await appendFile(
@@ -508,7 +524,7 @@ describe('watchEvents', () => {
     const file = join(dir, 'e.jsonl')
     await writeFile(file, line('Stop') + IDLE_EVENT + '\n')
     const { calls, cb } = collect()
-    stop = watchEvents(dir, cb)
+    stop = watchEvents(dir, cb, all())
     await appendFile(file, notification('idle_prompt'))
     await appendFile(file, line('Stop'))
     await vi.waitFor(() => expect(calls).toEqual([['e', 'needsYou']]), SLOW)
@@ -516,7 +532,7 @@ describe('watchEvents', () => {
 
   it('reports a Stop with background work when neither the state nor asking changes', async () => {
     const calls: [string, SessionState | null, boolean][] = []
-    stop = watchEvents(dir, (id, s, asking) => calls.push([id, s, asking]))
+    stop = watchEvents(dir, (id, s, asking) => calls.push([id, s, asking]), all())
     await live(calls)
     calls.length = 0
     await appendFile(join(dir, 'g.jsonl'), stopWith(task('shell')) + line('PreToolUse'))
@@ -525,7 +541,7 @@ describe('watchEvents', () => {
 
   it('reports whether Claude is asking, even when the state stays', async () => {
     const calls: [string, SessionState | null, boolean][] = []
-    stop = watchEvents(dir, (id, s, asking) => calls.push([id, s, asking]))
+    stop = watchEvents(dir, (id, s, asking) => calls.push([id, s, asking]), all())
     await live(calls)
     calls.length = 0
     const file = join(dir, 'q.jsonl')
@@ -545,7 +561,7 @@ describe('watchEvents', () => {
 
   it('notices a new file written once after the watcher is live', async () => {
     const { calls, cb } = collect()
-    stop = watchEvents(dir, cb)
+    stop = watchEvents(dir, cb, all())
     await live(calls)
     calls.length = 0
     await appendFile(join(dir, 'new.jsonl'), line('UserPromptSubmit'))
@@ -556,28 +572,28 @@ describe('watchEvents', () => {
     const file = join(dir, 'old.jsonl')
     await writeFile(file, (line('UserPromptSubmit') + line('Stop')).repeat(5))
     const { calls, cb } = collect()
-    stop = watchEvents(dir, cb)
+    stop = watchEvents(dir, cb, all())
     await appendFile(file, line('UserPromptSubmit'))
     await vi.waitFor(() => expect(calls).toEqual([['old', 'running']]), SLOW)
   })
 
   it('notices an append made immediately after the watch starts', async () => {
     const { calls, cb } = collect()
-    stop = watchEvents(dir, cb)
+    stop = watchEvents(dir, cb, all())
     appendFileSync(join(dir, 'a.jsonl'), line('Stop'))
     await vi.waitFor(() => expect(calls).toEqual([['a', 'needsYou']]), SLOW)
   })
 
   it('creates a missing directory', async () => {
     const { calls, cb } = collect()
-    stop = watchEvents(join(dir, 'nested'), cb)
+    stop = watchEvents(join(dir, 'nested'), cb, all(join(dir, 'nested')))
     await appendFile(join(dir, 'nested', 'a.jsonl'), line('Stop'))
     await vi.waitFor(() => expect(calls).toEqual([['a', 'needsYou']]), SLOW)
   })
 
   it('buffers a partial last line until its newline arrives', async () => {
     const { calls, cb } = collect()
-    stop = watchEvents(dir, cb)
+    stop = watchEvents(dir, cb, all())
     await live(calls)
     calls.length = 0
     const full = line('Stop')
@@ -597,7 +613,7 @@ describe('watchEvents', () => {
 
   it('tracks sessions separately and ignores other files', async () => {
     const { calls, cb } = collect()
-    stop = watchEvents(dir, cb)
+    stop = watchEvents(dir, cb, all())
     await live(calls)
     calls.length = 0
     await appendFile(join(dir, 'a.jsonl'), line('Stop'))
@@ -612,7 +628,7 @@ describe('watchEvents', () => {
     const file = join(dir, 'old.jsonl')
     await writeFile(file, line('UserPromptSubmit') + stopWith(task('subagent')))
     const { calls, cb } = collect()
-    stop = watchEvents(dir, cb)
+    stop = watchEvents(dir, cb, all())
     await appendFile(file, notification('idle_prompt') + line('PostToolUse'))
     await vi.waitFor(() => expect(calls).toEqual([['old', 'running']]), SLOW)
   })
@@ -621,13 +637,13 @@ describe('watchEvents', () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
     try {
       const { calls, cb } = collect()
-      const s = watchEvents(dir, cb)
+      const s = watchEvents(dir, cb, all())
       await live(calls)
       s()
       expect(vi.getTimerCount()).toBe(0)
       calls.length = 0
       const control = collect()
-      stop = watchEvents(dir, control.cb)
+      stop = watchEvents(dir, control.cb, all())
       await appendFile(join(dir, 'a.jsonl'), line('Stop'))
       await vi.advanceTimersByTimeAsync(2500)
       await settled(control.calls)
