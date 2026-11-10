@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { MODELS } from '../../shared/types'
+import { EFFORTS, MODELS } from '../../shared/types'
 import type {
   ConversationEntry,
+  Effort,
   Model,
   Project,
   ProjectRepo,
@@ -74,6 +75,7 @@ export function createRoutines(ctx: {
       scheduled?: boolean
       trigger?: RunTrigger
       model?: Model | null
+      effort?: Effort | null
     }
   ) => Promise<string>
 }): RoutinesApi & {
@@ -119,6 +121,7 @@ export function createRoutines(ctx: {
         allow: opts.trigger ? undefined : r.allow,
         scheduled: opts.scheduled,
         model: r.model,
+        effort: r.effort,
         ...(opts.trigger && { trigger: opts.trigger })
       })
     } finally {
@@ -273,6 +276,8 @@ export function createRoutines(ctx: {
       if (problem) throw new Error(problem)
       const { model } = input
       if (model != null && !MODELS.includes(model)) throw new Error('Not a model')
+      const { effort } = input
+      if (effort != null && !EFFORTS.includes(effort)) throw new Error('Not an effort')
       const repo = repoOf(project, input.repo)
       const old = input.id === undefined ? undefined : others.find((r) => r.id === input.id)
       if (input.id !== undefined && !old) throw new Error('Unknown routine')
@@ -291,6 +296,7 @@ export function createRoutines(ctx: {
         worktree,
         message,
         ...(model !== undefined && { model }),
+        ...(effort !== undefined && { effort }),
         ...(allow.length > 0 && { allow }),
         ...(schedule && { schedule: { days: [...schedule.days], time: schedule.time } }),
         ...(triggered && { on }),
