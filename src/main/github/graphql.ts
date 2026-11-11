@@ -1,10 +1,8 @@
-import { cliToken, fetchJson } from '../http'
+import { cliToken, fetchJson, type GraphqlFn } from '../http'
 
-export { paginate } from '../http'
+export { paginate, type GraphqlFn } from '../http'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export type GraphqlFn = (query: string, vars: Record<string, unknown>) => Promise<any>
-
 /** Splits `owner/name` into the variables GitHub's repository queries take. */
 export const splitRepo = (repo: string): { owner: string; name: string } => {
   const [owner, name] = repo.split('/')

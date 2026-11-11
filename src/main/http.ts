@@ -1,8 +1,10 @@
 import { run } from './env/tools'
 import { parseJson } from '../shared/json'
-import type { GraphqlFn } from './github/graphql'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+/** Runs one GraphQL query with its variables and resolves to the response's data. */
+export type GraphqlFn = (query: string, vars: Record<string, unknown>) => Promise<any>
+
 type Connection = { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: any[] }
 
 const TOKEN_TIMEOUT_MS = 10_000

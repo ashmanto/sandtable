@@ -781,7 +781,7 @@ export function createLaunch(ctx: LaunchContext): LaunchApi {
             .map((m, i) => fetchWarning(repos[i].github, m.fetchError))
             .filter(Boolean)
             .join(' ')
-          const launched = await launchNew(
+          const fields = await launchNew(
             project,
             id,
             name,
@@ -812,7 +812,7 @@ export function createLaunch(ctx: LaunchContext): LaunchApi {
             tmuxName: name,
             branch,
             worktrees,
-            ...launched,
+            ...fields,
             startedAt: now().toISOString(),
             state: 'running',
             startWarning: warning || undefined,
