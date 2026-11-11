@@ -1,4 +1,4 @@
-import { fetchJson } from '../github/graphql'
+import { fetchJson } from '../http'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export type JiraFn = (method: string, path: string, body?: unknown) => Promise<any>

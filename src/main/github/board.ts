@@ -2,7 +2,8 @@ import { columnFor } from '../../shared/columns'
 import type { BoardSource, StatusMap, Ticket } from '../../shared/types'
 import { parseBoardUrl } from '../../shared/boardUrl'
 import { parseTicketKey } from '../../shared/repo'
-import { paginate, splitRepo as split, type GraphqlFn } from './graphql'
+import { splitRepo as split, type GraphqlFn } from './graphql'
+import { paginate } from '../http'
 import { ISSUE_PROPS, issueProps } from './repoIssues'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

@@ -2,7 +2,8 @@ import { IN_PROGRESS_LABEL, REPO_STATUS } from '../../shared/columns'
 import { prStage } from '../../shared/findings'
 import { knownMergeable } from './mergeable'
 import type { BoardColumn, PrStage, Ticket, IssueRef } from '../../shared/types'
-import { paginate, splitRepo as split, type GraphqlFn } from './graphql'
+import { splitRepo as split, type GraphqlFn } from './graphql'
+import { paginate } from '../http'
 
 export type RepoIssuesClient = {
   tickets(

@@ -103,8 +103,11 @@ const REFERENCE = /&(?:#x([0-9a-f]+)|#([0-9]+)|[a-z][a-z0-9]{1,31});/gi
 export const withoutUnsafe = (s: string): string =>
   s.replace(new RegExp(UNSAFE, 'gu'), (c) => (c === '\n' || c === '\t' ? c : ''))
 
+/** The text with each run of whitespace collapsed to one space, trimmed. */
+export const squeeze = (s: string): string => s.replace(/\s+/g, ' ').trim()
+
 /** The text on one line without unsafe characters. */
-export const oneLine = (s: string): string => withoutUnsafe(s).replace(/\s+/g, ' ').trim()
+export const oneLine = (s: string): string => squeeze(withoutUnsafe(s))
 
 function visibleMarkdown(body: string): string {
   const md = body.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n')

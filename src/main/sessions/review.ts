@@ -2,6 +2,7 @@ import { repoName } from '../../shared/sessions'
 import { wasCut } from '../../shared/findings'
 import type { DiffLine, Finding, RepoChanges } from '../../shared/types'
 import { withoutTags } from './chat'
+import { squeeze } from './claudeLaunch'
 import {
   fitBytes,
   isSecretFile,
@@ -101,14 +102,13 @@ export const diffText = (changes: RepoChanges[]): string =>
     )
     .join('\n')
 
-const squeezed = (s: string): string => s.replace(/\s+/g, ' ').trim()
 const MARKER = /^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/
 const HEADING = /^\s*(?:#{1,6}\s|\*\*[^*]+\*\*:?\s*$)/
 const CRITERIA =
   /^\s*(?:#{1,6}\s*)?(?:\*\*)?\s*(?:done when|acceptance criteria)\b\s*:?\s*(?:\*\*)?\s*:?\s*/i
 const FENCE = /^\s*(?:```|~~~)/
 const keyOf = (s: string): string =>
-  squeezed(s.replace(MARKER, '').replace(/[*_`]/g, ''))
+  squeeze(s.replace(MARKER, '').replace(/[*_`]/g, ''))
     .replace(/[.;:,]+$/, '')
     .toLowerCase()
 
@@ -122,7 +122,7 @@ const criteriaOf = (issue: string): Map<string, string> => {
   let alias = ''
   let isListed = false
   const end = (): void => {
-    const text = squeezed(item.join(' ').replace(/[*`]/g, ''))
+    const text = squeeze(item.join(' ').replace(/[*`]/g, ''))
     const into = isListed ? listed : loose
     if (text) for (const k of [text, alias].filter(Boolean)) into.set(keyOf(k), text)
     item = []

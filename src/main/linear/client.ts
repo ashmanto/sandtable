@@ -1,7 +1,8 @@
 import { AREA_PREFIX, areaOf } from '../../shared/areas'
 import { columnFor, LINEAR_STATUS, statusField } from '../../shared/columns'
 import type { BoardColumn, LinearTeam, LinearWorkspace, Ticket, IssueRef } from '../../shared/types'
-import { cliToken, graphqlWith, paginate, runCli, type GraphqlFn } from '../github/graphql'
+import { graphqlWith, type GraphqlFn } from '../github/graphql'
+import { cliToken, paginate, runCli } from '../http'
 import { newestMerged } from '../github/repoIssues'
 import type { TeamClient } from '../tracker'
 
