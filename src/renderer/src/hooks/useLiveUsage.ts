@@ -1,13 +1,13 @@
 import { useSyncExternalStore } from 'react'
 import { listenerSet } from '@/lib/fanOut'
+import { same } from '../../../shared/same'
 import type { ModelUsage } from '../../../shared/types'
 
 type LiveUsage = Record<string, ModelUsage[]>
 let latest: LiveUsage = {}
 const publish = (usage: LiveUsage): void => {
-  const same = (id: string): boolean => JSON.stringify(usage[id]) === JSON.stringify(latest[id])
   latest = Object.fromEntries(
-    Object.entries(usage).map(([id, u]) => [id, same(id) ? latest[id] : u])
+    Object.entries(usage).map(([id, u]) => [id, same(u, latest[id]) ? latest[id] : u])
   )
   changed()
 }

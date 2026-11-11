@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { same } from '../../shared/same'
 import { EFFORTS, MODELS } from '../../shared/types'
 import type {
   ConversationEntry,
@@ -228,12 +229,7 @@ export function createRoutines(ctx: {
           .sessions()
           .map((s) => ({ routineId: s.routineId, at: s.startedAt, trigger: s.trigger })),
         ...ctx.skippedRuns()
-      ].some(
-        (x) =>
-          x.routineId === r.id &&
-          since(x.at) &&
-          JSON.stringify(x.trigger) === JSON.stringify(trigger)
-      )
+      ].some((x) => x.routineId === r.id && since(x.at) && same(x.trigger, trigger))
     let dirty = false
     for (const r of ctx.routines()) {
       if (r.projectId !== projectId || !r.on) continue

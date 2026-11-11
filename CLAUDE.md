@@ -35,7 +35,9 @@ make install                     # on master: pull, build the app, run the pre-p
   client (`linear/`), the Jira client and its saved sign-ins (`jira/`), the shared tracker path
   (`tracker.ts`), git worktrees (`git/`), tmux and Claude Code sessions (`sessions/`), program
   runs and the tool probe (`env/`), the live terminals (`terminal.ts`), the JSON store, and the
-  orchestrator that ties them together.
+  orchestrator that ties them together. The orchestrator builds board sync and moves
+  (`sync.ts`), session launch and the start flow (`launch.ts`), and project and account saving
+  (`projects.ts`) as modules, and `channels.ts` maps each IPC channel to its method.
 - `src/preload/`: exposes `src/shared/api.ts` to the renderer as `window.sandtable`.
 - `src/renderer/`: the React UI. It talks to the main process only through `window.sandtable`.
 - `src/shared/`: types and pure helpers used by both sides.

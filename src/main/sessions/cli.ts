@@ -3,6 +3,7 @@ import { chmod, mkdir, rename, unlink, writeFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type Server } from 'node:http'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { messageOf } from '../../shared/errors'
 
 /** The `sh` script on a ticket session's `PATH` that sends its command to the session's socket. */
 export const CLI_SCRIPT = `#!/bin/sh
@@ -49,10 +50,10 @@ export const cliDir = (dataDir: string, home = homedir()): string =>
   )
 
 /** A command the `sandtable` script sends. */
-export type CliCommand = 'start' | 'status' | 'wait' | 'summary' | 'info'
+type CliCommand = 'start' | 'status' | 'wait' | 'summary' | 'info'
 
 /** A command's result: 0 is done, 1 is refused or failed, 3 is a `wait` that timed out. */
-export type CliReply = { code: 0 | 1 | 3; text: string }
+type CliReply = { code: 0 | 1 | 3; text: string }
 
 /** Runs a command for the session that called it. */
 export type CliHandler = (
@@ -94,7 +95,7 @@ export function createCliServer(
       ticket,
       timeout > 0 ? timeout : undefined,
       signal
-    ).catch((err: unknown) => ({ code: 1, text: err instanceof Error ? err.message : String(err) }))
+    ).catch((err: unknown) => ({ code: 1, text: messageOf(err) }))
   }
 
   const serve = (sessionId: string): Server =>

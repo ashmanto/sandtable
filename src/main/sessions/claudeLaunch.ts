@@ -56,18 +56,22 @@ export const READ_ONLY_ARGS = [
   'json'
 ]
 
+/** A `claude -p` argument list: `head` and `flags`, then the system prompt `rules`, then `prompt` after `--`. */
+export const printArgs = (
+  head: string[],
+  flags: string[],
+  rules: string,
+  prompt: string
+): string[] => [...head, ...flags, '--append-system-prompt', rules, '--', prompt]
+
 /** The `claude` arguments for a read-only, one-shot run whose JSON answer matches the schema. */
-export const schemaArgs = (schema: object, prompt: string, sessionId: string): string[] => [
-  ...READ_ONLY_ARGS,
-  '--session-id',
-  sessionId,
-  '--json-schema',
-  JSON.stringify(schema),
-  '--append-system-prompt',
-  ISSUE_TEXT_RULE,
-  '--',
-  prompt
-]
+export const schemaArgs = (schema: object, prompt: string, sessionId: string): string[] =>
+  printArgs(
+    READ_ONLY_ARGS,
+    ['--session-id', sessionId, '--json-schema', JSON.stringify(schema)],
+    ISSUE_TEXT_RULE,
+    prompt
+  )
 
 /** Reads `claude -p` JSON output or a `stream-json` result row, throwing Claude's own error under the label. */
 export function parseAnswer<T>(stdout: string, label: string): T & { result?: string } {
@@ -99,8 +103,11 @@ const REFERENCE = /&(?:#x([0-9a-f]+)|#([0-9]+)|[a-z][a-z0-9]{1,31});/gi
 export const withoutUnsafe = (s: string): string =>
   s.replace(new RegExp(UNSAFE, 'gu'), (c) => (c === '\n' || c === '\t' ? c : ''))
 
+/** The text with each run of whitespace collapsed to one space, trimmed. */
+export const squeeze = (s: string): string => s.replace(/\s+/g, ' ').trim()
+
 /** The text on one line without unsafe characters. */
-export const oneLine = (s: string): string => withoutUnsafe(s).replace(/\s+/g, ' ').trim()
+export const oneLine = (s: string): string => squeeze(withoutUnsafe(s))
 
 function visibleMarkdown(body: string): string {
   const md = body.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n')

@@ -7,7 +7,9 @@ import {
   isSecretFile,
   NO_SECRETS_RULE,
   parseAnswer,
+  printArgs,
   READ_ONLY_ARGS,
+  squeeze,
   withoutUnsafe
 } from './claudeLaunch'
 
@@ -67,20 +69,21 @@ export const reviewArgs = (
   sessionId: string,
   label: string,
   otherWorktrees: string[] = []
-): string[] => [
-  ...READ_ONLY_ARGS,
-  ...otherWorktrees.flatMap((w) => ['--add-dir', w]),
-  '--session-id',
-  sessionId,
-  '-n',
-  `Sandtable review ${label}`,
-  '--json-schema',
-  JSON.stringify(REVIEW_SCHEMA),
-  '--append-system-prompt',
-  REVIEW_RULES,
-  '--',
-  prompt
-]
+): string[] =>
+  printArgs(
+    READ_ONLY_ARGS,
+    [
+      ...otherWorktrees.flatMap((w) => ['--add-dir', w]),
+      '--session-id',
+      sessionId,
+      '-n',
+      `Sandtable review ${label}`,
+      '--json-schema',
+      JSON.stringify(REVIEW_SCHEMA)
+    ],
+    REVIEW_RULES,
+    prompt
+  )
 
 const prefixOf = (changes: RepoChanges[], c: RepoChanges): string =>
   changes.length > 1 ? `${repoName(c.worktree)}/` : ''
@@ -99,14 +102,13 @@ export const diffText = (changes: RepoChanges[]): string =>
     )
     .join('\n')
 
-const squeezed = (s: string): string => s.replace(/\s+/g, ' ').trim()
 const MARKER = /^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?/
 const HEADING = /^\s*(?:#{1,6}\s|\*\*[^*]+\*\*:?\s*$)/
 const CRITERIA =
   /^\s*(?:#{1,6}\s*)?(?:\*\*)?\s*(?:done when|acceptance criteria)\b\s*:?\s*(?:\*\*)?\s*:?\s*/i
 const FENCE = /^\s*(?:```|~~~)/
 const keyOf = (s: string): string =>
-  squeezed(s.replace(MARKER, '').replace(/[*_`]/g, ''))
+  squeeze(s.replace(MARKER, '').replace(/[*_`]/g, ''))
     .replace(/[.;:,]+$/, '')
     .toLowerCase()
 
@@ -120,7 +122,7 @@ const criteriaOf = (issue: string): Map<string, string> => {
   let alias = ''
   let isListed = false
   const end = (): void => {
-    const text = squeezed(item.join(' ').replace(/[*`]/g, ''))
+    const text = squeeze(item.join(' ').replace(/[*`]/g, ''))
     const into = isListed ? listed : loose
     if (text) for (const k of [text, alias].filter(Boolean)) into.set(keyOf(k), text)
     item = []

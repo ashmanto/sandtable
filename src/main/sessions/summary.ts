@@ -1,6 +1,13 @@
 import type { ConversationEntry } from '../../shared/types'
 import { untagged } from './chat'
-import { fitBytes, ISSUE_TEXT_RULE, NO_SECRETS_RULE, redact, withoutUnsafe } from './claudeLaunch'
+import {
+  fitBytes,
+  ISSUE_TEXT_RULE,
+  NO_SECRETS_RULE,
+  printArgs,
+  redact,
+  withoutUnsafe
+} from './claudeLaunch'
 
 const MAX_TRANSCRIPT_BYTES = 150_000
 const MAX_FIRST_BYTES = 20_000
@@ -14,23 +21,13 @@ export const SUMMARY_RULES = [
 ].join('\n')
 
 /** The `claude` arguments for a summary run with no tools, recorded as conversation `sessionId`. */
-export const summaryArgs = (prompt: string, sessionId: string, label: string): string[] => [
-  '-p',
-  '--restricted',
-  '--tools',
-  '',
-  '--strict-mcp-config',
-  '--output-format',
-  'json',
-  '--session-id',
-  sessionId,
-  '-n',
-  `Sandtable summary ${label}`,
-  '--append-system-prompt',
-  SUMMARY_RULES,
-  '--',
-  prompt
-]
+export const summaryArgs = (prompt: string, sessionId: string, label: string): string[] =>
+  printArgs(
+    ['-p', '--restricted', '--tools', '', '--strict-mcp-config', '--output-format', 'json'],
+    ['--session-id', sessionId, '-n', `Sandtable summary ${label}`],
+    SUMMARY_RULES,
+    prompt
+  )
 
 const lineOf = (e: Exclude<ConversationEntry, { kind: 'compact' }>): string =>
   e.kind === 'tool'
