@@ -8,7 +8,14 @@ import type {
   Step
 } from '../../shared/types'
 import type { Orchestrator, OrchestratorDeps } from '../orchestrator'
-import { chatArgs, MAX_CHAT_MESSAGE_BYTES, printChat, type PrintClaude, withoutTags } from './chat'
+import {
+  chatArgs,
+  chatRun,
+  MAX_CHAT_MESSAGE_BYTES,
+  printChat,
+  type PrintClaude,
+  withoutTags
+} from './chat'
 import { NO_SECRETS_RULE, oneLine, parseAnswer, withoutUnsafe } from './claudeLaunch'
 
 /** The JSON Schema each routine chat answer must match. */
@@ -187,13 +194,15 @@ export function createRoutineChat(ctx: {
       if (turn.conversationId !== undefined && known?.projectId !== project.id)
         throw new Error('This chat is gone. Use Start over.')
       const conversationId = turn.conversationId ?? randomUUID()
-      if (answering.has(conversationId)) throw new Error('Claude is still answering')
-      answering.add(conversationId)
       const { runId } = turn
-      const stop = new AbortController()
-      stoppers.set(runId, stop)
-      let run: string | undefined
-      try {
+      const guard = {
+        answering,
+        busyKey: conversationId,
+        stoppers,
+        stopKey: runId,
+        runsInFlight: ctx.runsInFlight
+      }
+      return chatRun(guard, async (signal, recorded) => {
         let place = known
         if (!place) {
           const repo = ctx.repoOf(project, turn.repo)
@@ -203,7 +212,7 @@ export function createRoutineChat(ctx: {
             cwd: repo.path,
             claudeDir: project.claudeDir ?? ctx.deps.claudeDir
           }
-          run = await ctx.recordRun(project.id, '', conversationId)
+          recorded(await ctx.recordRun(project.id, '', conversationId))
         }
         const { copiedFrom } = turn
         const prompt = routineChatPrompt(
@@ -217,17 +226,13 @@ export function createRoutineChat(ctx: {
         const args = routineChatArgs({ prompt, conversationId, resume: !!known })
         const answer = parseRoutineChat(
           await printChat(ctx.printClaude, 'Routine chat', place, args, !!known, {
-            signal: stop.signal,
+            signal,
             onSteps: (steps) => stepListeners.forEach((cb) => cb(runId, steps))
           })
         )
         chats.set(conversationId, place)
         return { conversationId, ...answer }
-      } finally {
-        if (run) ctx.runsInFlight.delete(run)
-        answering.delete(conversationId)
-        stoppers.delete(runId)
-      }
+      })
     },
 
     stopRoutineChat: async (runId) => stoppers.get(runId)?.abort(),

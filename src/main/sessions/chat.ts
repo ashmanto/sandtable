@@ -10,6 +10,7 @@ import {
   oneLine,
   openingPrompt,
   parseAnswer,
+  printArgs,
   READ_ONLY_ARGS,
   visibleText,
   withoutUnsafe
@@ -37,18 +38,45 @@ export const chatArgs = (opts: {
   name: string
   rules: string
   schema?: object
-}): string[] => [
-  ...STREAM_ARGS,
-  opts.resume ? '--resume' : '--session-id',
-  opts.conversationId,
-  '-n',
-  opts.name,
-  ...(opts.schema ? ['--json-schema', JSON.stringify(opts.schema)] : []),
-  '--append-system-prompt',
-  opts.rules,
-  '--',
-  opts.prompt
-]
+}): string[] =>
+  printArgs(
+    STREAM_ARGS,
+    [
+      opts.resume ? '--resume' : '--session-id',
+      opts.conversationId,
+      '-n',
+      opts.name,
+      ...(opts.schema ? ['--json-schema', JSON.stringify(opts.schema)] : [])
+    ],
+    opts.rules,
+    opts.prompt
+  )
+
+/** Runs one chat turn under the busy check, with an abort stopper, and clears both and the recorded run afterwards. */
+export async function chatRun<T>(
+  guard: {
+    answering: Set<string>
+    busyKey: string
+    stoppers: Map<string, AbortController>
+    stopKey: string
+    runsInFlight: Set<string>
+  },
+  turn: (signal: AbortSignal, recorded: (runId: string) => void) => Promise<T>
+): Promise<T> {
+  const { answering, busyKey, stoppers, stopKey, runsInFlight } = guard
+  if (answering.has(busyKey)) throw new Error('Claude is still answering')
+  const stop = new AbortController()
+  let run: string | undefined
+  answering.add(busyKey)
+  stoppers.set(stopKey, stop)
+  try {
+    return await turn(stop.signal, (id) => (run = id))
+  } finally {
+    if (run) runsInFlight.delete(run)
+    answering.delete(busyKey)
+    stoppers.delete(stopKey)
+  }
+}
 
 /** Records a one-shot claude run against a ticket, then runs it and returns its output. */
 export type PrintRun = (

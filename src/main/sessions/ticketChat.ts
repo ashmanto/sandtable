@@ -15,6 +15,7 @@ import type { Orchestrator, OrchestratorDeps } from '../orchestrator'
 import {
   CHAT_RULES,
   chatArgs,
+  chatRun,
   chatPrompt,
   DRAFT_PROMPT,
   MAX_CHAT_MESSAGE_BYTES,
@@ -128,43 +129,45 @@ export function createTicketChat(ctx: {
     const label = labelOf(ticketKey)
     const saved = chatOf(projectId, ticketKey)
     const prev = saved?.messages.length ? saved : undefined
-    let run: string | undefined
-    const stop = new AbortController()
-    chatting.add(busy)
-    stoppers.set(busy, stop)
     try {
-      let place: ChatPlace
-      if (prev) {
-        place = { conversationId: prev.conversationId, claudeDir: prev.claudeDir, cwd: prev.cwd }
-      } else {
-        const repo = await chatRepo(project, ticketKey)
-        place = {
-          conversationId: randomUUID(),
-          claudeDir: projectById(projectId).claudeDir ?? deps.claudeDir,
-          cwd: repo.path
+      return await chatRun(
+        { answering: chatting, busyKey: busy, stoppers, stopKey: busy, runsInFlight },
+        async (signal, recorded) => {
+          let place: ChatPlace
+          if (prev) {
+            place = {
+              conversationId: prev.conversationId,
+              claudeDir: prev.claudeDir,
+              cwd: prev.cwd
+            }
+          } else {
+            const repo = await chatRepo(project, ticketKey)
+            place = {
+              conversationId: randomUUID(),
+              claudeDir: projectById(projectId).claudeDir ?? deps.claudeDir,
+              cwd: repo.path
+            }
+            recorded(await recordRun(projectId, ticketKey, place.conversationId))
+          }
+          const ask = async (prompt: string): Promise<string> => {
+            const args = chatArgs({
+              prompt,
+              conversationId: place.conversationId,
+              resume: !!prev,
+              name: `Sandtable chat ${label}`,
+              rules: CHAT_RULES
+            })
+            return parseChat(
+              await printChat(printClaude, 'Chat', place, args, !!prev, {
+                signal,
+                onSteps: (steps) => stepListeners.forEach((cb) => cb(projectId, ticketKey, steps))
+              })
+            )
+          }
+          return turn(ask, place, prev)
         }
-        run = await recordRun(projectId, ticketKey, place.conversationId)
-      }
-      const ask = async (prompt: string): Promise<string> => {
-        const args = chatArgs({
-          prompt,
-          conversationId: place.conversationId,
-          resume: !!prev,
-          name: `Sandtable chat ${label}`,
-          rules: CHAT_RULES
-        })
-        return parseChat(
-          await printChat(printClaude, 'Chat', place, args, !!prev, {
-            signal: stop.signal,
-            onSteps: (steps) => stepListeners.forEach((cb) => cb(projectId, ticketKey, steps))
-          })
-        )
-      }
-      return await turn(ask, place, prev)
+      )
     } finally {
-      if (run) runsInFlight.delete(run)
-      chatting.delete(busy)
-      stoppers.delete(busy)
       changed(projectId)
     }
   }

@@ -56,18 +56,22 @@ export const READ_ONLY_ARGS = [
   'json'
 ]
 
+/** A `claude -p` argument list: `head` and `flags`, then the system prompt `rules`, then `prompt` after `--`. */
+export const printArgs = (
+  head: string[],
+  flags: string[],
+  rules: string,
+  prompt: string
+): string[] => [...head, ...flags, '--append-system-prompt', rules, '--', prompt]
+
 /** The `claude` arguments for a read-only, one-shot run whose JSON answer matches the schema. */
-export const schemaArgs = (schema: object, prompt: string, sessionId: string): string[] => [
-  ...READ_ONLY_ARGS,
-  '--session-id',
-  sessionId,
-  '--json-schema',
-  JSON.stringify(schema),
-  '--append-system-prompt',
-  ISSUE_TEXT_RULE,
-  '--',
-  prompt
-]
+export const schemaArgs = (schema: object, prompt: string, sessionId: string): string[] =>
+  printArgs(
+    READ_ONLY_ARGS,
+    ['--session-id', sessionId, '--json-schema', JSON.stringify(schema)],
+    ISSUE_TEXT_RULE,
+    prompt
+  )
 
 /** Reads `claude -p` JSON output or a `stream-json` result row, throwing Claude's own error under the label. */
 export function parseAnswer<T>(stdout: string, label: string): T & { result?: string } {

@@ -7,6 +7,7 @@ import {
   isSecretFile,
   NO_SECRETS_RULE,
   parseAnswer,
+  printArgs,
   READ_ONLY_ARGS,
   withoutUnsafe
 } from './claudeLaunch'
@@ -67,20 +68,21 @@ export const reviewArgs = (
   sessionId: string,
   label: string,
   otherWorktrees: string[] = []
-): string[] => [
-  ...READ_ONLY_ARGS,
-  ...otherWorktrees.flatMap((w) => ['--add-dir', w]),
-  '--session-id',
-  sessionId,
-  '-n',
-  `Sandtable review ${label}`,
-  '--json-schema',
-  JSON.stringify(REVIEW_SCHEMA),
-  '--append-system-prompt',
-  REVIEW_RULES,
-  '--',
-  prompt
-]
+): string[] =>
+  printArgs(
+    READ_ONLY_ARGS,
+    [
+      ...otherWorktrees.flatMap((w) => ['--add-dir', w]),
+      '--session-id',
+      sessionId,
+      '-n',
+      `Sandtable review ${label}`,
+      '--json-schema',
+      JSON.stringify(REVIEW_SCHEMA)
+    ],
+    REVIEW_RULES,
+    prompt
+  )
 
 const prefixOf = (changes: RepoChanges[], c: RepoChanges): string =>
   changes.length > 1 ? `${repoName(c.worktree)}/` : ''
