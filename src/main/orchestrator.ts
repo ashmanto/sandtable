@@ -1,9 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { appendFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import { setTimeout as delay } from 'node:timers/promises'
-import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import type { BoardView, SidebarSession } from '../shared/api'
 import type { BackgroundTask, SessionStatus } from '../shared/sessionStatus'
 import type {
@@ -25,7 +24,6 @@ import type {
   LastView,
   Leftover,
   JiraAccount,
-  JiraProject,
   LinearTeam,
   LinearWorkspace,
   Effort,
@@ -60,18 +58,15 @@ import type {
   Triage
 } from '../shared/types'
 import type { PromptAnswer, SessionPrompt } from '../shared/prompt'
-import { withGroup } from '../shared/types'
 import { appName, isApp } from '../shared/editors'
-import { isSandboxDomain } from '../shared/sandbox'
 import { createCliServer, type CliHandler } from './sessions/cli'
 import { WT_SUFFIX } from './git/worktree'
 import type { AreasClient } from './github/areas'
 import { boardError, type BoardClient } from './github/board'
 import type { RepoIssuesClient } from './github/repoIssues'
 import type { LinearClient } from './linear/client'
-import { isJiraProjectKey, type JiraClient } from './jira/client'
+import type { JiraClient } from './jira/client'
 import type { JiraCredentials } from './jira/credentials'
-import { assertSite } from './jira/rest'
 import type { MergedPr } from './github/merged'
 import { repoOf, trackerOf, type Tracker } from './tracker'
 import { parseBoardUrl } from '../shared/boardUrl'
@@ -92,8 +87,6 @@ import {
   ticketLabel,
   ticketSource
 } from '../shared/repo'
-import { instructionsBytes, keptInstructions, MAX_INSTRUCTIONS_BYTES } from '../shared/instructions'
-import { TOKEN_CAPS } from '../shared/pricing'
 import { DEFAULT_KEEP_DONE_DAYS, daysBefore, visibleTickets } from '../shared/visibleTickets'
 import { oneLine, withoutUnsafe, schemaArgs } from './sessions/claudeLaunch'
 import { readActivity, readStop, type Stopped } from './sessions/activity'
@@ -130,6 +123,7 @@ import { createLeftovers } from './sessions/leftovers'
 import { createCliCommands } from './sessions/cliCommands'
 import { createTicketChat } from './sessions/ticketChat'
 import { createSync, type Synced } from './sync'
+import { createProjects } from './projects'
 import { createLaunch, labelOf, REMOVING, shortName, unlessBusy } from './launch'
 import { tmuxName, typeIntoTmux } from './sessions/tmux'
 import { accountEnv, stopChildren } from './env/tools'
@@ -414,37 +408,7 @@ export type Orchestrator = {
   endUnknown(name: string): Promise<void>
 }
 
-const sourceOf = (p: Project): string =>
-  JSON.stringify([
-    p.board?.source.url,
-    p.linear?.team,
-    p.linear?.projects.map((x) => x.id),
-    p.linear?.workspace,
-    p.jira?.site,
-    p.jira?.project,
-    p.jira?.board?.id
-  ])
-
 const tracked = (p: Project): boolean => serviceOf(p) !== 'GitHub'
-
-function savedInstructions(x: unknown): Project['instructions'] {
-  if (x === undefined) return undefined
-  if (typeof x !== 'object' || x === null) throw new Error('Not instructions')
-  const { all, labels = [] } = x as { all?: unknown; labels?: unknown }
-  if (
-    (all !== undefined && typeof all !== 'string') ||
-    !Array.isArray(labels) ||
-    labels.some((l) => typeof l?.label !== 'string' || typeof l?.text !== 'string')
-  )
-    throw new Error('Not instructions')
-  const out = keptInstructions({ ...(all !== undefined && { all }), labels })
-  const bytes = instructionsBytes(out)
-  if (bytes > MAX_INSTRUCTIONS_BYTES)
-    throw new Error(
-      `Your instructions are ${bytes.toLocaleString('en-US')} bytes; the limit is ${MAX_INSTRUCTIONS_BYTES.toLocaleString('en-US')}`
-    )
-  return out
-}
 
 /** Ties projects, board sync, worktrees, and Claude Code sessions together. */
 export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
@@ -816,25 +780,6 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     }
   }
 
-  const assertJira = async (jira: JiraProject): Promise<void> => {
-    assertSite(jira.site)
-    if (!isJiraProjectKey(jira.project)) throw new Error('Not a Jira project key')
-    if (typeof jira.name !== 'string' || /[\r\n]/.test(jira.name))
-      throw new Error('Not a Jira project name')
-    const { board } = jira
-    if (
-      board !== undefined &&
-      (typeof board !== 'object' ||
-        board === null ||
-        !Number.isInteger(board.id) ||
-        board.id <= 0 ||
-        typeof board.name !== 'string' ||
-        /[\r\n]/.test(board.name))
-    )
-      throw new Error('Not a Jira board')
-    if (!(await deps.jiraCredentials.sites()).some((a) => a.site === jira.site))
-      throw new Error(`No Jira account for ${jira.site}; add one in Add project`)
-  }
   const readActivities = async (): Promise<void> => {
     const running = sessions.filter((s) => s.state === 'running')
     for (const id of activities.keys()) if (!running.some((s) => s.id === id)) activities.delete(id)
@@ -911,8 +856,6 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         throw new Error(folderError(r.github))
   }
 
-  const added = (): Account[] => accounts.filter((a) => a.dir !== deps.claudeDir)
-  const allAccounts = (): Account[] => [{ name: 'Default', dir: deps.claudeDir }, ...added()]
   const conversationDir = (s: SessionRecord): string => s.claudeDir ?? deps.claudeDir
   const conversationFiles = async (
     s: SessionRecord,
@@ -1347,6 +1290,30 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     liveTick: liveView.tick
   })
 
+  const { allAccounts, ...projectsApi } = createProjects({
+    deps,
+    projects: () => projects,
+    setProjects: (next) => (projects = next),
+    groups: () => groups,
+    setGroups: (next) => (groups = next),
+    accounts: () => accounts,
+    setAccounts: (next) => (accounts = next),
+    sessions: () => sessions,
+    synced,
+    mergedPrs,
+    projectById,
+    savedRepo,
+    persist,
+    persistCache,
+    changed,
+    clearFixedFolders,
+    resetSource,
+    assertModel,
+    assertEffort,
+    syncGate: (s) => reviewLoop.syncGate(s),
+    sync
+  })
+
   let stopped = false
   const { runSchedules, onSync, ...routinesApi } = createRoutines({
     now,
@@ -1561,95 +1528,8 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     unwatchAll: liveView.unwatchAll,
     listProjects: async (): Promise<Project[]> => projects,
 
-    async saveProject(project: Project): Promise<void> {
-      if ([project.board, project.linear, project.jira].filter(Boolean).length > 1)
-        throw new Error('Pick one ticket source')
-      const workspace = project.linear?.workspace
-      if (workspace !== undefined && !/^[A-Za-z0-9._-]+$/.test(workspace))
-        throw new Error('Not a Linear workspace')
-      if (project.linear && !/^[A-Za-z0-9_]+$/.test(project.linear.team))
-        throw new Error('Not a Linear team')
-      if (project.linear?.projects.some((p) => !/^[A-Za-z0-9-]+$/.test(p.id)))
-        throw new Error('Not a Linear project')
-      if (project.jira) await assertJira(project.jira)
-      if (project.tokenCap !== undefined && !TOKEN_CAPS.includes(project.tokenCap))
-        throw new Error('Not a token cap')
-      assertModel(project.model)
-      assertEffort(project.effort)
-      if (project.editor !== undefined && typeof project.editor !== 'string')
-        throw new Error('Not an editor')
-      if (!isApp(project.editor)) delete project.editor
-      if (project.sandbox !== undefined && project.sandbox !== true)
-        throw new Error('Not a sandbox choice')
-      if (project.sandboxDomains !== undefined && !Array.isArray(project.sandboxDomains))
-        throw new Error('Not a domain list')
-      for (const d of project.sandboxDomains ?? [])
-        if (typeof d !== 'string' || !isSandboxDomain(d))
-          throw new Error(`Not a domain: ${String(d)}`)
-      const saved = projects.find((x) => x.id === project.id)?.repos ?? []
-      const repos = await Promise.all(
-        project.repos.map((r) => savedRepo(r, findRepo(saved, r.github)))
-      )
-      const { instructions, ...plain } = { ...project, repos }
-      const kept = savedInstructions(instructions)
-      const checked: Project = kept ? { ...plain, instructions: kept } : plain
-      const { claudeDir, ...rest } = checked
-      const p: Project =
-        accounts.some((a) => a.dir === claudeDir) || accountEnv(claudeDir, deps.claudeDir)
-          ? checked
-          : rest
-      if (p.claudeDir && !accounts.some((a) => a.dir === p.claudeDir))
-        throw new Error(`Add the account for ${p.claudeDir} on Settings first`)
-      const i = projects.findIndex((x) => x.id === p.id)
-      const resourced = i >= 0 && sourceOf(projects[i]) !== sourceOf(p)
-      projects =
-        i < 0
-          ? [...projects, withGroup(p, undefined)]
-          : projects.with(i, withGroup(p, projects[i].group))
-      const cleared = await clearFixedFolders(p)
-      await persist()
-      if (cleared) changed(p.id)
-      for (const s of sessions) if (s.projectId === p.id) await reviewLoop.syncGate(s)
-      if (resourced) {
-        synced.delete(p.id)
-        mergedPrs.delete(p.id)
-        resetSource(p.id)
-        persistCache()
-      }
-      void sync(p.id)
-    },
-
-    async setEditor(projectId, app) {
-      if (!isApp(app)) throw new Error('Not an editor')
-      const p = projectById(projectId)
-      projects = projects.map((x) => (x === p ? { ...p, editor: app } : x))
-      await persist()
-    },
-
     listGroups: async (): Promise<ProjectGroup[]> => groups,
-
-    /** Replaces the groups and reorders projects to `order`; unlisted projects keep their order at the end. */
-    async arrangeProjects(
-      next: ProjectGroup[],
-      order: { id: string; group?: string }[]
-    ): Promise<void> {
-      const byId = new Map(projects.map((p) => [p.id, p]))
-      const valid = next
-        .filter((g) => typeof g?.id === 'string' && typeof g.name === 'string')
-        .map(({ id, name }) => ({ id, name }))
-      const known = new Set(valid.map((g) => g.id))
-      const placed = order.flatMap(({ id, group }) => {
-        const p = byId.get(id)
-        if (!p) return []
-        byId.delete(id)
-        return [withGroup(p, typeof group === 'string' ? group : undefined)]
-      })
-      groups = valid.filter((g, i) => valid.findIndex((x) => x.id === g.id) === i)
-      projects = [...placed, ...byId.values()].map((p) =>
-        withGroup(p, p.group && known.has(p.group) ? p.group : undefined)
-      )
-      await persist()
-    },
+    ...projectsApi,
 
     async removeProject(id: string): Promise<void> {
       projects = projects.filter((x) => x.id !== id)
@@ -1669,43 +1549,6 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       await persist()
       changed(id)
     },
-
-    listAccounts: async (): Promise<Account[]> => allAccounts(),
-
-    async addAccount(a: Account): Promise<void> {
-      const name = a.name.trim()
-      const typed = a.dir.trim()
-      if (!name) throw new Error('Enter a name')
-      if (!typed) throw new Error('Enter a folder')
-      const expanded = typed.startsWith('~/') ? homedir() + typed.slice(1) : typed
-      if (!isAbsolute(expanded)) throw new Error('Enter a full path, starting with / or ~/')
-      const dir = resolve(expanded)
-      if (dir === homedir() || dir === '/')
-        throw new Error(`${dir} can't be an account's folder. Use a folder such as ~/.claude-work.`)
-      const all = allAccounts()
-      if (all.some((x) => x.name.toLowerCase() === name.toLowerCase()))
-        throw new Error(`An account named ${name} already exists`)
-      const owner = all.find((x) => resolve(x.dir) === dir)
-      if (owner) throw new Error(`${owner.name} already uses ${dir}`)
-      accounts = [...accounts, { name, dir }]
-      await persist()
-    },
-
-    async removeAccount(dir: string): Promise<void> {
-      if (dir === deps.claudeDir) throw new Error("Default can't be removed")
-      const account = accounts.find((a) => a.dir === dir)
-      if (!account) throw new Error('Unknown account')
-      const users = projects.filter((p) => p.claudeDir === dir).map((p) => p.name)
-      if (users.length)
-        throw new Error(
-          `${users.join(', ')} ${users.length === 1 ? 'uses' : 'use'} ${account.name}. Pick another account for ${users.length === 1 ? 'it' : 'them'} first.`
-        )
-      accounts = accounts.filter((a) => a !== account)
-      await persist()
-    },
-
-    usedAccounts: (): Account[] =>
-      added().filter((a) => projects.some((p) => p.claudeDir === a.dir)),
 
     linearTeams: (workspace?: string): Promise<LinearTeam[]> => deps.linear(workspace).teams(),
 
