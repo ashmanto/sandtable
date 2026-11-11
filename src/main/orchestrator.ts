@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { appendFile, mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { setTimeout as delay } from 'node:timers/promises'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
@@ -43,7 +43,6 @@ import type {
   RoutineChatTurn,
   RoutineInput,
   RoutineRun,
-  RunTrigger,
   SessionCommand,
   SessionRecord,
   SessionState,
@@ -61,12 +60,11 @@ import type {
   Triage
 } from '../shared/types'
 import type { PromptAnswer, SessionPrompt } from '../shared/prompt'
-import { EFFORTS, MODELS, withGroup } from '../shared/types'
+import { withGroup } from '../shared/types'
 import { appName, isApp } from '../shared/editors'
-import { isSandboxDomain, sandboxDomains } from '../shared/sandbox'
+import { isSandboxDomain } from '../shared/sandbox'
 import { createCliServer, type CliHandler } from './sessions/cli'
-import { branchName } from './git/branchName'
-import { ownGitDir, worktreePath, WT_SUFFIX } from './git/worktree'
+import { WT_SUFFIX } from './git/worktree'
 import type { AreasClient } from './github/areas'
 import { boardError, type BoardClient } from './github/board'
 import type { RepoIssuesClient } from './github/repoIssues'
@@ -75,19 +73,11 @@ import { isJiraProjectKey, type JiraClient } from './jira/client'
 import type { JiraCredentials } from './jira/credentials'
 import { assertSite } from './jira/rest'
 import type { MergedPr } from './github/merged'
-import { linearProjectIn, repoOf, trackerOf, type Tracker } from './tracker'
+import { repoOf, trackerOf, type Tracker } from './tracker'
 import { parseBoardUrl } from '../shared/boardUrl'
 import { APPLIED_BUT, AREA_PREFIX, areaOf, overlapCandidates, startProblems } from '../shared/areas'
 import { sections } from '../shared/projectGroups'
-import {
-  currentSession,
-  isDoneOpen,
-  isLive,
-  listedSessions,
-  sessionDir,
-  sessionRepos,
-  tooLong
-} from '../shared/sessions'
+import { isDoneOpen, isLive, listedSessions, sessionDir } from '../shared/sessions'
 import { compactText, prepareText } from '../shared/compact'
 import { sessionDraft } from '../shared/drafts'
 import { IMAGE_TYPES, imageProblem, withImages } from '../shared/images'
@@ -96,40 +86,16 @@ import {
   CREATED,
   findRepo,
   folderError,
-  folderErrorRepo,
-  isTrackerKey,
-  parseTicketKey,
   sameRepo,
   serviceOf,
   sameTicketSource,
   ticketLabel,
   ticketSource
 } from '../shared/repo'
-import {
-  instructionsBytes,
-  instructionsFor,
-  keptInstructions,
-  MAX_INSTRUCTIONS_BYTES
-} from '../shared/instructions'
-import { shortTime } from '../shared/time'
+import { instructionsBytes, keptInstructions, MAX_INSTRUCTIONS_BYTES } from '../shared/instructions'
 import { TOKEN_CAPS } from '../shared/pricing'
 import { DEFAULT_KEEP_DONE_DAYS, daysBefore, visibleTickets } from '../shared/visibleTickets'
-import {
-  claudeArgs,
-  draftPrompt,
-  agentSockets,
-  hookSettings,
-  sandboxSettings,
-  STATUS_SCRIPT,
-  GATE_SCRIPT,
-  oneLine,
-  withoutUnsafe,
-  openingPrompt,
-  schemaArgs,
-  sessionRules,
-  fitBytes,
-  MAX_NOTE_BYTES
-} from './sessions/claudeLaunch'
+import { oneLine, withoutUnsafe, schemaArgs } from './sessions/claudeLaunch'
 import { readActivity, readStop, type Stopped } from './sessions/activity'
 import { findConversation, parseConversation, readLastEntries } from './sessions/conversation'
 import { commandsOf } from './sessions/commands'
@@ -144,7 +110,6 @@ import {
 import {
   ANSWERED_EVENT,
   conversationIds,
-  hasStarted,
   IDLE_EVENT,
   readAgentRequests,
   STOPPED_EVENT
@@ -165,36 +130,20 @@ import { createLeftovers } from './sessions/leftovers'
 import { createCliCommands } from './sessions/cliCommands'
 import { createTicketChat } from './sessions/ticketChat'
 import { createSync, type Synced } from './sync'
+import { createLaunch, labelOf, REMOVING, shortName, unlessBusy } from './launch'
 import { tmuxName, typeIntoTmux } from './sessions/tmux'
 import { accountEnv, stopChildren } from './env/tools'
 import { copyPaths, ignoredProblem, runSetup, stopSetups, suggestSetup } from './env/worktreeSetup'
-import { SETUP_CANCELLED, SETUP_FAILED } from '../shared/worktreeSetup'
 import { draftFile } from './drafts'
 import { serial, type Run, type Store } from './store'
 import type { SyncCache, SyncCacheStore } from './syncCache'
 import { messageOf } from '../shared/errors'
 
 const SYNC_MS = 60_000
-const POLL_MS = 3_000
 const NOTIFY_WAIT_MS = 10_000
 const STOP_READS = 4
 const STOP_RETRY_MS = 500
-const SCHEDULE_MS = 30_000
-const EARLY_EXIT_MS = 10_000
-const START_EVENT_MS = 30_000
-const NOT_STARTED =
-  "Claude Code hasn't started. It's probably waiting for you to trust this folder: open the terminal to answer it."
 
-const unlessBusy = (tick: () => Promise<unknown>): (() => void) => {
-  let busy = false
-  return () => {
-    if (busy) return
-    busy = true
-    void tick()
-      .catch((err) => console.error(err))
-      .finally(() => (busy = false))
-  }
-}
 const DATA_URL = /^data:([\w/+.-]+);base64,/
 const typeOf = (bytes: Buffer): string => {
   const head = bytes.subarray(0, 12).toString('latin1')
@@ -211,7 +160,6 @@ const imageOf = (url: string): { ext: string; bytes: Buffer } => {
   if (problem) throw new Error(problem)
   return { ext: IMAGE_TYPES[type], bytes }
 }
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 async function transcriptsIn(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true }).catch(() => [])
@@ -466,17 +414,6 @@ export type Orchestrator = {
   endUnknown(name: string): Promise<void>
 }
 
-const labelOf = (ticketKey: string): string =>
-  ticketLabel({
-    key: ticketKey,
-    number: isTrackerKey(ticketKey) ? 0 : parseTicketKey(ticketKey).number
-  })
-
-const shortName = (ticketKey: string): string => ticketKey.split('/').pop() ?? ticketKey
-
-const checkoutRepo = (repos: ProjectRepo[], s: SessionRecord): string =>
-  (sessionRepos(repos, s)[0] ?? repos[0])?.github ?? ''
-
 const sourceOf = (p: Project): string =>
   JSON.stringify([
     p.board?.source.url,
@@ -508,10 +445,6 @@ function savedInstructions(x: unknown): Project['instructions'] {
     )
   return out
 }
-
-const fetchWarning = (github: string, fetchError?: string): string | undefined =>
-  fetchError &&
-  `Couldn't update ${github} from GitHub, so this branch starts from your local copy: ${fetchError}`
 
 /** Ties projects, board sync, worktrees, and Claude Code sessions together. */
 export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
@@ -658,7 +591,6 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
   const commandLists = new Map<string, Promise<SessionCommand[]>>()
   const removing = new Set<string>()
   const beingRemoved = (worktrees: string[]): boolean => worktrees.some((w) => removing.has(w))
-  const REMOVING = 'Wait until the worktree is removed'
   const stillStarting = async (s: SessionRecord): Promise<boolean> =>
     resuming.has(s.id) || notStarted(s) || (startBy.has(s.id) && !(await startedSince(s)))
   const assertSendable = async (s: SessionRecord): Promise<void> => {
@@ -669,13 +601,6 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
   }
   const creating = new Set<string>()
   const sending = new Set<string>()
-  const launches = new Map<string, number>()
-  const launchedAt = new Map<string, number>()
-  const startBy = new Map<string, number>()
-  const startFrom = new Map<string, number>()
-  const startedSince = (s: SessionRecord): Promise<boolean> =>
-    hasStarted(s.eventsFile, startFrom.get(s.id))
-  const notStarted = (s: SessionRecord): boolean => !!s.startWarning?.endsWith(NOT_STARTED)
   const sameSource = (a: string, b: string): boolean => {
     const [x, y] = [a, b].map((id) => projects.find((p) => p.id === id))
     return !x || !y || sameTicketSource(x, y)
@@ -910,52 +835,6 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     if (!(await deps.jiraCredentials.sites()).some((a) => a.site === jira.site))
       throw new Error(`No Jira account for ${jira.site}; add one in Add project`)
   }
-  const pollTmux = async (): Promise<void> => {
-    const launched = new Map(launches)
-    const watched = sessions.filter(isLive)
-    const names = new Set((await deps.tmux.listTmux()).map((t) => t.name))
-    for (const s of watched)
-      if (
-        isLive(s) &&
-        !names.has(s.tmuxName) &&
-        (await deps.tmux.hasTmux(s.tmuxName).catch(() => null)) === false &&
-        launches.get(s.id) === launched.get(s.id)
-      )
-        setState(
-          s,
-          'finished',
-          now().getTime() - (launchedAt.get(s.id) ?? -Infinity) < EARLY_EXIT_MS
-            ? "Claude exited right after it started. Run claude in the session's folder to see why."
-            : undefined
-        )
-    await checkStarts()
-  }
-  const checkStarts = async (): Promise<void> => {
-    for (const [id, by] of startBy) {
-      const s = sessions.find((x) => x.id === id)
-      if (!s || !isLive(s)) startBy.delete(id)
-      else if (notStarted(s) && (await startedSince(s))) {
-        startBy.delete(id)
-        if (!isLive(s)) continue
-        const earlier = s.startWarning!.slice(0, -NOT_STARTED.length).trimEnd()
-        if (earlier) s.startWarning = earlier
-        else delete s.startWarning
-        setAsking(s, await deps.events.readAsking(s.eventsFile))
-        setState(s, (await lastStateOf(s)) ?? (s.unprompted ? 'idle' : 'running'))
-        void persist().catch(() => undefined)
-        changed(s.projectId)
-      } else if (by <= now().getTime() && !notStarted(s)) {
-        if (await startedSince(s)) startBy.delete(id)
-        else if (isLive(s)) {
-          s.startWarning = s.startWarning ? `${s.startWarning} ${NOT_STARTED}` : NOT_STARTED
-          setAsking(s, true)
-          setState(s, 'needsYou')
-          void persist().catch(() => undefined)
-          changed(s.projectId)
-        }
-      }
-    }
-  }
   const readActivities = async (): Promise<void> => {
     const running = sessions.filter((s) => s.state === 'running')
     for (const id of activities.keys()) if (!running.some((s) => s.id === id)) activities.delete(id)
@@ -966,28 +845,6 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       activities.set(s.id, next)
       activityListeners.forEach((cb) => cb(s.id, next))
     }
-  }
-  const capFile = (id: string): string => join(settingsDir, `${id}.capped`)
-  let pollingTmux = false
-  const startPollingTmux = (): (() => void) => {
-    pollingTmux = true
-    const schedule = unlessBusy(runSchedules)
-    const poll = unlessBusy(pollTmux)
-    const watchLive = unlessBusy(liveView.tick)
-    const readSteps = unlessBusy(async () => {
-      await readActivities()
-      await readLiveUsage()
-    })
-    const timers = [
-      setInterval(() => {
-        poll()
-        readSteps()
-        watchLive()
-      }, POLL_MS),
-      setInterval(schedule, SCHEDULE_MS)
-    ]
-    stoppers.push(() => timers.forEach(clearInterval))
-    return schedule
   }
 
   const removeWorktree = async (sessionId: string): Promise<RemoveResult> => {
@@ -1054,188 +911,8 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         throw new Error(folderError(r.github))
   }
 
-  const settingsDir = join(deps.dataDir, 'settings')
-  const eventsDir = join(deps.dataDir, 'events')
-  const statusScript = join(deps.dataDir, 'statusline.sh')
-  const gateScript = join(deps.dataDir, 'gate.sh')
-  const gateFile = (id: string): string => join(settingsDir, `${id}.gate`)
-  const treesOf = (worktrees: string[], repoPaths: string[]): Promise<[string, string][]> =>
-    Promise.all(worktrees.map(async (w) => [(await ownGitDir(w, repoPaths)) ?? '', w]))
-  const statusFile = (id: string): string => join(deps.dataDir, 'status', `${id}.json`)
-  const imagesDir = (id: string): string => join(deps.dataDir, 'images', id)
-  const notesFile = (id: string): string => join(deps.dataDir, 'notes', `${id}.md`)
-  const draftsDir = join(deps.dataDir, 'drafts')
-  const remoteControlOf = (p: Project): boolean => p.remoteControl ?? deps.remoteControl()
-  const npmCache = join(homedir(), 'Library', 'Caches', 'Sandtable', 'npm')
-  const sandboxOf = (p: Project): string[] | undefined =>
-    p.sandbox ? sandboxDomains(p) : undefined
-  const assertModel = (m: unknown): void => {
-    if (m !== undefined && !MODELS.includes(m as Model)) throw new Error('Not a model')
-  }
-  const assertSetupChoice = (setup: unknown): void => {
-    if (setup !== undefined && setup !== false) throw new Error('Not a setup choice')
-  }
-  const modelOf = (p: Project, choice: Model | null | undefined): Model | undefined => {
-    const model = choice === undefined ? p.model : (choice ?? undefined)
-    assertModel(model)
-    return model
-  }
-  const assertEffort = (e: unknown): void => {
-    if (e !== undefined && !EFFORTS.includes(e as Effort)) throw new Error('Not an effort')
-  }
-  const effortOf = (p: Project, choice: Effort | null | undefined): Effort | undefined => {
-    const effort = choice === undefined ? p.effort : (choice ?? undefined)
-    assertEffort(effort)
-    return effort
-  }
   const added = (): Account[] => accounts.filter((a) => a.dir !== deps.claudeDir)
   const allAccounts = (): Account[] => [{ name: 'Default', dir: deps.claudeDir }, ...added()]
-  const launch = async (
-    id: string,
-    tmux: string,
-    cwd: string,
-    rules: Parameters<typeof sessionRules>[0],
-    opts: Omit<Parameters<typeof claudeArgs>[0], 'settingsFile' | 'rules'> & {
-      allow?: string[]
-      sandbox?: string[]
-      repoPaths?: string[]
-    },
-    dir: string = deps.claudeDir
-  ): Promise<string> => {
-    const eventsFile = join(eventsDir, `${id}.jsonl`)
-    const settingsFile = join(settingsDir, `${id}.json`)
-    const cliSocket =
-      rules.ticket !== undefined ? await cliServer?.open(id).catch(() => undefined) : undefined
-    try {
-      return await launchWith(id, tmux, cwd, rules, opts, dir, eventsFile, settingsFile, cliSocket)
-    } catch (err) {
-      if (cliSocket) await cliServer?.close(id)
-      throw err
-    }
-  }
-  const launchWith = async (
-    id: string,
-    tmux: string,
-    cwd: string,
-    rules: Parameters<typeof sessionRules>[0],
-    opts: Parameters<typeof launch>[4],
-    dir: string,
-    eventsFile: string,
-    settingsFile: string,
-    cliSocket: string | undefined
-  ): Promise<string> => {
-    await mkdir(eventsDir, { recursive: true })
-    await mkdir(settingsDir, { recursive: true })
-    await mkdir(join(deps.dataDir, 'status'), { recursive: true })
-    for (const [file, text] of [
-      [statusScript, STATUS_SCRIPT],
-      [gateScript, GATE_SCRIPT]
-    ]) {
-      const temp = `${file}.${randomUUID()}`
-      await writeFile(temp, text)
-      await rename(temp, file)
-    }
-    await writeFile(
-      settingsFile,
-      JSON.stringify(
-        hookSettings(
-          eventsFile,
-          capFile(id),
-          statusFile(id),
-          statusScript,
-          [
-            ...(opts.allow ?? []),
-            ...(cliSocket ? ['Bash(sandtable:*)'] : []),
-            `Read(/${imagesDir(id)}/**)`,
-            `Read(/${notesFile(id)})`,
-            `Edit(/${notesFile(id)})`
-          ],
-          opts.sandbox &&
-            sandboxSettings(
-              opts.sandbox,
-              deps.dataDir,
-              [...agentSockets(), ...(cliSocket ? [cliSocket] : [])],
-              npmCache
-            ),
-          rules.ticket !== undefined && rules.worktree
-            ? {
-                script: gateScript,
-                file: gateFile(id),
-                trees: await treesOf([cwd, ...opts.addDirs], opts.repoPaths ?? [])
-              }
-            : undefined
-        )
-      )
-    )
-    const args = claudeArgs({
-      ...opts,
-      settingsFile,
-      rules: sessionRules({ ...rules, cli: !!cliSocket })
-    })
-    const inherit = dir === deps.claudeDir && !deps.claudeDirSet
-    startFrom.set(id, (await stat(eventsFile).catch(() => null))?.size ?? 0)
-    await deps.tmux.startTmux(
-      tmux,
-      cwd,
-      [...(inherit ? ['/usr/bin/env', '-u', 'CLAUDE_CONFIG_DIR'] : []), deps.claude.bin, ...args],
-      inherit && !cliSocket
-        ? undefined
-        : {
-            ...(!inherit && { CLAUDE_CONFIG_DIR: dir }),
-            ...(cliSocket && {
-              SANDTABLE_SOCKET: cliSocket,
-              PATH: `${dirname(cliSocket)}:${(await deps.tmux.globalPath().catch(() => undefined)) ?? process.env.PATH ?? ''}`
-            })
-          },
-      deps.dataDir
-    )
-    startBy.set(id, now().getTime() + START_EVENT_MS)
-    return eventsFile
-  }
-  const launchNew = async (
-    project: Project,
-    id: string,
-    tmux: string,
-    cwd: string,
-    rules: Parameters<typeof sessionRules>[0],
-    opts: Omit<Parameters<typeof launch>[4], 'remoteControl' | 'model' | 'effort' | 'sandbox'>,
-    choice: { model?: Model | null; effort?: Effort | null },
-    sandboxed: boolean
-  ): Promise<
-    Pick<
-      SessionRecord,
-      'eventsFile' | 'remoteControl' | 'claudeDir' | 'model' | 'effort' | 'sandbox'
-    >
-  > => {
-    const model = modelOf(project, choice.model)
-    const effort = effortOf(project, choice.effort)
-    const remoteControl = remoteControlOf(project)
-    const sandbox = sandboxed ? sandboxOf(project) : undefined
-    const eventsFile = await launch(
-      id,
-      tmux,
-      cwd,
-      rules,
-      {
-        ...opts,
-        remoteControl,
-        model,
-        effort,
-        sandbox,
-        repoPaths: project.repos.map((r) => r.path)
-      },
-      project.claudeDir
-    )
-    launchedAt.set(id, now().getTime())
-    return {
-      eventsFile,
-      remoteControl,
-      claudeDir: project.claudeDir,
-      ...(model && { model }),
-      ...(effort && { effort }),
-      ...(sandbox && { sandbox: { allowedDomains: sandbox } })
-    }
-  }
   const conversationDir = (s: SessionRecord): string => s.claudeDir ?? deps.claudeDir
   const conversationFiles = async (
     s: SessionRecord,
@@ -1291,77 +968,6 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       if (file) files.add(file)
     }
     return [...files]
-  }
-
-  const goneError = (s: SessionRecord): Error =>
-    new Error(
-      !s.ticketKey
-        ? "The session's folder is gone. Remove it from the list."
-        : s.removedAt
-          ? 'The worktree was removed; use Start'
-          : 'The worktree is gone; use Remove worktree, then Start'
-    )
-  const folderOf = (s: SessionRecord): string => {
-    const dir = sessionDir(s)
-    if (s.removedAt || !dir || !existsSync(dir)) throw goneError(s)
-    return dir
-  }
-  const relaunch = async (s: SessionRecord, dir: string): Promise<void> => {
-    try {
-      launches.set(s.id, (launches.get(s.id) ?? 0) + 1)
-      launchedAt.set(s.id, now().getTime())
-      delete s.startWarning
-      assertModel(s.model)
-      assertEffort(s.effort)
-      const project = projectById(s.projectId)
-      const conversationId = (await conversationFiles(s)).pop()?.id ?? s.id
-      const sandbox = s.routineId ? undefined : sandboxOf(project)
-      const ticket =
-        s.ticketKey && !isTrackerKey(s.ticketKey) ? parseTicketKey(s.ticketKey) : undefined
-      await launch(
-        s.id,
-        s.tmuxName,
-        dir,
-        {
-          repo: ticket?.repo ?? checkoutRepo(project.repos, s),
-          ticket: s.ticketKey && labelOf(s.ticketKey),
-          worktree: s.worktrees.length > 0,
-          routine: !!s.routineId,
-          board: project.board,
-          linear: project.linear,
-          jira: project.jira,
-          yours: s.ticketKey
-            ? instructionsFor(
-                project,
-                synced.get(s.projectId)?.tickets.find((t) => t.key === s.ticketKey)?.labels ?? []
-              )
-            : undefined
-        },
-        {
-          sessionId: conversationId,
-          name: s.name ?? shortName(s.ticketKey ?? ''),
-          addDirs: s.worktrees.slice(1),
-          resume: true,
-          remoteControl: s.remoteControl,
-          model: s.model,
-          effort: s.effort,
-          allow: s.trigger ? undefined : routines.find((r) => r.id === s.routineId)?.allow,
-          sandbox,
-          repoPaths: repoPathsOf(s)
-        },
-        s.claudeDir
-      )
-      if (sandbox) s.sandbox = { allowedDomains: sandbox }
-      else delete s.sandbox
-      await reviewLoop.syncGate(s)
-    } finally {
-      resuming.delete(s.id)
-    }
-    missedConversations.delete(s.id)
-    setAsking(s, false)
-    s.state = shownState(s, 'needsYou')
-    await persist()
-    changed(s.projectId)
   }
 
   const INITIALIZE =
@@ -1610,7 +1216,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     entryCount: (sessionId) => liveView.entryCount(sessionId),
     fingerprint: async (s) =>
       deps.fingerprint(gateScript, await treesOf(s.worktrees, repoPathsOf(s))),
-    gateFile,
+    gateFile: (id) => gateFile(id),
     roundStarted: (s, ticketKey) => {
       if (s.state !== 'needsYou' || s.asking || s.capped) return false
       s.state = 'reviewing'
@@ -1660,98 +1266,86 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     subscribe
   })
 
-  const createSession = async (
-    picked: Project,
-    github: string,
-    worktree: boolean,
-    opts: {
-      name: (startedAt: string) => string
-      prompt?: string
-      routineId?: string
-      allow?: string[]
-      scheduled?: boolean
-      trigger?: RunTrigger
-      model?: Model | null
-      effort?: Effort | null
-      setupId?: string
-      setup?: false
-    }
-  ): Promise<string> => {
-    modelOf(picked, opts.model)
-    effortOf(picked, opts.effort)
-    const repo = repoOf(picked, github)
-    await checkFolders([repo])
-    const id = randomUUID()
-    const target = opts.setupId ?? id
-    assertNoSetup(target)
-    const branch = worktree ? `session-${target.slice(0, 8)}` : undefined
-    const made = branch ? await deps.git.ensureWorktree(repo.path, branch) : undefined
-    if (opts.setupId && made && sharesWorktree({ worktrees: [made.path] }, (x) => !x.removedAt))
-      throw new Error(`Another session uses ${branch}`)
-    const leftover = !!made && (made.created || setupPending.includes(made.path))
-    if (made) await pend(repo, made)
-    if (made && opts.setup === false) skipSetups(target)
-    else if (made)
-      await runSetups(target, [{ repo, worktree: made.path, created: made.created }]).catch(
-        async (err: unknown) => {
-          const cancelled = err instanceof Error && err.message === SETUP_CANCELLED
-          if (opts.setupId && !cancelled) {
-            keep(target, made.path, repo.path)
-            throw err
-          }
-          await removeKept(made.path, repo.path)
-          if (opts.setupId) throw err
-          const lines = setupApi.setupProgress(target)?.lines.slice(-5) ?? []
-          showSetup(target, null)
-          throw new Error([messageOf(err), ...lines].join('\n'))
-        }
-      )
-    const tmux = tmuxName(picked.id, `session-${id}`)
-    try {
-      const project = projectById(picked.id)
-      const { board, linear, jira } = project
-      const startedAt = now().toISOString()
-      const name = opts.name(startedAt)
-      creating.add(tmux)
-      const launched = await launchNew(
-        project,
-        id,
-        tmux,
-        made?.path ?? repo.path,
-        { repo: repo.github, worktree, routine: !!opts.routineId, board, linear, jira },
-        {
-          sessionId: id,
-          name,
-          addDirs: [],
-          allow: opts.allow,
-          ...(opts.prompt !== undefined && { prompt: opts.prompt })
-        },
-        { model: opts.model, effort: opts.effort },
-        !opts.routineId
-      ).finally(() => creating.delete(tmux))
-      sessions.push({
-        id,
-        projectId: project.id,
-        name,
-        tmuxName: tmux,
-        ...(made ? { branch, worktrees: [made.path] } : { worktrees: [], checkout: repo.path }),
-        ...launched,
-        startedAt,
-        ...(opts.prompt === undefined ? { state: 'idle', unprompted: true } : { state: 'running' }),
-        startWarning: fetchWarning(repo.github, made?.fetchError),
-        ...(opts.routineId && { routineId: opts.routineId }),
-        ...(opts.scheduled && { scheduled: true as const }),
-        ...(opts.trigger && { trigger: opts.trigger })
-      })
-    } catch (err) {
-      if (made && leftover) await removeTree(made.path, [repo.path]).catch(() => undefined)
-      throw err
-    }
-    if (made && opts.setup === false) await unpend([made.path])
-    await persist()
-    changed(picked.id)
-    return id
-  }
+  const {
+    relaunch,
+    folderOf,
+    goneError,
+    createSession,
+    startFor,
+    create,
+    startPollingTmux,
+    pollTmux,
+    pollingTmux,
+    startBy,
+    startedSince,
+    notStarted,
+    assertModel,
+    assertEffort,
+    settingsDir,
+    eventsDir,
+    gateScript,
+    draftsDir,
+    capFile,
+    gateFile,
+    statusFile,
+    imagesDir,
+    notesFile,
+    treesOf
+  } = createLaunch({
+    deps,
+    now,
+    sessions: () => sessions,
+    routines: () => routines,
+    startFailures: () => startFailures,
+    setStartFailures: (failures) => {
+      startFailures = failures
+    },
+    setupPending: () => setupPending,
+    synced,
+    starting,
+    startingSetups,
+    creating,
+    resuming,
+    missedConversations,
+    stoppers,
+    cliServer,
+    setupRuns: {
+      pend,
+      unpend,
+      skipSetups,
+      runSetups,
+      keep,
+      removeKept,
+      removeTree,
+      showSetup,
+      assertNoSetup,
+      setupProgress: setupApi.setupProgress
+    },
+    sync: { writing, moveTicket },
+    projectById,
+    repoPathsOf,
+    checkFolders,
+    sharesWorktree,
+    syncedTicket,
+    assertNoLiveSession,
+    assertFreeTmux,
+    sameSource,
+    beingRemoved,
+    ticketId,
+    persist,
+    persistCache,
+    changed,
+    setState,
+    setAsking,
+    shownState,
+    lastStateOf,
+    conversationFiles,
+    syncGate: (s) => reviewLoop.syncGate(s),
+    runSchedules: () => runSchedules(),
+    readActivities,
+    readLiveUsage: () => readLiveUsage(),
+    liveTick: liveView.tick
+  })
 
   let stopped = false
   const { runSchedules, onSync, ...routinesApi } = createRoutines({
@@ -1905,7 +1499,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         () => true,
         () => false
       )
-      if (!ok || pollingTmux) return
+      if (!ok || pollingTmux()) return
       const schedule = startPollingTmux()
       await pollTmux()
       schedule()
@@ -1924,7 +1518,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       await Promise.all([write.flush(), writeCache.flush()])
     },
 
-    anyRunning: () => pollingTmux && sessions.some((s) => s.state === 'running'),
+    anyRunning: () => pollingTmux() && sessions.some((s) => s.state === 'running'),
     needsYouCount: () => waitingList().length,
     openNextNeedsYou: (current) => {
       const list = waitingList()
@@ -2316,224 +1910,9 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
 
     start: (...args) => api.startFor(undefined, ...args),
 
-    async startFor(
-      startedBy: string | undefined,
-      projectId: string,
-      ticketKey: string,
-      extraRepos: string[] = [],
-      mainRepo?: string,
-      note?: string,
-      choice?: Model | null,
-      setup?: false,
-      plan?: true
-    ): Promise<void> {
-      if (note !== undefined && typeof note !== 'string') throw new Error('Not a note')
-      assertSetupChoice(setup)
-      if (plan !== undefined && plan !== true) throw new Error('Not a plan choice')
-      let project = projectById(projectId)
-      modelOf(project, choice)
-      const ticket = syncedTicket(projectId, ticketKey)
-      if (columnFor(ticket.status, statusMapOf(project)) === 'done')
-        throw new Error("This ticket is done, so it can't start")
-      assertNoLiveSession(projectId, ticketKey)
-      assertFreeTmux(tmuxName(projectId, ticketKey))
-      starting.set(ticketId(projectId, ticketKey), [ticketKey, projectId])
-      const target = `${projectId}\n${ticketKey}`
-      let picked = false
-      let launched = false
-      try {
-        if (!ticket.repo && !mainRepo) throw new Error('Choose the repo for this ticket')
-        const main = repoOf(project, mainRepo || ticket.repo)
-        const extras = extraRepos.map((r) => repoOf(project, r))
-        if (extras.includes(main)) throw new Error('Extra repo is the main repo')
-        const repos = [...new Set([main, ...extras])]
-        picked = true
-        startFailures = startFailures.filter(
-          (f) => f.projectId !== projectId || f.ticketKey !== ticketKey
-        )
-        const mine = sessions.filter((s) => s.projectId === projectId)
-        const branch =
-          currentSession(mine, ticketKey)?.branch ??
-          branchName(
-            isTrackerKey(ticketKey) ? ticketKey.toLowerCase() : ticket.number,
-            ticket.title
-          )
-        if (
-          beingRemoved([
-            ...repos.map((r) => worktreePath(r.path, branch)),
-            ...mine.filter((s) => s.ticketKey === ticketKey).flatMap((s) => s.worktrees)
-          ])
-        )
-          throw new Error(REMOVING)
-        await checkFolders(repos)
-        const settled = await Promise.allSettled(
-          repos.map(async (r) => {
-            const m = await deps.git.ensureWorktree(r.path, branch)
-            await pend(r, m)
-            return m
-          })
-        )
-        const made = settled.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []))
-        const repoPaths = repos.map((r) => r.path)
-        const removeCreated = async (): Promise<void> => {
-          for (const m of made.filter((m) => m.created))
-            await removeTree(m.path, repoPaths).catch(() => undefined)
-        }
-        const failed = settled.find((r) => r.status === 'rejected')
-        if (failed) {
-          await removeCreated()
-          throw failed.reason
-        }
-        if (
-          made.some((m) =>
-            sharesWorktree(
-              { worktrees: [m.path] },
-              (x) =>
-                !x.removedAt && (x.ticketKey !== ticketKey || !sameSource(projectId, x.projectId))
-            )
-          )
-        ) {
-          await removeCreated()
-          throw new Error(`Another ticket's session uses ${branch}`)
-        }
-        const worktrees = made.map((m) => m.path)
-        if (setup === false) skipSetups(target)
-        else
-          await runSetups(
-            target,
-            made.map((m, i) => ({ repo: repos[i], worktree: m.path, created: m.created }))
-          )
-        const id = randomUUID()
-        const name = tmuxName(projectId, ticketKey)
-        try {
-          project = projectById(projectId)
-          const warning = made
-            .map((m, i) => fetchWarning(repos[i].github, m.fetchError))
-            .filter(Boolean)
-            .join(' ')
-          const launched = await launchNew(
-            project,
-            id,
-            name,
-            worktrees[0],
-            {
-              repo: main.github,
-              ticket: ticketLabel(ticket),
-              worktree: true,
-              board: project.board,
-              linear: project.linear,
-              jira: project.jira,
-              yours: instructionsFor(project, ticket.labels)
-            },
-            {
-              sessionId: id,
-              name: shortName(ticketKey),
-              addDirs: worktrees.slice(1),
-              prompt: openingPrompt(ticket, serviceOf(project), note),
-              ...(plan && { permissionMode: 'plan' as const })
-            },
-            { model: choice },
-            true
-          )
-          sessions.push({
-            id,
-            projectId,
-            ticketKey,
-            tmuxName: name,
-            branch,
-            worktrees,
-            ...launched,
-            startedAt: now().toISOString(),
-            state: 'running',
-            startWarning: warning || undefined,
-            ...(note?.trim() && { note: fitBytes(note.trim(), MAX_NOTE_BYTES) }),
-            ...(startedBy && { startedBy })
-          })
-        } catch (err) {
-          await removeCreated()
-          throw err
-        }
-        launched = true
-        await reviewLoop.syncGate(sessions.at(-1)!)
-        if (setup === false) await unpend(worktrees)
-        ticket.repo = main.github
-        const fresh = synced.get(projectId)?.tickets.find((t) => t.key === ticketKey)
-        if (fresh) fresh.repo = main.github
-        persistCache()
-        await persist()
-        changed(projectId)
+    startFor,
 
-        await writing(projectId, ticketKey)
-        const latest = synced.get(projectId)?.tickets.find((t) => t.key === ticketKey)
-        if (latest && columnFor(latest.status, statusMapOf(project)) === 'done') return
-        await moveTicket(
-          project,
-          ticketKey,
-          'inProgress',
-          () => "Started, but couldn't set In Progress",
-          false
-        ).catch(() => undefined)
-      } catch (err) {
-        const reason = messageOf(err)
-        if (launched || !picked) throw err
-        if (!reason.startsWith(SETUP_CANCELLED)) {
-          const lines = reason.startsWith(SETUP_FAILED) ? setupApi.setupProgress(target)?.lines : []
-          startFailures.push({
-            projectId,
-            ticketKey,
-            at: now().toISOString(),
-            reason,
-            repo: folderErrorRepo(reason),
-            ...(lines?.length && { lines })
-          })
-        }
-        void persist().catch(() => undefined)
-        changed(projectId)
-        throw err
-      } finally {
-        starting.delete(ticketId(projectId, ticketKey))
-      }
-    },
-
-    async create(
-      projectId: string,
-      github: string,
-      worktree: boolean,
-      draft?: TicketDraft,
-      firstMessage?: string,
-      model?: Model | null,
-      setupId?: string,
-      setup?: false,
-      effort?: Effort | null
-    ): Promise<string> {
-      if (firstMessage && tooLong(firstMessage)) throw new Error('Shorten the first message')
-      if (setupId !== undefined && (typeof setupId !== 'string' || !UUID.test(setupId)))
-        throw new Error('Not a setup ID')
-      assertSetupChoice(setup)
-      const project = projectById(projectId)
-      const { linear, jira } = project
-      const linearProject = draft && linear && linearProjectIn(linear, draft.linearProject)
-      const repo = repoOf(project, github)
-      if (setupId && startingSetups.has(setupId)) throw new Error('The session is already starting')
-      if (setupId) startingSetups.add(setupId)
-      try {
-        return await createSession(project, repo.github, worktree && !draft, {
-          name: (startedAt) => (draft ? 'New ticket' : shortTime(startedAt)),
-          prompt: draft
-            ? draftPrompt(
-                linear ? { linear, projectId: linearProject } : jira ? { jira } : repo.github,
-                draft
-              )
-            : firstMessage?.trim() || undefined,
-          model,
-          effort,
-          setupId,
-          setup
-        })
-      } finally {
-        if (setupId) startingSetups.delete(setupId)
-      }
-    },
+    create,
 
     ...setupApi,
 
