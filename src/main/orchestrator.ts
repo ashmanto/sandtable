@@ -4,6 +4,7 @@ import { appendFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/pro
 import { setTimeout as delay } from 'node:timers/promises'
 import { basename, dirname, join } from 'node:path'
 import type { BoardView, SidebarSession } from '../shared/api'
+import type { ChannelMethods } from './channels'
 import type { BackgroundTask, SessionStatus } from '../shared/sessionStatus'
 import type {
   Account,
@@ -11,25 +12,16 @@ import type {
   BoardColumn,
   BoardSource,
   Chat,
-  ChatState,
   ConversationChunk,
   ConversationEntry,
   Finding,
-  FindingPatch,
-  FindingsState,
-  NewFinding,
   ComposerDraft,
   PullRequestState,
   LaneChange,
   LastView,
-  Leftover,
-  JiraAccount,
   LinearTeam,
   LinearWorkspace,
-  Effort,
-  Model,
   ModelUsage,
-  UsageByWeek,
   Overlap,
   Project,
   ProjectGroup,
@@ -37,24 +29,17 @@ import type {
   RemoveResult,
   RepoChanges,
   Routine,
-  RoutineChatReply,
-  RoutineChatTurn,
-  RoutineInput,
-  RoutineRun,
   SessionCommand,
   SessionRecord,
   SessionState,
   SessionStop,
   SetupProgress,
-  SetupSuggestion,
   Step,
   SkippedRun,
   StartFailure,
   StartCheck,
   Ticket,
   TicketDetails,
-  TicketDraft,
-  TicketUsage,
   Triage
 } from '../shared/types'
 import type { PromptAnswer, SessionPrompt } from '../shared/prompt'
@@ -263,7 +248,7 @@ export type OrchestratorDeps = {
 }
 
 /** The main-process operations behind `window.sandtable`. */
-export type Orchestrator = {
+export type Orchestrator = Omit<ChannelMethods, 'activity' | 'liveUsage' | 'setupProgress'> & {
   reconnect(tmuxAvailable?: boolean): Promise<void>
   watchTmux(): Promise<void>
   stop(): void
@@ -278,134 +263,20 @@ export type Orchestrator = {
   /** Each status-line update, with the account the session runs as, named '' when it's no longer added. */
   onStatus(cb: (sessionId: string, status: SessionStatus, account: Account) => void): () => void
   onConversation(cb: (sessionId: string, chunk: ConversationChunk) => void): () => void
-  status(sessionId: string): Promise<SessionStatus | null>
-  watchConversation(sessionId: string): Promise<ConversationChunk>
-  unwatchConversation(sessionId: string): Promise<void>
   /** Closes every conversation watch, for when the renderer that held them is gone. */
   unwatchAll(): void
   activity(sessionId: string): Activity | null
   onLiveUsage(cb: (usage: Record<string, ModelUsage[]>) => void): () => void
   liveUsage(): Record<string, ModelUsage[]>
-  raiseCap(sessionId: string): Promise<void>
-  listProjects(): Promise<Project[]>
-  saveProject(p: Project): Promise<void>
-  /** Sets only the project's editor app on its saved copy, without a sync. */
-  setEditor(projectId: string, app: string): Promise<void>
-  listGroups(): Promise<ProjectGroup[]>
-  arrangeProjects(groups: ProjectGroup[], order: { id: string; group?: string }[]): Promise<void>
-  removeProject(id: string): Promise<void>
-  listAccounts(): Promise<Account[]>
-  addAccount(a: Account): Promise<void>
-  removeAccount(dir: string): Promise<void>
   usedAccounts(): Account[]
-  linearTeams(workspace?: string): Promise<LinearTeam[]>
-  linearWorkspaces(): Promise<LinearWorkspace[]>
   usedLinearWorkspaces(): string[]
   usedJiraSites(): string[]
-  jiraAccounts(): Promise<JiraAccount[]>
-  jiraSignIn(site: string, email: string, token: string): Promise<JiraAccount>
-  jiraProjects(site: string): Promise<{ key: string; name: string }[]>
-  jiraBoards(site: string, project: string): Promise<{ id: number; name: string }[]>
-  statusOptions(url: string): Promise<string[]>
-  boardRepos(url: string): Promise<string[]>
-  me(projectId: string): Promise<string>
   resetViewers(): void
-  getBoard(projectId: string): Promise<BoardView>
-  sync(projectId: string): Promise<void>
-  watch(projectId: string | null, visible: boolean): void
   session(id: string): SessionRecord | undefined
-  checkStart(projectId: string, ticketKey: string): Promise<StartCheck>
-  checkOverlap(projectId: string, ticketKey: string): Promise<Overlap[]>
-  checkReady(projectId: string, ticketKey: string): Promise<string[]>
-  triage(projectId: string, ticketKey: string): Promise<Triage>
-  applyTriage(projectId: string, ticketKey: string, t: Triage): Promise<void>
-  chat(projectId: string, ticketKey: string): Promise<ChatState>
-  sendChat(projectId: string, ticketKey: string, text: string): Promise<Chat>
-  draftComment(projectId: string, ticketKey: string, mine?: string): Promise<string>
-  saveDraft(projectId: string, ticketKey: string, draft: string): Promise<void>
-  postComment(projectId: string, ticketKey: string, body: string): Promise<void>
-  discardDraft(projectId: string, ticketKey: string): Promise<void>
-  clearChat(projectId: string, ticketKey: string): Promise<void>
-  stopChat(projectId: string, ticketKey: string): Promise<void>
-  onChatSteps(cb: (projectId: string, ticketKey: string, steps: Step[]) => void): () => void
-  start(
-    projectId: string,
-    ticketKey: string,
-    extraRepos?: string[],
-    mainRepo?: string,
-    note?: string,
-    model?: Model | null,
-    setup?: false,
-    plan?: true
-  ): Promise<void>
-  create(
-    projectId: string,
-    repo: string,
-    worktree: boolean,
-    draft?: TicketDraft,
-    firstMessage?: string,
-    model?: Model | null,
-    setupId?: string,
-    setup?: false,
-    effort?: Effort | null
-  ): Promise<string>
   setupProgress(target: string): SetupProgress | null
-  cancelSetup(target: string): Promise<void>
-  suggestSetup(path: string): Promise<SetupSuggestion | null>
-  setupHint(projectId: string, repo: string): Promise<SetupSuggestion | null>
-  hideSetupHint(projectId: string, repo: string): Promise<void>
+  onChatSteps(cb: (projectId: string, ticketKey: string, steps: Step[]) => void): () => void
   onSetupProgress(cb: (target: string, progress: SetupProgress | null) => void): () => void
-  firstMessage(sessionId: string): Promise<string>
-  listRoutines(projectId: string): Promise<Routine[]>
-  saveRoutine(input: RoutineInput): Promise<Routine>
-  chatRoutine(turn: RoutineChatTurn): Promise<RoutineChatReply>
-  stopRoutineChat(runId: string): Promise<void>
   onRoutineChatSteps(cb: (runId: string, steps: Step[]) => void): () => void
-  removeRoutine(id: string): Promise<void>
-  startRoutine(id: string): Promise<string>
-  routineHistory(id: string): Promise<RoutineRun[]>
-  createTicket(
-    projectId: string,
-    where: string,
-    title: string,
-    body: string,
-    parent?: string
-  ): Promise<string>
-  rename(sessionId: string, name: string): Promise<void>
-  changes(sessionId: string): Promise<RepoChanges[]>
-  /** Opens one of the session's folders in Finder or the project's editor. */
-  openFolder(sessionId: string, folder: string, how: 'finder' | 'editor'): Promise<void>
-  findings(sessionId: string): Promise<FindingsState>
-  addFinding(sessionId: string, f: NewFinding): Promise<Finding>
-  updateFinding(sessionId: string, id: string, patch: FindingPatch): Promise<void>
-  removeFinding(sessionId: string, id: string): Promise<void>
-  sendFindings(sessionId: string, ids: string[]): Promise<void>
-  review(sessionId: string): Promise<number>
-  pullRequests(sessionId: string): Promise<PullRequestState[]>
-  addCheck(sessionId: string, repo: string, jobId: number, name: string): Promise<Finding>
-  addThread(sessionId: string, repo: string, threadId: string): Promise<Finding>
-  setAutoReview(sessionId: string, on: boolean): Promise<void>
-  summarize(sessionId: string): Promise<void>
-  end(sessionId: string): Promise<void>
-  clearNeedsYou(sessionId: string): Promise<void>
-  move(projectId: string, ticketKey: string, column: BoardColumn, lane?: LaneChange): Promise<void>
-  details(projectId: string, ticketKey: string): Promise<TicketDetails>
-  usage(projectId: string, ticketKey: string): Promise<TicketUsage>
-  usageByWeek(): Promise<UsageByWeek>
-  resume(sessionId: string): Promise<void>
-  setRemoteControl(sessionId: string, on: boolean): Promise<void>
-  send(sessionId: string, text: string, images?: string[]): Promise<string>
-  image(sessionId: string, path: string): Promise<string>
-  interrupt(sessionId: string): Promise<void>
-  compact(sessionId: string, step: 'prepare' | 'compact'): Promise<void>
-  prompt(sessionId: string): Promise<SessionPrompt | null>
-  commands(sessionId: string): Promise<SessionCommand[]>
-  suggestion(sessionId: string): Promise<string | null>
-  answer(sessionId: string, shown: SessionPrompt, answer: PromptAnswer): Promise<void>
-  removeWorktree(sessionId: string): Promise<RemoveResult>
-  endAndRemove(sessionId: string): Promise<RemoveResult>
-  leftovers(): Promise<Leftover[]>
-  endUnknown(name: string): Promise<void>
 }
 
 const tracked = (p: Project): boolean => serviceOf(p) !== 'GitHub'
