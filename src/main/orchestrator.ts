@@ -55,6 +55,7 @@ import type { JiraCredentials } from './jira/credentials'
 import type { MergedPr } from './github/merged'
 import { repoOf, trackerOf, type Tracker } from './tracker'
 import { parseBoardUrl } from '../shared/boardUrl'
+import { same } from '../shared/same'
 import { APPLIED_BUT, AREA_PREFIX, areaOf, overlapCandidates, startProblems } from '../shared/areas'
 import { sections } from '../shared/projectGroups'
 import { isDoneOpen, isLive, listedSessions, sessionDir } from '../shared/sessions'
@@ -419,6 +420,18 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
   const ticketId = (projectId: string, ticketKey: string): string => `${projectId} ${ticketKey}`
   const startingSetups = new Set<string>()
   const checking = new Map<string, [ticketKey: string, projectId: string]>()
+  const whileChecking = async <T>(
+    projectId: string,
+    ticketKey: string,
+    work: () => Promise<T>
+  ): Promise<T> => {
+    checking.set(ticketId(projectId, ticketKey), [ticketKey, projectId])
+    try {
+      return await work()
+    } finally {
+      checking.delete(ticketId(projectId, ticketKey))
+    }
+  }
   // shortcut: in memory, so a restart checks a passed ticket once more; persist it if that costs too much.
   const passedReady = new Map<string, string>()
   const readyText = (t: Ticket): string => `${t.title}\n${t.body}`
@@ -657,7 +670,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
     for (const s of running) {
       const latest = (await conversationFiles(s, activityFiles).catch(() => [])).pop()
       const next = latest && (await readActivity(latest.file).catch(() => null))
-      if (!next || JSON.stringify(next) === JSON.stringify(activities.get(s.id))) continue
+      if (!next || same(next, activities.get(s.id))) continue
       activities.set(s.id, next)
       activityListeners.forEach((cb) => cb(s.id, next))
     }
@@ -1533,8 +1546,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       const ticket = syncedTicket(projectId, ticketKey)
       const repo = ticketRepo(project, ticket.repo)
       await checkFolders([repo])
-      checking.set(ticketId(projectId, ticketKey), [ticketKey, projectId])
-      try {
+      return whileChecking(projectId, ticketKey, async () => {
         const { body, comments } = await detailsOf(project, ticketKey)
         const stdout = await printRun(projectId, ticketKey, 'Readiness check', repo.path, (id) =>
           schemaArgs(
@@ -1546,9 +1558,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         const gaps = parseReadiness(stdout)
         if (!gaps.length) passedReady.set(`${projectId}\n${ticketKey}`, readyText(ticket))
         return gaps
-      } finally {
-        checking.delete(ticketId(projectId, ticketKey))
-      }
+      })
     },
 
     checkOverlap: (projectId: string, ticketKey: string): Promise<Overlap[]> =>
@@ -1562,15 +1572,12 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       if (!candidates.length) return []
       const repo = ticketRepo(project, ticket.repo)
       await checkFolders([repo])
-      checking.set(ticketId(projectId, ticketKey), [ticketKey, projectId])
-      try {
+      return whileChecking(projectId, ticketKey, async () => {
         const stdout = await printRun(projectId, ticketKey, 'Overlap check', repo.path, (id) =>
           schemaArgs(OVERLAP_SCHEMA, overlapPrompt(ticket, candidates, serviceOf(project)), id)
         )
         return parseOverlap(stdout, candidates)
-      } finally {
-        checking.delete(ticketId(projectId, ticketKey))
-      }
+      })
     },
 
     async triage(projectId: string, ticketKey: string): Promise<Triage> {
@@ -1861,9 +1868,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         if (!isLive(s) || !s.asking) throw new Error("Claude isn't asking anything.")
         const pane = await deps.tmux.captureTmux(s.tmuxName)
         const prompt = await promptNow(s, pane)
-        const same = (p: SessionPrompt | null): boolean =>
-          JSON.stringify(p) === JSON.stringify(shown)
-        if (!prompt || !same(prompt) || !untouched(prompt, pane))
+        if (!prompt || !same(prompt, shown) || !untouched(prompt, pane))
           throw new Error('The terminal has moved on from this question. Answer it there.')
         await deps.tmux.keysTmux(s.tmuxName, answerKeys(prompt, answer))
         if (prompt.kind !== 'permission') return
@@ -1874,7 +1879,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
             await delay(100)
             const now = await deps.tmux.captureTmux(s.tmuxName)
             const next = await promptNow(s, now)
-            if (next && !same(next)) break
+            if (next && !same(next, shown)) break
             gone = choicesOf(now) ? 0 : gone + 1
           }
           if (gone === 3) await appendFile(s.eventsFile, ANSWERED_EVENT + '\n')

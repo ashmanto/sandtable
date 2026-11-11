@@ -1,3 +1,4 @@
+import { same } from '../../../shared/same'
 import type { BoardView } from '../../../shared/api'
 import type { Project, TicketTab } from '../../../shared/types'
 
@@ -11,8 +12,7 @@ export type Route =
 /** The screens you visited, oldest first, and the one you're on. */
 export type History<T> = { entries: T[]; index: number }
 
-/** Whether two entries are the same screen. */
-export const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b)
+export { same }
 
 /** Adds `entry` after the current one and drops the forward entries; the screen you're on or the one before it moves instead. */
 export const push = <T>(h: History<T>, entry: T): History<T> =>

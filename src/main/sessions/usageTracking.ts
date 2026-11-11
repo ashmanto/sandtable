@@ -10,6 +10,7 @@ import type {
   UsageByWeek
 } from '../../shared/types'
 import { isLive, tokenCapOf } from '../../shared/sessions'
+import { same } from '../../shared/same'
 import { tokenCount } from '../../shared/pricing'
 import type { Orchestrator, OrchestratorDeps } from '../orchestrator'
 import type { Run, serial } from '../store'
@@ -82,7 +83,7 @@ export function createUsageTracking(ctx: {
         console.error(`Sandtable could not check the token cap of session ${s.id}`, err)
       )
     }
-    if (JSON.stringify(next) === JSON.stringify(liveUsage)) return
+    if (same(next, liveUsage)) return
     liveUsage = next
     liveUsageListeners.forEach((cb) => cb(next))
   }
