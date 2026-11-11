@@ -516,23 +516,7 @@ export function createLaunch(ctx: LaunchContext): LaunchApi {
     changed(s.projectId)
   }
 
-  const createSession = async (
-    picked: Project,
-    github: string,
-    worktree: boolean,
-    opts: {
-      name: (startedAt: string) => string
-      prompt?: string
-      routineId?: string
-      allow?: string[]
-      scheduled?: boolean
-      trigger?: RunTrigger
-      model?: Model | null
-      effort?: Effort | null
-      setupId?: string
-      setup?: false
-    }
-  ): Promise<string> => {
+  const createSession: LaunchApi['createSession'] = async (picked, github, worktree, opts) => {
     modelOf(picked, opts.model)
     effortOf(picked, opts.effort)
     const repo = repoOf(picked, github)

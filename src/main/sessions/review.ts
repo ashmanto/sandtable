@@ -2,7 +2,6 @@ import { repoName } from '../../shared/sessions'
 import { wasCut } from '../../shared/findings'
 import type { DiffLine, Finding, RepoChanges } from '../../shared/types'
 import { withoutTags } from './chat'
-import { squeeze } from './claudeLaunch'
 import {
   fitBytes,
   isSecretFile,
@@ -10,6 +9,7 @@ import {
   parseAnswer,
   printArgs,
   READ_ONLY_ARGS,
+  squeeze,
   withoutUnsafe
 } from './claudeLaunch'
 

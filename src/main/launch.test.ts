@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { project, session, setup } from './test/orchestrator'
 
@@ -30,6 +32,8 @@ describe('launch', () => {
     expect(s).toMatchObject({ model: 'opus', effort: 'high' })
     const [, , cmd] = t.deps.tmux.startTmux.mock.calls[0]
     expect(cmd[cmd.indexOf('--model') + 1]).toBe('opus')
+    const settings = JSON.parse(await readFile(join(t.dataDir, 'settings', `${s.id}.json`), 'utf8'))
+    expect(settings).toHaveProperty('hooks')
     t.orch.stop()
   })
 

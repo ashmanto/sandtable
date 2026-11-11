@@ -7,15 +7,19 @@ import type { Terminals } from './terminal'
 const waitingHandlers = (
   orch: Orchestrator,
   terminals: Terminals
-): Pick<Handlers, WaitingChannel> => ({
-  ...(Object.fromEntries(
-    Object.entries(ORCHESTRATOR_CHANNELS).map(([channel, method]) => [channel, orch[method]])
-  ) as Pick<Handlers, OrchestratorChannel>),
-  'terminal.open': terminals.open,
-  'terminal.write': terminals.write,
-  'terminal.resize': terminals.resize,
-  'terminal.close': terminals.close
-})
+): Pick<Handlers, WaitingChannel> => {
+  const methods: { [C in OrchestratorChannel as (typeof ORCHESTRATOR_CHANNELS)[C]]: Handlers[C] } =
+    orch
+  return {
+    ...(Object.fromEntries(
+      Object.entries(ORCHESTRATOR_CHANNELS).map(([channel, method]) => [channel, methods[method]])
+    ) as Pick<Handlers, OrchestratorChannel>),
+    'terminal.open': terminals.open,
+    'terminal.write': terminals.write,
+    'terminal.resize': terminals.resize,
+    'terminal.close': terminals.close
+  }
+}
 
 /** The app's own handlers; unlike the orchestrator and terminal ones, they answer without waiting for the store to load. */
 export type AppHandlers = Omit<Handlers, WaitingChannel>

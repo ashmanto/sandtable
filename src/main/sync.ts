@@ -101,7 +101,6 @@ export type SyncApi = Pick<Orchestrator, 'watch'> & {
     lane?: LaneChange
   ): Promise<void>
   detailsOf(project: Project, key: string): Promise<TicketDetails>
-  setError(projectId: string, error: string): void
   resetSource(projectId: string): void
   writing(projectId: string, ticketKey: string): Promise<void> | undefined
 }
@@ -441,7 +440,6 @@ export function createSync(ctx: SyncContext): SyncApi {
     visible: () => visible,
     moveTicket,
     detailsOf,
-    setError,
     resetSource(projectId: string): void {
       for (const [id, m] of moves) if (m.projectId === projectId) moves.delete(id)
       appliedSync.set(projectId, now().getTime())
