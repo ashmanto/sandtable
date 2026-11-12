@@ -524,6 +524,21 @@ test('keeps the New session dialog and Start on screen with many repos', async (
   await expect(dialog.getByRole('button', { name: 'Start' })).toBeInViewport()
 })
 
+test('keeps the routine editor from scrolling as a whole in a short window', async () => {
+  const app = await launch(['.'], noGitHub(), undefined, seedRepos(40))
+  const page = await app.firstWindow()
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(1200, 420))
+  await expect.poll(() => page.evaluate(() => innerHeight)).toBe(420)
+  await page.getByRole('button', { name: 'New routine' }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  await page.waitForFunction(() => !document.getAnimations().length)
+  const box = (await dialog.boundingBox())!
+  expect(box.y).toBeGreaterThanOrEqual(0)
+  expect(box.y + box.height).toBeLessThanOrEqual(420)
+  expect(await dialog.evaluate((d) => d.scrollHeight - d.clientHeight)).toBe(0)
+})
+
 test("picks a project's emoji on Review and shows it in the sidebar and header after a restart", async () => {
   const userData = seedTickets()
   let app = await launch(['.'], noGitHub(), undefined, userData)
