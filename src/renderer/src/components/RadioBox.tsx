@@ -110,7 +110,11 @@ export function RepoPicker({
       <FieldHeading id={name} mark={mark}>
         {legend}
       </FieldHeading>
-      <div role="radiogroup" aria-labelledby={name} className="flex flex-col gap-2">
+      <div
+        role="radiogroup"
+        aria-labelledby={name}
+        className="relative -m-1 flex max-h-48 flex-col gap-2 overflow-y-auto p-1"
+      >
         {repos.map((r) => (
           <RadioBox
             key={r.github}

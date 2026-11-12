@@ -502,6 +502,28 @@ test('keeps a long repo list inside the add-project step on Repos and Review', a
   await expect(page.getByRole('button', { name: 'Save' })).toBeInViewport()
 })
 
+test('keeps the New session dialog and Start on screen with many repos', async () => {
+  const app = await launch(['.'], noGitHub(), undefined, seedRepos(40))
+  const page = await app.firstWindow()
+  await page.getByRole('button', { name: 'App', exact: true }).hover()
+  await page.getByRole('button', { name: 'More for App' }).click()
+  await page.getByRole('menuitem', { name: 'New session' }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  await page.waitForFunction(() => !document.getAnimations().length)
+  const box = (await dialog.boundingBox())!
+  const height = await page.evaluate(() => innerHeight)
+  expect(box.y).toBeGreaterThanOrEqual(0)
+  expect(box.y + box.height).toBeLessThanOrEqual(height)
+  await expect(dialog.getByRole('button', { name: 'Start' })).toBeInViewport()
+  await expect(dialog.getByRole('heading', { name: 'New session in App' })).toBeInViewport()
+  const list = dialog.getByRole('radiogroup', { name: 'Repo' })
+  expect(await list.evaluate((e) => e.scrollHeight > e.clientHeight)).toBe(true)
+  await list.getByText('octo/repo39', { exact: true }).click()
+  await expect(list.getByRole('radio', { name: 'octo/repo39' })).toBeChecked()
+  await expect(dialog.getByRole('button', { name: 'Start' })).toBeInViewport()
+})
+
 test("picks a project's emoji on Review and shows it in the sidebar and header after a restart", async () => {
   const userData = seedTickets()
   let app = await launch(['.'], noGitHub(), undefined, userData)
