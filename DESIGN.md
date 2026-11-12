@@ -137,6 +137,8 @@ them through Tailwind classes and never name a raw color.
   weight-500 title, a `fg-2` description, and a right-aligned footer of 28 px buttons. A
   dialog's close button is a ghost 24 px icon button in `fg-3` with the tooltip "Close", 12 px from
   the top and right.
+  A dialog, unlike an alert dialog, is at most the window's height less 32 px. When its content is
+  taller, the content scrolls and the close button stays in place.
   Alert dialogs have no close button. Both sit on `raised` with `shadow-lg` and a 1 px `line-2`
   ring around the outside, so the edge stays clear on the dimmed page in dark mode, where the shadow
   doesn't show. Behind both, the page dims under `scrim`: `fg` at 32% in light mode and black at 40%
@@ -1725,7 +1727,8 @@ them through Tailwind classes and never name a raw color.
 
 - **New session** opens a dialog, "New session in <project>", with "Runs Claude Code with no
   ticket. Leave the first message empty to type it in the terminal." With more than one repo, a **Repo** group lists the
-  project's repos as radio boxes. A **Where** group holds two radio boxes, like the add-project
+  project's repos as radio boxes. The list shows about four radio boxes, up to 192 px, and
+  scrolls on its own, as it does in the Start dialog and the routine editor. A **Where** group holds two radio boxes, like the add-project
   flow's: **Main checkout** (the default, "Runs in <path>, the folder you also work in, so it can
   change your files there.") and **New worktree** ("Gets its own branch and worktree, for changing
   code."). Then **First message**, a textarea with the placeholder "Optional", up to 240 px tall.

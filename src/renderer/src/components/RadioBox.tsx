@@ -23,7 +23,7 @@ export function RadioBox({
   return (
     <label
       className={cn(
-        'highlight flex w-full items-start gap-2.5 rounded-card bg-fg/5 px-3 py-2.5 text-left hover:bg-fg/8 has-focus-visible:ring-[3px] has-focus-visible:ring-ring/50',
+        'highlight relative flex w-full items-start gap-2.5 rounded-card bg-fg/5 px-3 py-2.5 text-left hover:bg-fg/8 has-focus-visible:ring-[3px] has-focus-visible:ring-ring/50',
         checked && 'bg-fg/8',
         disabled && 'opacity-50'
       )}
@@ -110,7 +110,11 @@ export function RepoPicker({
       <FieldHeading id={name} mark={mark}>
         {legend}
       </FieldHeading>
-      <div role="radiogroup" aria-labelledby={name} className="flex flex-col gap-2">
+      <div
+        role="radiogroup"
+        aria-labelledby={name}
+        className="-m-1 flex max-h-48 flex-col gap-2 overflow-y-auto p-1"
+      >
         {repos.map((r) => (
           <RadioBox
             key={r.github}

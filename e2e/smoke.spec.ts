@@ -184,6 +184,31 @@ const noGitHub = (): Record<string, string | undefined> => ({
   GITHUB_TOKEN: undefined
 })
 
+function seedRepos(count: number): string {
+  const userData = tempDir('sandtable-e2e-')
+  const repos = Array.from({ length: count }, (_, i) => ({
+    github: `octo/repo${i}`,
+    path: tmpdir()
+  }))
+  const project = { id: 'p1', name: 'App', repos }
+  writeFileSync(
+    join(userData, 'sandtable.json'),
+    JSON.stringify({ projects: [project], sessions: [] })
+  )
+  return userData
+}
+
+const pageScroll = (page: Page): Promise<{ top: number; height: number; window: number }> =>
+  page.evaluate(() => {
+    const root = document.scrollingElement!
+    return { top: root.scrollTop, height: root.scrollHeight, window: innerHeight }
+  })
+
+const shrink = async (app: ElectronApplication, page: Page): Promise<void> => {
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(1200, 420))
+  await expect.poll(() => page.evaluate(() => innerHeight)).toBe(420)
+}
+
 function seedTickets(repo = 'octo/app', sessions: unknown[] = [], more = 0): string {
   const userData = tempDir('sandtable-e2e-')
   const project = { id: 'p1', name: 'App', repos: [{ github: repo, path: tmpdir() }] }
@@ -458,6 +483,78 @@ test('suggests a worktree setup from the main checkout, and Use saves it', async
     command: 'npm install'
   })
   await app.close()
+})
+
+test('keeps a long repo list inside the add-project step on Repos and Review', async () => {
+  const app = await launch(['.'], noGitHub(), undefined, seedRepos(40))
+  const page = await app.firstWindow()
+  await page.getByRole('button', { name: 'App', exact: true }).hover()
+  await page.getByRole('button', { name: 'More for App' }).click()
+  await page.getByRole('menuitem', { name: 'Edit project' }).click()
+  for (const [step, heading] of [
+    [/^Repos/, 'Repos and folders'],
+    [/Review/, 'Review']
+  ] as const) {
+    await page.getByRole('list', { name: 'Steps' }).getByRole('button', { name: step }).click()
+    await expect(page.getByRole('heading', { name: heading, level: 2 })).toBeVisible()
+    await page.waitForFunction(() => !document.getAnimations().length)
+    await page.mouse.move(700, 400)
+    await page.mouse.wheel(0, 5000)
+    const scroll = await pageScroll(page)
+    expect(scroll.height).toBeLessThanOrEqual(scroll.window)
+    expect(scroll.top).toBe(0)
+  }
+  await expect(page.getByRole('button', { name: 'Save' })).toBeInViewport()
+  await shrink(app, page)
+  const scroll = await pageScroll(page)
+  expect(scroll.height).toBeLessThanOrEqual(scroll.window)
+  await expect(page.getByRole('button', { name: 'Save' })).toBeInViewport()
+})
+
+test('keeps the New session dialog and Start on screen with many repos', async () => {
+  const app = await launch(['.'], noGitHub(), undefined, seedRepos(40))
+  const page = await app.firstWindow()
+  await page.getByRole('button', { name: 'App', exact: true }).hover()
+  await page.getByRole('button', { name: 'More for App' }).click()
+  await page.getByRole('menuitem', { name: 'New session' }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  await page.waitForFunction(() => !document.getAnimations().length)
+  const box = (await dialog.boundingBox())!
+  const height = await page.evaluate(() => innerHeight)
+  expect(box.y).toBeGreaterThanOrEqual(0)
+  expect(box.y + box.height).toBeLessThanOrEqual(height)
+  await expect(dialog.getByRole('heading', { name: 'New session in App' })).toBeInViewport()
+  const list = dialog.getByRole('radiogroup', { name: 'Repo' })
+  expect(await list.evaluate((e) => e.clientHeight <= 192 && e.scrollHeight > e.clientHeight)).toBe(
+    true
+  )
+  await list.getByText('octo/repo39', { exact: true }).click()
+  await expect(list.getByRole('radio', { name: 'octo/repo39' })).toBeChecked()
+  await shrink(app, page)
+  const short = (await dialog.boundingBox())!
+  expect(short.y).toBeGreaterThanOrEqual(0)
+  expect(short.y + short.height).toBeLessThanOrEqual(420)
+  const start = dialog.getByRole('button', { name: 'Start' })
+  await start.scrollIntoViewIfNeeded()
+  await expect(start).toBeInViewport()
+  const close = (await dialog.getByRole('button', { name: 'Close' }).boundingBox())!
+  expect(close.y).toBeGreaterThanOrEqual(short.y)
+})
+
+test('keeps the routine editor from scrolling as a whole in a short window', async () => {
+  const app = await launch(['.'], noGitHub(), undefined, seedRepos(40))
+  const page = await app.firstWindow()
+  await shrink(app, page)
+  await page.getByRole('button', { name: 'New routine' }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  await page.waitForFunction(() => !document.getAnimations().length)
+  const box = (await dialog.boundingBox())!
+  expect(box.y).toBeGreaterThanOrEqual(0)
+  expect(box.y + box.height).toBeLessThanOrEqual(420)
+  const body = dialog.locator('[data-slot="dialog-body"]')
+  expect(await body.evaluate((d) => d.scrollHeight - d.clientHeight)).toBe(0)
 })
 
 test("picks a project's emoji on Review and shows it in the sidebar and header after a restart", async () => {

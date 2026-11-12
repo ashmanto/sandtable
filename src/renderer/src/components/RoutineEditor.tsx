@@ -301,7 +301,8 @@ export function RoutineEditor({
     <Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
       <DialogContent
         showCloseButton={!busy}
-        className="flex h-[min(640px,calc(100vh-2rem))] gap-0 p-0 sm:max-w-[880px]"
+        className="h-[min(640px,calc(100vh-2rem))] sm:max-w-[880px]"
+        bodyClassName="flex flex-1 gap-0 p-0"
       >
         <div className="flex w-112 shrink-0 flex-col">
           <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pt-4 pb-3">
