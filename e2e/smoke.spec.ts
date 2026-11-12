@@ -184,6 +184,26 @@ const noGitHub = (): Record<string, string | undefined> => ({
   GITHUB_TOKEN: undefined
 })
 
+function seedRepos(count: number): string {
+  const userData = tempDir('sandtable-e2e-')
+  const repos = Array.from({ length: count }, (_, i) => ({
+    github: `octo/repo${i}`,
+    path: tmpdir()
+  }))
+  const project = { id: 'p1', name: 'App', repos }
+  writeFileSync(
+    join(userData, 'sandtable.json'),
+    JSON.stringify({ projects: [project], sessions: [] })
+  )
+  return userData
+}
+
+const pageScroll = (page: Page): Promise<{ top: number; height: number; window: number }> =>
+  page.evaluate(() => {
+    const root = document.scrollingElement!
+    return { top: root.scrollTop, height: root.scrollHeight, window: innerHeight }
+  })
+
 function seedTickets(repo = 'octo/app', sessions: unknown[] = [], more = 0): string {
   const userData = tempDir('sandtable-e2e-')
   const project = { id: 'p1', name: 'App', repos: [{ github: repo, path: tmpdir() }] }
@@ -458,6 +478,28 @@ test('suggests a worktree setup from the main checkout, and Use saves it', async
     command: 'npm install'
   })
   await app.close()
+})
+
+test('keeps a long repo list inside the add-project step on Repos and Review', async () => {
+  const app = await launch(['.'], noGitHub(), undefined, seedRepos(40))
+  const page = await app.firstWindow()
+  await page.getByRole('button', { name: 'App', exact: true }).hover()
+  await page.getByRole('button', { name: 'More for App' }).click()
+  await page.getByRole('menuitem', { name: 'Edit project' }).click()
+  for (const [step, heading] of [
+    [/^Repos/, 'Repos and folders'],
+    [/Review/, 'Review']
+  ] as const) {
+    await page.getByRole('list', { name: 'Steps' }).getByRole('button', { name: step }).click()
+    await expect(page.getByRole('heading', { name: heading, level: 2 })).toBeVisible()
+    await page.waitForFunction(() => !document.getAnimations().length)
+    await page.mouse.move(700, 400)
+    await page.mouse.wheel(0, 5000)
+    const scroll = await pageScroll(page)
+    expect(scroll.height).toBeLessThanOrEqual(scroll.window)
+    expect(scroll.top).toBe(0)
+  }
+  await expect(page.getByRole('button', { name: 'Save' })).toBeInViewport()
 })
 
 test("picks a project's emoji on Review and shows it in the sidebar and header after a restart", async () => {
