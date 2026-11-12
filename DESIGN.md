@@ -137,8 +137,8 @@ them through Tailwind classes and never name a raw color.
   weight-500 title, a `fg-2` description, and a right-aligned footer of 28 px buttons. A
   dialog's close button is a ghost 24 px icon button in `fg-3` with the tooltip "Close", 12 px from
   the top and right.
-  A dialog, unlike an alert dialog, is at most the window's height less 32 px, and it scrolls when
-  its content is taller.
+  A dialog, unlike an alert dialog, is at most the window's height less 32 px. When its content is
+  taller, the content scrolls and the close button stays in place.
   Alert dialogs have no close button. Both sit on `raised` with `shadow-lg` and a 1 px `line-2`
   ring around the outside, so the edge stays clear on the dimmed page in dark mode, where the shadow
   doesn't show. Behind both, the page dims under `scrim`: `fg` at 32% in light mode and black at 40%
